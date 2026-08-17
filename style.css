@@ -137,6 +137,34 @@ button:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 .risk { float: right; color: var(--accent); font-size: 12px; letter-spacing: .08em; }
 .risk.sure { color: #8ce0c0; }
 
+button.on { border-color: var(--accent); background: #2b2450; }
+.dot { display: inline-block; width: 9px; height: 9px; margin-right: 7px; }
+
+/* --- the night --- */
+
+.hud {
+  display: flex;
+  gap: 20px;
+  margin: 14px 0 8px;
+  font-size: 13px;
+  letter-spacing: .08em;
+  text-transform: uppercase;
+  color: var(--dim);
+}
+.hud b { color: var(--ink); }
+
+canvas {
+  display: block;
+  width: 100%;
+  max-width: 640px;
+  border: 2px solid var(--line);
+  background: #0d0b18;
+  cursor: crosshair;
+  image-rendering: pixelated;
+}
+
+.tiny { margin-top: 10px; font-size: 12px; }
+
 /* --- result / confirm --- */
 
 .box {
