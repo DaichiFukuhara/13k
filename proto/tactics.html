@@ -1,0 +1,544 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<title>Virginight 夜戦プロトタイプ</title>
+<style>
+* { box-sizing: border-box; }
+body {
+  margin: 0; padding: 16px;
+  background: #14121a; color: #d8d4e0;
+  font: 14px/1.5 "Segoe UI", system-ui, sans-serif;
+}
+h1 { font-size: 15px; margin: 0 0 12px; color: #8c86a0; font-weight: 500; letter-spacing: .08em; }
+#wrap { display: flex; gap: 20px; align-items: flex-start; flex-wrap: wrap; }
+#bar { display: flex; gap: 18px; margin-bottom: 10px; font-variant-numeric: tabular-nums; }
+#bar b { color: #fff; font-weight: 600; }
+
+#board {
+  display: grid;
+  grid-template-columns: repeat(7, 76px);
+  grid-template-rows: repeat(5, 76px);
+  gap: 3px; background: #232030; padding: 3px;
+}
+.cell {
+  background: #1b1926; position: relative;
+  display: flex; flex-direction: column; align-items: center; justify-content: center;
+  border: 2px solid transparent;
+}
+.cell.move { border-color: #4a7fb5; cursor: pointer; background: #1e2634; }
+.cell.atk  { border-color: #c25b5b; cursor: pointer; background: #2c1d1f; }
+.cell.sel  { border-color: #e0d060; }
+.cell.aim  { outline: 2px solid #a03c3c; outline-offset: -6px; }
+.cell.hot  { background: #2a2036; }
+
+.pc { font-size: 19px; font-weight: 700; }
+.pc.ally { color: #e8e4f0; }
+.pc.foe  { color: #d08a8a; }
+.hp { font-size: 11px; color: #8c86a0; font-variant-numeric: tabular-nums; }
+.done { opacity: .42; }
+.tel {
+  position: absolute; top: 2px; right: 4px;
+  font-size: 11px; font-weight: 700; color: #ff8a8a; font-variant-numeric: tabular-nums;
+}
+.tel.leth { color: #fff; background: #a02c2c; padding: 0 3px; }
+.src {
+  position: absolute; bottom: 1px; left: 0; right: 0; text-align: center;
+  font-size: 11px; color: #c07070; font-variant-numeric: tabular-nums;
+}
+.blocked {
+  position: absolute; top: 2px; left: 4px;
+  font-size: 9px; font-weight: 700; color: #7d7690; letter-spacing: .04em;
+}
+
+#side { width: 340px; }
+#threat { font-size: 12px; margin-bottom: 8px; min-height: 68px; }
+#threat div { color: #c08a8a; }
+#threat .t-none { color: #6f9c6f; }
+#log {
+  height: 210px; overflow-y: auto; background: #191722; padding: 8px 10px;
+  font-size: 12px; line-height: 1.6; border-left: 2px solid #2e2a3c;
+}
+.lg-r { color: #7d7690; margin-top: 6px; }
+.lg-h { color: #d08a8a; }
+.lg-w { color: #6f9c6f; }
+.lg-k { color: #e0d060; }
+
+button {
+  font: inherit; padding: 6px 12px; margin: 0 6px 6px 0;
+  background: #2b2739; color: #d8d4e0; border: 1px solid #3d3852; cursor: pointer;
+}
+button:hover:not(:disabled) { background: #383150; }
+button:disabled { opacity: .35; cursor: default; }
+#roster { font-size: 12px; margin-top: 10px; color: #8c86a0; }
+#roster b { color: #d8d4e0; }
+#hint { font-size: 12px; color: #7d7690; margin-top: 6px; min-height: 20px; }
+#result { margin-top: 10px; padding: 10px; background: #191722; font-size: 12px; white-space: pre-wrap; }
+</style>
+</head>
+<body>
+
+<h1>VIRGINIGHT — 夜戦プロトタイプ / 検証: 4体いるのに3体しか動かせないのは悩ましいか</h1>
+
+<div id="wrap">
+  <div>
+    <div id="bar">
+      <span>ROUND <b id="s-round">1</b></span>
+      <span>行動 <b id="s-acts">3</b> / 3</span>
+      <span>FOES <b id="s-foes">6</b> / 6</span>
+      <span>経過 <b id="s-time">0:00</b></span>
+    </div>
+    <div id="board"></div>
+    <div style="margin-top:10px">
+      <button id="b-skip">攻撃せず終了</button>
+      <button id="b-undo">フェーズやり直し</button>
+      <button id="b-end">敵フェーズへ →</button>
+      <button id="b-reset">最初から</button>
+    </div>
+    <div id="roster"></div>
+    <div id="hint"></div>
+  </div>
+
+  <div id="side">
+    <div id="threat"></div>
+    <div id="log"></div>
+    <div id="result"></div>
+  </div>
+</div>
+
+<script>
+'use strict';
+
+const W = 7, H = 5, ACTS = 3;
+const idx = (x, y) => y * W + x;
+const inb = (x, y) => x >= 0 && x < W && y >= 0 && y < H;
+const ORTH = [[0,-1],[0,1],[-1,0],[1,0]];
+const DIAG = [[-1,-1],[1,-1],[-1,1],[1,1]];
+const ALL8 = ORTH.concat(DIAG);
+const ARROW = { '0,-1':'↑', '0,1':'↓', '-1,0':'←', '1,0':'→' };
+
+// --- 駒定義 -------------------------------------------------------------
+const DEF = {
+  U:      { name:'ユニコーン', side:'p', hp:20, dmg:4, move:'step8',   atk:'adj8'  },
+  Red:    { name:'Red',        side:'p', hp:12, dmg:6, move:'step4',   atk:'adj4'  },
+  Orange: { name:'Orange',     side:'p', hp: 9, dmg:2, move:'walk2',   atk:'adj4', hits:2 },
+  Blue:   { name:'Blue',       side:'p', hp: 8, dmg:2, move:'diag2lr', atk:'adj8', push:true },
+  Pawn:   { name:'Pawn',       side:'e', hp: 6, dmg:3, move:'step4',   atk:'adj4'  },
+  Archer: { name:'Archer',     side:'e', hp: 4, dmg:3, move:'step4',   atk:'line'  },
+};
+
+const START = [
+  ['U',3,2], ['Red',2,2], ['Orange',3,1], ['Blue',3,3],
+  ['Pawn',0,1], ['Pawn',0,3], ['Archer',0,2],
+  ['Pawn',6,1], ['Pawn',6,3], ['Archer',6,2],
+];
+
+let G;
+
+function newGame() {
+  G = {
+    pieces: START.map(([t,x,y], i) => {
+      const d = DEF[t];
+      // home: 出現側。同点時の方向優先に使う（左右対称盤面での偏りを消す）
+      return { id:i, type:t, side:d.side, x, y, hp:d.hp, max:d.hp,
+               alive:true, used:false, home: x < W/2 ? 1 : -1 };
+    }),
+    round: 1, acts: ACTS, intents: [], sel: null, moved: null, hint: '',
+    log: [], over: false, t0: Date.now(), totalActs: 0, rested: [], snap: null,
+  };
+  say('lg-r', '── ROUND 1 ──');
+  enemyPhase();
+  snapshot();
+  render();
+}
+
+// --- 盤面ユーティリティ --------------------------------------------------
+const at = (x, y) => G.pieces.find(p => p.alive && p.x === x && p.y === y);
+const live = s => G.pieces.filter(p => p.alive && p.side === s);
+const md = (a, b) => Math.abs(a.x - b.x) + Math.abs(a.y - b.y);
+const say = (cls, txt) => { G.log.push({ cls, txt }); };
+
+// --- Undo：フェーズ開始地点のスナップショット ----------------------------
+function snapshot() {
+  G.snap = JSON.stringify({
+    pieces: G.pieces, intents: G.intents, acts: G.acts,
+    totalActs: G.totalActs, logLen: G.log.length,
+  });
+}
+function restore() {
+  const s = JSON.parse(G.snap);
+  G.pieces = s.pieces; G.intents = s.intents;
+  G.acts = s.acts; G.totalActs = s.totalActs;
+  G.log.length = s.logLen;
+  G.sel = null; G.moved = null; G.hint = '';
+}
+
+// --- 移動生成（駒種ごとに分ける）-----------------------------------------
+function moves(p) {
+  const out = [{ x:p.x, y:p.y }];
+  const kind = DEF[p.type].move;
+
+  if (kind === 'step4' || kind === 'step8') {
+    for (const [dx,dy] of (kind === 'step4' ? ORTH : ALL8)) {
+      const x = p.x+dx, y = p.y+dy;
+      if (inb(x,y) && !at(x,y)) out.push({x,y});
+    }
+  }
+
+  if (kind === 'walk2') {                    // 直交2マス・途中で1回曲がれる
+    const seen = new Set([idx(p.x,p.y)]);
+    let front = [{x:p.x, y:p.y}];
+    for (let s = 0; s < 2; s++) {
+      const next = [];
+      for (const c of front) for (const [dx,dy] of ORTH) {
+        const x = c.x+dx, y = c.y+dy;
+        if (!inb(x,y) || at(x,y) || seen.has(idx(x,y))) continue;
+        seen.add(idx(x,y)); next.push({x,y}); out.push({x,y});
+      }
+      front = next;
+    }
+  }
+
+  if (kind === 'diag2lr') {                  // 斜め1〜2マス、または左右へ1マス
+    for (const [dx,dy] of DIAG) {
+      const x1 = p.x+dx, y1 = p.y+dy;
+      if (!inb(x1,y1) || at(x1,y1)) continue;
+      out.push({x:x1, y:y1});
+      const x2 = p.x+dx*2, y2 = p.y+dy*2;
+      if (inb(x2,y2) && !at(x2,y2)) out.push({x:x2, y:y2});
+    }
+    for (const dx of [-1, 1]) {              // 盤面色の固定を破るための左右1マス
+      const x = p.x+dx;
+      if (inb(x,p.y) && !at(x,p.y)) out.push({x, y:p.y});
+    }
+  }
+  return out;
+}
+
+// --- 攻撃対象（駒の現在位置から評価する）---------------------------------
+function targets(p) {
+  const foe = p.side === 'p' ? 'e' : 'p';
+  const shape = DEF[p.type].atk;
+  const out = [];
+
+  if (shape === 'adj4' || shape === 'adj8') {
+    for (const [dx,dy] of (shape === 'adj4' ? ORTH : ALL8)) {
+      const t = at(p.x+dx, p.y+dy);
+      if (t && t.side === foe) out.push(t);
+    }
+  }
+
+  if (shape === 'line') {                    // 直線2〜4マス・隣接不可・遮蔽で停止
+    for (const [dx,dy] of ORTH) {
+      for (let d = 1; d <= 4; d++) {
+        const t = at(p.x+dx*d, p.y+dy*d);
+        if (!t) continue;
+        if (d >= 2 && t.side === foe) out.push(t);
+        break;
+      }
+    }
+  }
+  return out;
+}
+
+// 仮想位置で評価する。元の位置に自駒が残っていると自分で射線を塞ぐため、
+// 実際に一時移動させてから評価して戻す
+function evalAt(p, c, fn) {
+  const ox = p.x, oy = p.y;
+  p.x = c.x; p.y = c.y;
+  const r = fn();
+  p.x = ox; p.y = oy;
+  return r;
+}
+
+const cmp = (a, b) => { for (let i=0;i<a.length;i++) if (a[i]!==b[i]) return a[i]-b[i]; return 0; };
+
+// --- 敵フェーズ：移動 → 意図確定 -----------------------------------------
+function enemyPhase() {
+  const allies = live('p');
+  if (!allies.length) return;
+
+  // 固定ID順に一体ずつ。次の敵は更新後の盤面を見る
+  for (const e of live('e').sort((a,b) => a.id - b.id)) {
+    const cands = moves(e);
+    let best = null, bestKey = null;
+
+    for (const c of cands) {
+      const r = evalAt(e, c, () => ({
+        hit: targets(e).length > 0,
+        adj: ALL8.some(([dx,dy]) => { const t = at(c.x+dx, c.y+dy); return t && t.side === 'p'; }),
+      }));
+      let near = 99;
+      for (const a of allies) near = Math.min(near, Math.abs(c.x-a.x) + Math.abs(c.y-a.y));
+      const stay = (c.x === e.x && c.y === e.y) ? 0 : 1;
+      const fwd  = -(c.x - e.x) * e.home;     // 出現側から盤面中央へ向かう向きを優先
+
+      // 辞書順の優先規則。Archer は撃てるなら動かず、隣接を避ける
+      const key = e.type === 'Archer'
+        ? [r.hit ? 0 : 1, r.adj ? 1 : 0, stay, near, fwd, idx(c.x,c.y)]
+        : [r.hit ? 0 : 1, near, fwd, idx(c.x,c.y)];
+
+      if (!bestKey || cmp(key, bestKey) < 0) { bestKey = key; best = c; }
+    }
+    e.x = best.x; e.y = best.y;
+  }
+
+  // 意図の確定。以後この方向と距離は変えない
+  G.intents = [];
+  for (const e of live('e').sort((a,b) => a.id - b.id)) {
+    const ts = targets(e);
+    if (!ts.length) continue;
+    ts.sort((a,b) => md(e,a) - md(e,b) || idx(a.x,a.y) - idx(b.x,b.y));
+    const t = ts[0];
+    G.intents.push({
+      id: e.id,
+      dx: Math.sign(t.x - e.x), dy: Math.sign(t.y - e.y),
+      r: Math.max(Math.abs(t.x - e.x), Math.abs(t.y - e.y)),
+      dmg: DEF[e.type].dmg,
+    });
+  }
+}
+
+function aimCell(it) {
+  const e = G.pieces[it.id];
+  if (!e.alive) return null;
+  return { x: e.x + it.dx * it.r, y: e.y + it.dy * it.r };
+}
+
+// --- 敵攻撃の一括解決 ---------------------------------------------------
+function resolve() {
+  for (const it of G.intents) {
+    const e = G.pieces[it.id];
+    if (!e.alive) continue;                  // 倒された敵の意図は消滅
+    const c = aimCell(it);
+    const t = at(c.x, c.y);
+    if (!t || t.side !== 'p') { say('lg-w', `${DEF[e.type].name} の攻撃 → 空振り`); continue; }
+    t.hp -= it.dmg;
+    say('lg-h', `${DEF[e.type].name} → ${DEF[t.type].name} に ${it.dmg}`);
+    if (t.hp <= 0) { t.alive = false; say('lg-k', `${DEF[t.type].name} 倒れる`); }
+  }
+  G.intents = [];
+}
+
+// --- プレイヤー行動 -----------------------------------------------------
+function activate(p, cell) {
+  p.x = cell.x; p.y = cell.y;
+  G.moved = p; G.sel = null;
+  if (!targets(p).length) finishAct(); else render();
+}
+
+function attack(p, t) {
+  const d = DEF[p.type], n = d.hits || 1;
+  t.hp -= d.dmg * n;
+  say('', `${d.name} → ${DEF[t.type].name} に ${d.dmg*n}${n>1 ? ` (${d.dmg}×${n})` : ''}`);
+
+  if (t.hp <= 0) {
+    t.alive = false;
+    say('lg-k', `${DEF[t.type].name} 撃破`);
+  } else if (d.push) {
+    const px = t.x + Math.sign(t.x - p.x), py = t.y + Math.sign(t.y - p.y);
+    if (inb(px,py) && !at(px,py)) {
+      t.x = px; t.y = py;
+      // 意図は方向と距離を保つため、起点が動けば着弾マスも動く
+      const moved = G.intents.some(i => i.id === t.id);
+      say('', `${DEF[t.type].name} を押し出す${moved ? '（射線がずれた）' : ''}`);
+    } else {
+      say('lg-w', `${DEF[t.type].name} は押し出せなかった（${inb(px,py) ? '駒がいる' : '盤外'}）`);
+    }
+  }
+  finishAct();
+}
+
+function finishAct() {
+  G.moved.used = true;
+  G.moved = null; G.sel = null; G.hint = '';
+  G.acts--; G.totalActs++;
+  if (checkOver()) return;
+  if (G.acts <= 0) endPlayerPhase(); else render();
+}
+
+function idleNames() {
+  return live('p').filter(p => !p.used).map(p => DEF[p.type].name);
+}
+
+function endPlayerPhase() {
+  const idle = idleNames();
+  G.rested.push({ r: G.round, names: idle, partial: false });
+  say('', `休ませた駒: ${idle.join('・') || 'なし'}`);
+
+  resolve();
+  if (checkOver()) return;
+
+  G.round++; G.acts = ACTS;
+  G.pieces.forEach(p => p.used = false);
+  G.sel = null; G.moved = null;
+  say('lg-r', `── ROUND ${G.round} ──`);
+  enemyPhase();
+  if (checkOver()) return;
+  snapshot();
+  render();
+}
+
+function checkOver() {
+  if (!G.pieces[0].alive) { finish(false); return true; }
+  if (!live('e').length) { finish(true); return true; }
+  return false;
+}
+
+const fmt = s => `${Math.floor(s/60)}:${String(s%60).padStart(2,'0')}`;
+
+function finish(won) {
+  G.over = true;
+  // 決着ラウンドは途中で終わっているため、集計から除外する印を付けて記録する
+  if (!G.rested.length || G.rested[G.rested.length-1].r !== G.round) {
+    G.rested.push({ r: G.round, names: idleNames(), partial: true });
+  }
+  say('lg-r', won ? '── 勝利 ──' : '── 敗北 ──');
+
+  const secs = Math.round((Date.now() - G.t0) / 1000);
+  const full = G.rested.filter(r => !r.partial);
+  const uniq = new Set(full.map(r => r.names.join('・')));
+  const ok = n => n ? '✅' : '❌';
+
+  document.getElementById('result').textContent =
+    `${won ? '勝利' : '敗北'}\n` +
+    `${ok(secs<=180)} 所要時間 ${fmt(secs)}   （初見3分以内 / 習熟後2分以内）\n` +
+    `${ok(G.round>=3&&G.round<=5)} ラウンド ${G.round}   （3〜5）\n` +
+    `${ok(G.totalActs>=9&&G.totalActs<=15)} 総アクティベーション ${G.totalActs}   （9〜15）\n\n` +
+    `【合格基準1】ラウンドごとに休ませた駒\n` +
+    G.rested.map(r =>
+      `  R${r.r}: ${r.names.join('・') || 'なし'}${r.partial ? '  ※決着ラウンド・集計対象外' : ''}`
+    ).join('\n') +
+    `\n\n  ${ok(uniq.size>=2)} 集計対象 ${full.length} ラウンド中 ${uniq.size} 通り\n` +
+    (uniq.size >= 2
+      ? '  → 休ませる駒が変化している'
+      : '  → 固定化している。実質的な出撃枠3でしかない');
+  render();
+}
+
+// --- 描画 ---------------------------------------------------------------
+const $board = document.getElementById('board');
+
+function render() {
+  const aims = new Map();                     // 着弾マス → 合算ダメージ
+  const srcs = new Map();                     // 攻撃元マス → 表示文字列
+  const lines = [];
+  for (const it of G.intents) {
+    const c = aimCell(it);
+    if (!c || !inb(c.x, c.y)) continue;
+    aims.set(idx(c.x,c.y), (aims.get(idx(c.x,c.y)) || 0) + it.dmg);
+    const e = G.pieces[it.id];
+    srcs.set(idx(e.x,e.y), `${ARROW[`${it.dx},${it.dy}`] || '·'}${it.dmg}`);
+    const t = at(c.x, c.y);
+    lines.push(`${DEF[e.type].name} ${ARROW[`${it.dx},${it.dy}`] || ''} ${t ? DEF[t.type].name : '空マス'} -${it.dmg}`);
+  }
+
+  const mv = G.sel && !G.moved ? moves(G.sel) : [];
+  const tg = G.moved ? targets(G.moved) : [];
+
+  $board.innerHTML = '';
+  for (let y = 0; y < H; y++) for (let x = 0; x < W; x++) {
+    const d = document.createElement('div');
+    d.className = 'cell';
+    const p = at(x, y);
+
+    if (aims.has(idx(x,y))) {
+      d.classList.add('aim');
+      const dm = aims.get(idx(x,y));
+      const lethal = p && p.side === 'p' && dm >= p.hp;
+      const t = document.createElement('span');
+      t.className = 'tel' + (lethal ? ' leth' : '');
+      t.textContent = lethal ? `${dm} LETHAL` : `-${dm}`;
+      d.appendChild(t);
+    }
+
+    if (!G.over) {
+      if (mv.some(c => c.x === x && c.y === y)) {
+        d.classList.add('move');
+        d.onclick = () => activate(G.sel, {x,y});
+        d.onmouseenter = () => { G.hint = previewMove(G.sel, {x,y}); paintHint(); };
+      }
+      if (tg.some(t => t.x === x && t.y === y)) {
+        d.classList.add('atk');
+        d.onclick = () => attack(G.moved, p);
+        if (DEF[G.moved.type].push) {
+          const px = p.x + Math.sign(p.x - G.moved.x), py = p.y + Math.sign(p.y - G.moved.y);
+          if (!inb(px,py) || at(px,py)) {
+            const b = document.createElement('span');
+            b.className = 'blocked'; b.textContent = 'PUSH×';
+            d.appendChild(b);
+          }
+        }
+      }
+    }
+
+    if (p) {
+      if (G.sel === p || G.moved === p) d.classList.add('sel');
+      const n = document.createElement('span');
+      n.className = 'pc ' + (p.side === 'p' ? 'ally' : 'foe') + (p.used && p.side === 'p' ? ' done' : '');
+      n.textContent = p.type === 'U' ? 'U' : p.type;
+      const h = document.createElement('span');
+      h.className = 'hp'; h.textContent = `${p.hp}/${p.max}`;
+      d.appendChild(n); d.appendChild(h);
+
+      if (srcs.has(idx(x,y))) {
+        const s = document.createElement('span');
+        s.className = 'src'; s.textContent = srcs.get(idx(x,y));
+        d.appendChild(s);
+      }
+      if (!G.over && !G.moved && p.side === 'p' && !p.used) {
+        d.style.cursor = 'pointer';
+        d.onclick = () => { G.sel = (G.sel === p ? null : p); G.hint=''; render(); };
+      }
+    }
+    $board.appendChild(d);
+  }
+
+  document.getElementById('s-round').textContent = G.round;
+  document.getElementById('s-acts').textContent = G.acts;
+  document.getElementById('s-foes').textContent = live('e').length;
+  document.getElementById('s-time').textContent = fmt(Math.round((Date.now()-G.t0)/1000));
+
+  document.getElementById('threat').innerHTML = lines.length
+    ? lines.map(l => `<div>${l}</div>`).join('')
+    : '<div class="t-none">今ラウンドの敵攻撃なし</div>';
+
+  document.getElementById('roster').innerHTML = live('p')
+    .map(p => `${p.used ? '　' : '<b>●</b>'} ${DEF[p.type].name} ${p.hp}/${p.max}`).join('　');
+
+  document.getElementById('b-skip').disabled = !G.moved;
+  document.getElementById('b-undo').disabled = G.over || !G.snap;
+  document.getElementById('b-end').disabled = G.over || !!G.moved;
+
+  const lg = document.getElementById('log');
+  lg.innerHTML = G.log.map(l => `<div class="${l.cls}">${l.txt}</div>`).join('');
+  lg.scrollTop = lg.scrollHeight;
+  paintHint();
+}
+
+// 移動先を確定する前に、そこから何ができるかを見せる
+function previewMove(p, c) {
+  const ts = evalAt(p, c, () => targets(p).map(t => DEF[t.type].name));
+  const safe = !G.intents.some(it => {
+    const a = aimCell(it); return a && a.x === c.x && a.y === c.y;
+  });
+  return `→ (${c.x},${c.y})　攻撃可能: ${ts.length ? ts.join('・') : 'なし'}　${safe ? '被弾なし' : '被弾する'}`;
+}
+const paintHint = () => { document.getElementById('hint').textContent = G.hint; };
+
+// --- 操作 ---------------------------------------------------------------
+document.getElementById('b-skip').onclick  = () => { if (G.moved) finishAct(); };
+document.getElementById('b-end').onclick   = () => { if (!G.over && !G.moved) endPlayerPhase(); };
+document.getElementById('b-reset').onclick = () => { document.getElementById('result').textContent=''; newGame(); };
+document.getElementById('b-undo').onclick  = () => {
+  if (!G.snap) return;
+  restore(); say('', '（フェーズをやり直した）'); render();
+};
+
+newGame();
+setInterval(() => {
+  if (!G.over) document.getElementById('s-time').textContent = fmt(Math.round((Date.now()-G.t0)/1000));
+}, 1000);
+</script>
+</body>
+</html>
