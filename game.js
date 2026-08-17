@@ -150,8 +150,8 @@ const PUNISHED = ev("watchmen", "Slip past the new watch",
   "Turned back at the first bend.",
   "They were waiting at both ends.");
 
-const WORKSHOP = { id: "shop", title: "Workshop", blurb: "Work at the bench. There is nothing to build yet.", karma: 0, risk: -1 };
-const REST = { id: "rest", title: "Rest", blurb: "Sit the hour out. There is nothing to recover yet.", karma: 0, risk: -1 };
+const WORKSHOP = { id: "shop", title: "The bench", blurb: "", karma: 0, risk: -1 };
+const REST = { id: "rest", title: "Rest", blurb: "", karma: 0, risk: -1 };
 
 /* --- 2b. causal items (design ch.8.2) ------------------------------------ */
 /* attr  +1 good / 0 neutral / -1 evil - decides what burns off at the
@@ -227,6 +227,37 @@ const HUES = [
 
 const GIRL_HP = 22;
 
+/* A ribbon for every colour, made from the same table. It carries no power and
+   cannot be put down: it is the slot she used to be (design ch.8.4). */
+const RIBBONS = HUES.map(([name], i) => ({
+  id: "rib" + i, name: `${name} ribbon`, attr: 0, kind: "E", place: "", shift: 0,
+  note: "Hers. You do not get to put this one down.", keep: 1
+}));
+
+/* --- 2b2. arms ----------------------------------------------------------- */
+/* [name, damage, cooldown, range, made at, cost, needs]
+   needs: "" nothing, "girl" at least one of them, or the id of a mark.
+   Condition steps are sound / worn / broken (design ch.11.3). */
+const ARMS = [
+  ["Healing horn", 5, .70, 46, "town", 6, ""],
+  ["Rainbow spear", 9, .85, 54, "castle", 8, ""],
+  ["Star chain", 6, .75, 62, "", 7, "key"],
+  ["Sevenfold", 4, .60, 50, "", 9, "girl"]
+];
+
+const WEAR = [1, .7, .5];
+const CONDITION = ["sound", "worn", "broken"];
+const FIX_COST = 4;
+
+/* Every skill is one use a night, whether or not the arm is the one you hold
+   (design ch.11.1). Broken arms keep swinging but their skill is gone. */
+const SKILLS = [
+  "Mend what is still standing",
+  "Everything on the field at once",
+  "Hold them where they are",
+  "As many as there are of her"
+];
+
 /* Which actions bring one of them back with you. The castle reads as a
    rescue and the town as taking her along; same seven either way (ch.12.1). */
 /* `shelter` is the guaranteed one: one of the three you took in stays, whatever
@@ -280,6 +311,9 @@ function newGame() {
     girls: [],        // { i: hue index, hp }
     dead: [],         // hue indices - never comes back, not even on a rewind
     placed: [null, null, null],
+    arms: [],         // { i: ARMS index, cond: 0 sound / 1 worn / 2 broken }
+    held: 0,          // index into arms - the one that decides your attack
+    owed: [],         // ribbons waiting for a slot to be freed
     fight: null
   };
   keep();
@@ -290,7 +324,8 @@ function newGame() {
 function keep() {
   const { fight, dawn, ...rest } = state;   // never nest one morning inside another
   state.dawn = { ...rest, items: [...state.items], log: [...state.log],
-                 girls: state.girls.map(g => ({ ...g })), placed: [null, null, null] };
+                 girls: state.girls.map(g => ({ ...g })),
+                 arms: state.arms.map(a => ({ ...a })), placed: [null, null, null] };
 }
 
 /* A lost night can be tried again, but the ones who died stay dead and the
@@ -299,7 +334,12 @@ function rewind() {
   const d = state.dawn, dead = state.dead;
   state = { ...d, items: [...d.items], log: [...d.log],
             girls: d.girls.filter(g => !dead.includes(g.i)).map(g => ({ ...g })),
+            arms: d.arms.map(a => ({ ...a })),
             dead, placed: [null, null, null], fight: null };
+  // The ribbons come back with you even though the morning does not know
+  // about them yet - the dead are the one thing a rewind cannot undo (ch.15.2).
+  // Through ribbon(), so the eight slots still mean eight.
+  for (const i of dead) ribbon(i);
   keep();
   paint();
 }
@@ -364,6 +404,41 @@ function grant(id, stage) {
   // first one the bag cannot hold rather than overwrite what is pending.
   for (const [item, from, to] of GIVES[id] || [])
     if (stage >= from && stage <= to && !take(ITEM[item])) return;
+}
+
+/* A ribbon cannot be refused, but nothing is thrown out behind the player's
+   back either: a full bag queues it and asks (design ch.8.3, ch.0.1). */
+function ribbon(i) {
+  if (has("rib" + i) || state.owed.includes(i)) return;
+  if (state.items.length < BAG) {
+    state.items.push(RIBBONS[i]);
+    note(`Kept: ${RIBBONS[i].name}`);
+  } else state.owed.push(i);
+}
+
+/* Clears anything waiting on an exchange, one at a time, then goes on. */
+function settle(then) {
+  if (!state.pending && state.owed.length) state.pending = RIBBONS[state.owed.shift()];
+  state.pending ? exchange(then) : then();
+}
+
+/* What you are holding decides your attack; its condition decides how much of
+   it is left. With nothing made you still have a horn (design ch.11.1). */
+function mine() {
+  const a = state.arms[state.held];
+  if (!a) return { dmg: 5, cd: .7, range: 44 };
+  const [, dmg, cd, range] = ARMS[a.i];
+  // The sevenfold is only ever worth as many as there are of her (ch.11.4).
+  const base = a.i === 3 ? 2 + state.girls.length : dmg;
+  return { dmg: Math.max(1, Math.round(base * WEAR[a.cond])), cd, range };
+}
+
+function canMake(n) {
+  const [, , , , where, cost, needs] = ARMS[n];
+  return !state.arms.some(a => a.i === n) &&
+    (!where || where === state.place) &&
+    (needs === "" || (needs === "girl" ? state.girls.length > 0 : has(needs))) &&
+    state.shards >= cost;
 }
 
 /* Evidence quietly makes a place kinder or harsher than it reads (ch.7.4). */
@@ -458,11 +533,25 @@ function pool() {
   );
 }
 
+/* The two standing choices say what they would actually do today. */
+function fixed() {
+  const can = ARMS.some((a, n) => canMake(n));
+  const bent = state.arms.some(a => a.cond && state.shards >= FIX_COST);
+  WORKSHOP.blurb = can && bent ? "There is something to make and something to mend."
+    : can ? "There is something here you could make."
+    : bent ? "Something you carry could be put right."
+    : "Nothing here can be made or mended today.";
+  const hurt = state.hp < state.max || state.girls.some(g => g.hp < GIRL_HP);
+  REST.blurb = hurt ? "Sit the hour out and put some of it back."
+    : "Sit the hour out. Nobody needs it.";
+  return [WORKSHOP, REST];
+}
+
 function buildOffers() {
   // Past the critical point the other side's stronghold stops feeding and
   // housing you. Its safe actions are replaced by exploration (design ch.5.2).
   const shut = state.place === (state.lock === 1 ? "castle" : state.lock === -1 ? "town" : "");
-  const out = shut ? [] : [WORKSHOP, REST];
+  const out = shut ? [] : fixed();
   const extra = [];
   let slots = shut ? 4 : 2;
 
@@ -505,7 +594,7 @@ function comer(kind, lane, dir, foe, tough) {
   const [name, hp, dmg, range, cd, speed, colour] = KIND[kind];
   const h = Math.round(hp * tough);
   return { name, lane, x: dir > 0 ? -8 : 328, dir, hp: h, max: h, dmg: Math.round(dmg * tough),
-           range, cd, wait: cd * Math.random(), speed, colour, foe, trait: 0, slow: 0 };
+           range, cd, wait: cd * Math.random(), speed, colour, foe, trait: 0, slow: 0, stun: 0 };
 }
 
 /* She stands on the same spot the unicorn defends, so that what comes from the
@@ -513,7 +602,7 @@ function comer(kind, lane, dir, foe, tough) {
 function stander(g, lane) {
   const [name, colour, dmg, cd, range, trait] = HUES[g.i];
   return { name, lane, x: MID, dir: 0, hp: g.hp, max: GIRL_HP, dmg, range, cd,
-           wait: 0, mend: 0, speed: 0, colour, foe: 0, trait, girl: g, slow: 0 };
+           wait: 0, mend: 0, speed: 0, colour, foe: 0, trait, girl: g, slow: 0, stun: 0 };
 }
 
 function startFight() {
@@ -532,15 +621,42 @@ function startFight() {
   }
   spawns.sort((a, b) => a.at - b.at);
 
+  const w = mine();
   const units = [{ name: "You", lane: 1, x: MID, dir: 0, hp: state.hp, max: state.max,
-                   dmg: 7, range: 50, cd: .65, wait: 0, speed: 0, colour: "#f4f0ff",
-                   foe: 0, trait: 0, slow: 0, me: 1 }];
+                   dmg: w.dmg, range: w.range, cd: w.cd, wait: 0, speed: 0,
+                   colour: "#f4f0ff", foe: 0, trait: 0, slow: 0, stun: 0, me: 1 }];
   state.placed.forEach((gi, lane) => {
     if (gi != null) units.push(stander(state.girls[gi], lane));
   });
 
-  state.fight = { t: 0, units, spawns, jumps: JUMPS, over: 0, last: 0, wasDead: state.dead.length };
+  state.fight = { t: 0, units, spawns, jumps: JUMPS, over: 0, last: 0,
+                  wasDead: state.dead.length, used: state.arms.map(() => 0) };
   fightScreen();
+}
+
+/* One use a night, from every arm you have made, held or not (ch.11.1).
+   A broken arm still swings but has nothing left to give (ch.11.3). */
+function useSkill(n) {
+  const f = state.fight, a = state.arms[n];
+  if (!f || f.over || !a || f.used[n] || a.cond === 2) return;
+  if (a.i === 3 && !state.girls.length) return;   // none of her left to be
+  f.used[n] = 1;
+  const foes = f.units.filter(u => u.foe && u.hp > 0);
+  const ours = f.units.filter(u => !u.foe && u.hp > 0);
+
+  if (a.i === 0) ours.forEach(u => (u.hp = Math.min(u.max, u.hp + Math.round(u.max * .35))));
+  else if (a.i === 1) foes.forEach(u => (u.hp -= 14));
+  else if (a.i === 2) foes.forEach(u => (u.stun = 3));
+  else {
+    // As many as there are of her (design ch.11.4).
+    const n7 = state.girls.length;
+    const reach = n7 >= 5 ? foes
+      : foes.sort((x, y) => Math.abs(x.x - MID) - Math.abs(y.x - MID)).slice(0, n7 >= 3 ? 3 : 1);
+    reach.forEach(u => (u.hp -= n7 >= 5 ? 11 : 17));
+    if (n7 >= 7) ours.forEach(u => (u.hp = Math.min(u.max, u.hp + 9)));
+  }
+  snd(a.i === 0 ? 700 : 260, .22, a.i === 0 ? "triangle" : "sawtooth", .06);
+  paintSkills();
 }
 
 function strike(u, t, f) {
@@ -572,6 +688,7 @@ function step(dt) {
 
   for (const u of f.units) {
     if (u.hp <= 0) continue;
+    if (u.stun > 0) { u.stun -= dt; continue; }   // held where it stands
     if (u.slow > 0) u.slow -= dt;
     u.wait -= dt * (u.slow > 0 ? .5 : 1);
 
@@ -614,6 +731,7 @@ function step(dt) {
         state.dead.push(u.girl.i);
         state.girls = state.girls.filter(g => g !== u.girl);
         note(`${HUES[u.girl.i][0]} does not get up.`);
+        ribbon(u.girl.i);
         snd(170, .5, "sawtooth", .06);
       }
     }
@@ -677,6 +795,9 @@ function loop(now) {
 
 function end(won) {
   state.fight.over = 1;
+  // A night's work tells on whatever you were holding, win or lose (ch.11.3).
+  const a = state.arms[state.held];
+  if (a && a.cond < 2) { a.cond++; note(`${ARMS[a.i][0]} is ${CONDITION[a.cond]}.`); }
   if (won) { snd(330, .16, "triangle", .06); setTimeout(() => snd(495, .3, "triangle", .06), 150); }
   else snd(160, .8, "sawtooth", .07);
   setTimeout(() => (won ? survived() : fell()), 400);
@@ -719,8 +840,8 @@ function dayStart() {
   }
 
   show(`<div class="eyebrow">Day ${state.day}</div>
-    <h1>${["The road is quiet.", "Word has travelled.", "Fewer doors open now.", "Whatever is coming arrives tonight."][state.day - 1]}</h1>
-    <p>You have four hours of daylight.</p>
+    <h1>${["The road is quiet.", "Word has travelled.", "Fewer doors open now.", "It arrives tonight."][state.day - 1]}</h1>
+    <p>Four hours of daylight.</p>
     ${echo}
     <button class="go" id="x">Go on</button>`);
   on("#x", placeSelect);
@@ -730,10 +851,10 @@ function placeSelect() {
   status();
   show(`<div class="eyebrow">${TIMES[state.step]}</div>
     <h1>Where do you go?</h1>
-    <p>Every hour spent is a choice about where you are seen.</p>
+    <p>Every hour is a choice about where you are seen.</p>
     <div class="pair">
-      <button data-p="town"><h2>The town</h2><small>People who still have doors to open. Nobody here is armed.</small></button>
-      <button data-p="castle"><h2>The castle</h2><small>Held, lit, and full. Nobody here expects you.</small></button>
+      <button data-p="town"><h2>The town</h2><small>People who still have doors to open.</small></button>
+      <button data-p="castle"><h2>The castle</h2><small>Held, lit, and full. Nobody expects you.</small></button>
     </div>`);
   on("[data-p]", el => {
     state.place = el.dataset.p;
@@ -762,7 +883,78 @@ function actionSelect() {
   show(`<div class="eyebrow">${TIMES[state.step]} &middot; ${state.place === "town" ? "The town" : "The castle"}</div>
     <h1>What do you do?</h1>
     <div class="list">${list}</div>`);
-  on("[data-i]", el => confirm(state.offers[+el.dataset.i]));
+  on("[data-i]", el => {
+    const e = state.offers[+el.dataset.i];
+    e.id === "shop" ? bench() : confirm(e);
+  });
+}
+
+/* The bench is its own screen because making and mending are the same hour.
+   Walking away from it costs nothing at all (design ch.5.3, ch.11.3). */
+function bench() {
+  const rows = [];
+  ARMS.forEach((a, n) => {
+    if (canMake(n)) rows.push(`<button data-m="${n}">
+      <span class="risk">${a[5]} shards</span><h2>Forge the ${a[0].toLowerCase()}</h2>
+      <small>${a[1]} damage &middot; ${SKILLS[n].toLowerCase()}</small></button>`);
+  });
+  state.arms.forEach((a, n) => {
+    if (a.cond) rows.push(`<button data-f="${n}" ${state.shards < FIX_COST ? "disabled" : ""}>
+      <span class="risk">${FIX_COST} shards</span><h2>Mend the ${ARMS[a.i][0].toLowerCase()}</h2>
+      <small>${CONDITION[a.cond]} &middot; back to sound</small></button>`);
+  });
+
+  status();
+  show(`<div class="eyebrow">${TIMES[state.step]} &middot; the bench</div>
+    <h1>What do you work on?</h1>
+    <p>${rows.length ? "It takes the hour, whichever you pick." : "Nothing here needs you yet."}</p>
+    <div class="list">${rows.join("")}
+      <button id="b">Leave the bench<small>Costs nothing.</small></button>
+    </div>`);
+
+  on("[data-m]", el => askBench(+el.dataset.m, 1));
+  on("[data-f]", el => askBench(+el.dataset.f, 0));
+  on("#b", actionSelect);
+}
+
+/* Making and mending spend the hour, so they are asked like anything else. */
+function askBench(n, making) {
+  const name = making ? ARMS[n][0] : ARMS[state.arms[n].i][0];
+  const price = making ? ARMS[n][5] : FIX_COST;
+  show(`<div class="eyebrow">The bench</div>
+    <h1>${making ? "Forge" : "Mend"} the ${name.toLowerCase()}?</h1>
+    <div class="box">
+      <p class="gain">${price} shards, and the hour.</p>
+      <div class="row">
+        <button class="go" id="y">Yes</button>
+        <button class="go" id="n">No</button>
+      </div>
+    </div>`);
+  on("#y", () => {
+    if (making) {
+      state.shards -= price;
+      state.arms.push({ i: n, cond: 0 });
+      note(`Forged: ${name}`);
+      snd(520, .14, "triangle");
+      worked(`The ${name.toLowerCase()} is finished.`, `${SKILLS[n]}, once a night.`);
+    } else {
+      const a = state.arms[n];
+      state.shards -= price;
+      a.cond = 0;
+      note(`Mended: ${name}`);
+      snd(440, .12, "triangle");
+      worked(`The ${name.toLowerCase()} is sound again.`, "It will hold another night or two.");
+    }
+  });
+  on("#n", bench);
+}
+
+function worked(head, sub) {
+  status();
+  show(`<div class="eyebrow">The bench</div>
+    <div class="box"><div class="stage great">${head}</div><p>${sub}</p>
+      <button class="go" id="x">Go on</button></div>`);
+  on("#x", nextStep);
 }
 
 /* Every action is confirmed. Saying no costs nothing at all - no time, no
@@ -802,8 +994,14 @@ function resolve(e) {
     body = `<div class="stage great">It goes the way you were told it would</div>
       <p>${e.text}</p><p class="gain">Rainbow shards +${e.shards}</p>`;
   } else if (r < 0) {
-    // Workshop and Rest burn the hour and nothing else, for now.
-    body = `<div class="stage">The hour passes</div><p>${e.blurb}</p>`;
+    // An hour of sitting still puts back a third of everyone, and nothing
+    // else - it does not mend arms and it does not raise the dead (ch.10).
+    const back = n => Math.round(n * .3);
+    state.hp = Math.min(state.max, state.hp + back(state.max));
+    state.girls.forEach(g => (g.hp = Math.min(GIRL_HP, g.hp + back(GIRL_HP))));
+    body = `<div class="stage">The hour passes</div>
+      <p>You put your head down where you are.</p>
+      <p class="gain">You and ${state.girls.length ? "the ones still with you are" : "nothing else is"} a little further from the edge.</p>`;
   } else {
     stage = roll(r);
     const [lo, hi] = SHARDS[stage];
@@ -827,12 +1025,12 @@ function resolve(e) {
   status();
   show(`<div class="eyebrow">${e.title}</div>
     <div class="box">${body}<button class="go" id="x">Go on</button></div>`);
-  on("#x", () => (state.pending ? exchange() : nextStep()));
+  on("#x", () => settle(nextStep));
 }
 
 /* The bag is full and something new has turned up. Nothing is destroyed
    quietly - the player picks what stops mattering (design ch.8.3). */
-function exchange() {
+function exchange(then) {
   const p = state.pending;
   status();
   show(`<div class="eyebrow">Your hands are full</div>
@@ -852,7 +1050,7 @@ function exchange() {
       note(`Kept: ${p.name}`);
     }
     state.pending = null;
-    nextStep();
+    settle(then);
   });
 }
 
@@ -881,14 +1079,21 @@ function placeGirls() {
     </button>`;
   }).join("");
 
+  const w = mine();
+  const arms = state.arms.map((a, n) => `<button data-w="${n}" class="${n === state.held ? "on" : ""}">
+    ${ARMS[a.i][0]}<small>${CONDITION[a.cond]}</small></button>`).join("");
+
   show(`<div class="eyebrow">Day ${state.day} &middot; Dusk</div>
     <h1>Who stands where?</h1>
     <p>${state.girls.length
-      ? "Three lanes, one to a lane. You hold whichever lane you are standing in."
-      : "There is nobody to put out there. You hold all three lanes yourself."}</p>
+      ? "One to a lane. You hold whichever lane you stand in."
+      : "Nobody to put out there. You hold all three yourself."}</p>
     <div class="list">${rows}</div>
+    ${state.arms.length ? `<p class="tiny">What you carry (${w.dmg} damage). Every arm you made
+      lends its skill once, held or not.</p><div class="skills">${arms}</div>` : ""}
     <button class="go" id="x">Let it come (${chosen.length} placed)</button>`);
 
+  on("[data-w]", el => { state.held = +el.dataset.w; placeGirls(); });
   on("[data-g]", el => {
     const i = +el.dataset.g, at = state.placed.indexOf(i);
     if (at >= 0) state.placed[at] = null;
@@ -903,8 +1108,12 @@ function fightScreen() {
   show(`<div class="eyebrow">Day ${state.day} &middot; Night</div>
     <div class="hud" id="hud"></div>
     <canvas id="field" width="320" height="180"></canvas>
-    <p class="tiny">Click a lane to be there. Three jumps, no warning, no wait.</p>`);
+    <div class="skills" id="skills">${state.arms.map((a, n) =>
+      `<button data-s="${n}">${ARMS[a.i][0]}<small>${SKILLS[a.i]}</small></button>`).join("")}</div>
+    <p class="tiny">Click a lane to be there. Three jumps, no wait.</p>`);
   hud = document.querySelector("#hud");
+  on("[data-s]", el => useSkill(+el.dataset.s));
+  paintSkills();
   const cv = document.querySelector("#field");
   ctx = cv.getContext("2d");
   cv.onclick = e => {
@@ -920,17 +1129,25 @@ function fightScreen() {
   requestAnimationFrame(loop);
 }
 
+function paintSkills() {
+  const f = state.fight;
+  document.querySelectorAll("[data-s]").forEach((b, n) => {
+    const a = state.arms[n], empty = a.i === 3 && !state.girls.length;
+    b.disabled = !!f.used[n] || a.cond === 2 || empty;
+    b.className = f.used[n] ? "spent" : a.cond === 2 || empty ? "broke" : "";
+  });
+}
+
 function survived() {
   status();
   show(`<div class="eyebrow">Day ${state.day} &middot; Dawn</div>
     <h1>It holds.</h1>
-    <p>What was coming is not coming any more. You are still standing, and so is
-      whoever was standing with you.</p>
+    <p>What was coming is not coming any more.</p>
     <button class="go" id="x">${state.day < 4 ? "Next morning" : "See how it ends"}</button>`);
-  on("#x", () => {
+  on("#x", () => settle(() => {
     if (state.day < 4) { state.day++; state.step = 0; state.placed = [null, null, null]; keep(); dayStart(); }
     else ending();
-  });
+  }));
 }
 
 function fell() {
@@ -938,16 +1155,14 @@ function fell() {
   status();
   show(`<div class="eyebrow">Day ${state.day} &middot; Night</div>
     <h1>It does not hold.</h1>
-    <p>You can go back to the morning and spend the day differently. The day is
-      yours to take again.</p>
-    ${lost ? `<p class="gain">${lost === 1 ? "The one who died tonight stays dead" :
-      `The ${lost} who died tonight stay dead`}. That much of the day does not come
-      back with you.</p>` : ""}
+    <p>The day is yours to take again, and spend differently.</p>
+    ${lost ? `<p class="gain">${lost === 1 ? "The one who died tonight stays dead"
+      : `The ${lost} who died tonight stay dead`}. That much does not come back with you.</p>` : ""}
     <div class="row">
       <button class="go" id="r">Take the day again</button>
       <button class="go" id="q">Start over</button>
     </div>`);
-  on("#r", () => { rewind(); dayStart(); });
+  on("#r", () => { rewind(); settle(dayStart); });
   on("#q", scrap);
 }
 
@@ -956,8 +1171,7 @@ function scrap() {
   show(`<div class="eyebrow">Start over</div>
     <h1>All of it?</h1>
     <div class="box">
-      <p>The four days, what you carried, what you did, and the ones who are
-        gone. None of it is kept.</p>
+      <p>The days, what you carried, what you did, and the ones who are gone.</p>
       <div class="row">
         <button class="go" id="y">Yes, all of it</button>
         <button class="go" id="n">No</button>
@@ -970,13 +1184,10 @@ function scrap() {
 function ending() {
   const k = state.karma;
   const [name, text] = k >= 21
-    ? ["VIRGIN KNIGHT", `You go up against what is waiting and you do not come back down.
-        They will tell it properly, later, and the telling will be kinder than the four days were.`]
+    ? ["VIRGIN KNIGHT", "You go up and you do not come back down. The telling will be kinder than the four days were."]
     : k <= -21
-      ? ["VIRGIN NIGHT", `Nothing is left standing that could argue with you. What survives,
-        survives behind a door you keep the key to. It is quiet, and it is yours.`]
-      : ["VIRGINIGHT", `You never came down on either side of it. The men and the monsters
-        settle nothing between them, and go on not settling it for a long time after you.`];
+      ? ["VIRGIN NIGHT", "What survives, survives behind a door you keep the key to."]
+      : ["VIRGINIGHT", "You came down on neither side, and nothing between them is settled."];
 
   status();
   show(`<div class="center"><div>

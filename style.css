@@ -165,6 +165,12 @@ canvas {
 
 .tiny { margin-top: 10px; font-size: 12px; }
 
+.skills { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 10px; }
+.skills button { padding: 8px 13px; font-size: 13px; }
+.skills small { display: block; margin-top: 2px; color: var(--dim); font-size: 11px; }
+.skills button.spent, .skills button.broke { opacity: .4; cursor: not-allowed; }
+.skills button.broke { border-style: dashed; }
+
 /* --- result / confirm --- */
 
 .box {
