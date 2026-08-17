@@ -225,7 +225,10 @@ const HUES = [
   ["Violet", "#a86bd6", 13, 2.1, 40, 0]
 ];
 
-const GIRL_HP = 22;
+/* She is hard to kill on purpose. A death is permanent and does not rewind
+   (ch.12.4, ch.15.2), so losing one has to be a thing you let happen rather
+   than a thing that happens to you (ch.0.1). */
+const GIRL_HP = 30;
 
 /* A ribbon for every colour, made from the same table. It carries no power and
    cannot be put down: it is the slot she used to be (design ch.8.4). */
@@ -268,10 +271,23 @@ const BRINGS = { shelter: 3, water: 1, wounded: 0, ration: 1, watch: 1, rope: 1,
 /* --- 2d. the night ------------------------------------------------------- */
 /* [name, hp, damage, range, cooldown, speed, colour] */
 const KIND = {
-  m: ["Monster", 15, 4, 13, 1.0, 17, "#7fd6a0"],
-  b: ["Bandit", 12, 3, 13, 0.9, 21, "#d6b87f"],
-  s: ["Soldier", 19, 5, 13, 1.1, 14, "#9fb4d6"]
+  // Monsters and soldiers are worth about the same: which of them is against
+  // you is decided by the karma band, not by the player picking a difficulty
+  // (design ch.13.2). Monsters come quicker, soldiers take more killing.
+  m: ["Monster", 15, 4, 13, 1.00, 18, "#7fd6a0"],
+  b: ["Bandit", 12, 3, 13, 0.90, 21, "#d6b87f"],
+  s: ["Soldier", 18, 4, 13, 1.10, 14, "#9fb4d6"],
+  // The fourth night only (design ch.14). Whichever one turns up, it turns up
+  // because of what you spent four days becoming.
+  k: ["The Demon King", 120, 7, 22, 1.5, 9, "#c85a52"],
+  h: ["The Hero", 102, 6, 20, 1.6, 10, "#e6dcae"]
 };
+
+/* Who the last night sends, by where you ended up (design ch.14).
+   Neutral gets no single thing to kill. It gets both armies instead: on the
+   last night the bandits are gone and it is the real ones on both roads. */
+const LAST = { "1": "k", "-1": "h", "0": "" };
+const LAST_NEUTRAL = [["m", 1], ["s", 1]];
 
 /* Who comes at you and who comes for you, by where you have ended up
    (design ch.13.2). foe 1 = it is here for you. */
@@ -606,19 +622,25 @@ function stander(g, lane) {
 }
 
 function startFight() {
-  const [L, R] = SIDES[band()];
+  const b = band();
+  const last = state.day === 4;
+  const [L, R] = last && !b ? LAST_NEUTRAL : SIDES[b];
+  const boss = last ? LAST[b] : "";
   const n = 3 + state.day * 2;
   const tough = 1 + state.day * .15;
   // Standing for nothing means both ends of the road are against you. More of
-  // them come than either side alone would send, but not twice as many.
+  // them come than either side alone would send, but not twice as many - and
+  // on the last night, with nothing at the head of it, a great deal more.
   const both = L[1] && R[1];
   const spawns = [];
   for (const [side, dir] of [[L, 1], [R, -1]]) {
     const [kind, foe] = side;
-    const count = Math.ceil(n * (foe ? (both ? .55 : 1) : .45));
+    const count = Math.ceil(n * (foe ? (both ? (last ? .55 : .55) : 1) : .45));
     for (let i = 0; i < count; i++)
       spawns.push({ at: (i + Math.random()) * SPAWN_FOR / count, kind, dir, foe, lane: rnd(3), tough });
   }
+  // It comes up the middle, from the side that was never yours.
+  if (boss) spawns.push({ at: 18, kind: boss, dir: b > 0 ? 1 : -1, foe: 1, lane: 1, tough: 1, boss: 1 });
   spawns.sort((a, b) => a.at - b.at);
 
   const w = mine();
@@ -681,7 +703,9 @@ function step(dt) {
 
   while (f.spawns.length && f.spawns[0].at <= f.t) {
     const s = f.spawns.shift();
-    f.units.push(comer(s.kind, s.lane, s.dir, s.foe, s.tough));
+    const u = comer(s.kind, s.lane, s.dir, s.foe, s.tough);
+    if (s.boss) { u.boss = 1; snd(70, .9, "sawtooth", .08); }   // the HUD names it
+    f.units.push(u);
   }
 
   const me = f.units[0];
@@ -747,13 +771,39 @@ function step(dt) {
   else if (f.t >= LASTS) end(foesLeft ? 0 : 1);
 }
 
-function draw() {
-  const f = state.fight;
-  ctx.fillStyle = "#0d0b18";
+/* The world behind the fight remembers what you did to it (design ch.16).
+   None of this is an image: it is a sky, a skyline, a rainbow with holes in
+   it, and one stone for every colour that is not coming back. */
+function backdrop() {
+  const k = state.lock ? state.lock * 60 : state.karma;
+  ctx.fillStyle = k > 20 ? "#22212f" : k < -20 ? "#1e0c11" : "#15131f";
   ctx.fillRect(0, 0, 320, 180);
 
+  ctx.lineWidth = 2;
+  ctx.globalAlpha = .3;
+  HUES.forEach((h, i) => {
+    if (state.dead.includes(i)) return;      // that band of it is simply gone
+    ctx.strokeStyle = h[1];
+    ctx.beginPath();
+    ctx.arc(MID, 178, 98 - i * 5, Math.PI, Math.PI * 2);
+    ctx.stroke();
+  });
+  ctx.globalAlpha = 1;
+
+  // One stone for every colour that went out under you.
+  ctx.fillStyle = "#332e45";
+  state.dead.forEach((d, i) => {
+    ctx.fillRect(112 + i * 14, 170, 6, 9);
+    ctx.fillRect(110 + i * 14, 168, 10, 3);
+  });
+}
+
+function draw() {
+  const f = state.fight;
+  backdrop();
+
   LANES.forEach((y, i) => {
-    ctx.fillStyle = i === f.units[0].lane ? "#1e1a38" : "#151228";
+    ctx.fillStyle = i === f.units[0].lane ? "rgba(44,37,84,.55)" : "rgba(12,10,24,.55)";
     ctx.fillRect(0, y - 17, 320, 34);
   });
   ctx.fillStyle = "#2c2554";
@@ -762,7 +812,7 @@ function draw() {
   for (const u of f.units) {
     if (u.hp <= 0) continue;
     // She and the unicorn hold the same spot, so they are drawn apart to be read.
-    const y = LANES[u.lane] + (u.girl ? 7 : u.me ? -4 : 0), w = u.me ? 11 : 8;
+    const y = LANES[u.lane] + (u.girl ? 7 : u.me ? -4 : 0), w = u.boss ? 16 : u.me ? 11 : 8;
     if (!u.foe && !u.me) { ctx.fillStyle = "#2a3a30"; ctx.fillRect(u.x - w, y - w, w * 2, w * 2); }
     ctx.fillStyle = u.colour;
     if (u.me) {
@@ -772,16 +822,19 @@ function draw() {
       ctx.fillRect(u.x - w / 2, y - w / 2, w, w);
       if (u.foe) { ctx.fillStyle = "#0d0b18"; ctx.fillRect(u.x - 2, y - 1, 4, 1); }
     }
+    const bw = u.boss ? 34 : 14;
     ctx.fillStyle = "#3a3352";
-    ctx.fillRect(u.x - 7, y - 13, 14, 2);
+    ctx.fillRect(u.x - bw / 2, y - w - 5, bw, u.boss ? 3 : 2);
     ctx.fillStyle = u.foe ? "#e2687a" : "#7fd6a0";
-    ctx.fillRect(u.x - 7, y - 13, 14 * Math.max(0, u.hp) / u.max, 2);
+    ctx.fillRect(u.x - bw / 2, y - w - 5, bw * Math.max(0, u.hp) / u.max, u.boss ? 3 : 2);
   }
 
+  const big = f.units.find(u => u.boss && u.hp > 0);
   hud.innerHTML = `<span>${Math.max(0, LASTS - f.t).toFixed(0)}s</span>
     <span>HP <b>${state.hp}</b> / ${state.max}</span>
     <span>Jumps <b>${f.jumps}</b></span>
-    <span>${f.units.filter(u => u.foe && u.hp > 0).length + f.spawns.filter(s => s.foe).length} left</span>`;
+    <span>${f.units.filter(u => u.foe && u.hp > 0).length + f.spawns.filter(s => s.foe).length} left</span>
+    ${big ? `<span class="big">${big.name} <b>${Math.max(0, big.hp)}</b></span>` : ""}`;
 }
 
 function loop(now) {
@@ -1189,11 +1242,23 @@ function ending() {
       ? ["VIRGIN NIGHT", "What survives, survives behind a door you keep the key to."]
       : ["VIRGINIGHT", "You came down on neither side, and nothing between them is settled."];
 
+  // What is left of the seven, said plainly and shown (design ch.16, ch.19).
+  const gone = state.dead.length, with_ = state.girls.length;
+  const after = gone
+    ? `${gone} of them went out under you, and you are still carrying the ${gone === 1 ? "ribbon" : "ribbons"}.`
+    : with_
+      ? `The ${with_} who came with you are still standing.`
+      : "Nobody came with you, and nobody was lost.";
+
   status();
   show(`<div class="center"><div>
     <div class="eyebrow">Four days</div>
     <h1>${name}</h1>
     <p>${text}</p>
+    <div class="bow">${HUES.map((h, i) =>
+      `<i style="background:${state.dead.includes(i) ? "transparent" : h[1]};
+        ${state.dead.includes(i) ? "border:1px dashed #4a4566" : ""}"></i>`).join("")}</div>
+    <p>${after}</p>
     <button class="go" id="x">Again</button>
   </div></div>`);
   on("#x", title);

@@ -170,6 +170,11 @@ canvas {
 .skills small { display: block; margin-top: 2px; color: var(--dim); font-size: 11px; }
 .skills button.spent, .skills button.broke { opacity: .4; cursor: not-allowed; }
 .skills button.broke { border-style: dashed; }
+.hud .big { color: #f0a0a8; }
+
+/* What is left of the seven, at the end. */
+.bow { display: flex; gap: 7px; justify-content: center; margin: 18px 0 20px; }
+.bow i { width: 26px; height: 8px; box-sizing: border-box; }
 
 /* --- result / confirm --- */
 
