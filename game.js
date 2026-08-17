@@ -1,445 +1,609 @@
+/* ==========================================================================
+   Virginight - stage 1 (see VIRGINIGHT_DESIGN.md ch.19).
+
+   Exploration, time, karma and one guaranteed causality loop.
+   No combat, no items, no companions, no HP yet.
+
+   The concept (ch.0) is responsibility: the game never shows a karma number
+   and never tells the player what is right. It only lets choices - and the
+   refusal to choose - come back.
+   ========================================================================== */
+
+const root = document.documentElement;
 const screen = document.querySelector("#screen");
-const status = document.querySelector("#status");
+const bar = document.querySelector("#bar");
+const kit = document.querySelector("#kit");
+const logbar = document.querySelector("#log");
 
-const state = {
-  day: 1,
-  baseHp: 5,
-  materials: 0,
-  location: "",
-  ally: false,
-  weapon: false,
-  slot: -1,
-  battle: null
+/* --- 1. constants ------------------------------------------------------- */
+
+const TIMES = ["Morning", "Noon", "Evening", "Dusk"];
+
+/* Danger is never given as a number (design ch.7.3). */
+const RISKS = ["Looks safe", "Should go well", "A little risky", "Very dangerous"];
+
+/* Outcome odds per risk tier: great / good / fail / bad. */
+const ODDS = [
+  [15, 60, 20, 5],
+  [20, 45, 25, 10],
+  [25, 30, 30, 15],
+  [30, 20, 25, 25]
+];
+
+const STAGES = [
+  ["great", "It went better than you hoped"],
+  ["good", "It went well enough"],
+  ["fail", "It did not go well"],
+  ["bad", "It went badly"]
+];
+
+/* Rainbow shards granted per outcome stage: [min, max]. */
+const SHARDS = [[4, 6], [2, 4], [0, 2], [0, 0]];
+
+/* --- 2. event data ------------------------------------------------------ */
+/* karma: applied when the action is confirmed, not when it resolves
+   (design ch.6.3 - intent is judged, not the result).
+   Events worth +-10 are the day 1-2 pool; +-20 unlocks on day 3. */
+
+function ev(id, title, blurb, karma, risk, great, good, fail, bad) {
+  return { id, title, blurb, karma, risk, out: [great, good, fail, bad] };
+}
+
+const EVENTS = {
+  town: [
+    ev("mend", "Mend the broken fence", "A family cannot keep their goats in.", 10, 0,
+      "You rebuild the whole pen before dark. They press dried fruit and shards on you.",
+      "The rail holds. They give you what little they can spare.",
+      "The post splits a second time. They thank you and turn back inside.",
+      "The rail goes through the trough. The goats scatter into the fields."),
+    ev("ration", "Share your ration", "Children are waiting outside the mill.", 10, 0,
+      "You feed all of them. Someone leaves shards on your saddle without a word.",
+      "There is enough to go around. A mother gives you a handful of shards.",
+      "There is not enough. The smallest ones go without.",
+      "The older boys take everything and run. Nobody is fed."),
+    ev("offering", "Take from the offering box", "The shrine is unwatched at this hour.", -10, 1,
+      "The box is fuller than it looked. You are gone before the candle gutters.",
+      "You take a fair share and leave the lid as you found it.",
+      "The hinge cracks. You leave with less than you came for.",
+      "The priest sees your shadow on the wall. Nothing is taken."),
+    ev("frighten", "Frighten the merchant", "He is slow to name a price for strangers.", -10, 1,
+      "One look at the horn and he empties the strongbox onto the counter.",
+      "He drops his price to nothing and asks you to leave.",
+      "He holds his ground and calls for the watch. You walk away empty.",
+      "He swings the scale hook at you. The stall is ruined and you take nothing.")
+  ],
+  castle: [
+    ev("cage", "Free a caged bird", "Something small is singing above the gate.", 10, 1,
+      "The cage opens clean. Shards fall out of the ruined nest below.",
+      "The bird goes. You find a few shards in the straw.",
+      "The lock will not give. You leave it singing.",
+      "The cage falls from the wall. The singing stops."),
+    ev("water", "Leave water at the cells", "The lower corridor has not been opened in days.", 10, 1,
+      "You reach every door. One of them pushes shards back through the grate.",
+      "You reach most of the doors before the guard turns.",
+      "The guard turns early. You get through two doors.",
+      "The bucket goes over on the stair. You are heard and have to run."),
+    ev("plate", "Pocket a silver plate", "The hall is set for people who are not coming.", -10, 2,
+      "You take the whole setting. It weighs more in shards than you expected.",
+      "You take two plates and nothing is missed.",
+      "The steward counts the table twice. You put it back.",
+      "The stack goes down the stairs. Half the castle hears it."),
+    ev("rope", "Cut the alarm rope", "One rope runs the length of the wall.", -10, 2,
+      "It parts silently. The wall is deaf for the rest of the night.",
+      "You cut it through. Nobody looks up.",
+      "The strands hold. You leave it fraying.",
+      "The bell rings once as it goes. They know someone is inside.")
+  ]
 };
 
-const places = {
-  town: {
-    name: "虹の町",
-    actions: [
-      ["彩り市を歩く", "光る露店を一軒ずつ調べる", 3],
-      ["噴水広場へ行く", "虹が落ちる水辺を探す", 4],
-      ["工房通りを訪ねる", "職人の手伝いを申し出る", 5],
-      ["花壇を調べる", "七色の花びらを集める", 3],
-      ["古い図書室へ", "忘れられた地図を読み解く", 4],
-      ["時計塔に登る", "町を上から見渡す", 5]
-    ]
-  },
-  castle: {
-    name: "敵の城",
-    actions: [
-      ["外壁を調べる", "崩れた石の隙間を探る", 3],
-      ["兵舎に忍び込む", "見張りの交代を待って進む", 4],
-      ["宝物庫を探す", "虹色に光る扉を開ける", 5],
-      ["中庭を横切る", "影から影へ素早く移動する", 3],
-      ["厨房をのぞく", "誰もいない勝手口から入る", 4],
-      ["尖塔へ向かう", "細い階段を一気に駆け上る", 5]
-    ]
+/* Day 3-4 events. Heavier karma, so they stay out of the early pool. */
+EVENTS.town.push(
+  ev("watch", "Stand guard until dawn", "The town has nobody left to put on the wall.", 20, 2,
+    "Nothing comes, and they see you standing there at first light. They give you everything they have.",
+    "You hold the wall all night. They are grateful in the morning.",
+    "You sleep an hour before dawn. Something got through the east gate.",
+    "You sleep through it. There is a house standing open when you wake."),
+  ev("drive", "Drive the beggars out", "They have been at the well since the first night.", -20, 1,
+    "They leave everything behind in the rush. It is worth a great deal.",
+    "They go quietly and leave what they were carrying.",
+    "They will not move. You stand in the square shouting at nobody.",
+    "One of them will not get up. The square empties and watches you.")
+);
+
+EVENTS.castle.push(
+  ev("wounded", "Carry the wounded out", "The east range is burning and still full.", 20, 3,
+    "You bring out every one of them. What they press on you afterward is worth more than shards.",
+    "You bring out three before the roof comes down.",
+    "You bring out one. The stair goes before you can turn back.",
+    "The floor gives under you. You get out alone and burned."),
+  ev("bind", "Bind the servant girl", "She has seen your face and the corridor behind you.", -20, 2,
+    "She is quiet and nobody comes. The room is yours to empty at leisure.",
+    "She is quiet long enough. You take what you came for.",
+    "She works a hand loose and screams. You leave with nothing.",
+    "She is found before morning, and they know exactly who to look for.")
+);
+
+/* The guaranteed causality loop (design ch.0.1, plan stage 1).
+   Offered every action of day 1 until it is taken or the day runs out. */
+/* All four outcomes must leave the three of them indoors: the payoff below
+   turns on the choice, not on how well the night went. */
+const SHELTER = ev("shelter", "Shelter the strangers",
+  "Three of them are asking at doors along the road. Nobody has opened one.", 10, 0,
+  "All three sleep under a roof. They talk half the night about the roads they came by, and you are better off for the listening.",
+  "You find all three a dry corner. They sleep, and they are grateful in the morning.",
+  "You get all three inside, but the roof is bad and nobody sleeps much.",
+  "You get all three inside. Something of yours leaves with them before first light.");
+
+/* Day 2 payoff. Which one appears depends on day 1 (design ch.0.1). */
+const REPAID = ev("marked", "Follow the marked path",
+  "The travelers left the safe way scratched into the milestone.", 0, 0,
+  "The path runs clean past every watch post. You come back loaded.",
+  "The path holds. You get in and out unseen.",
+  "The marks stop halfway. You turn back with a little.",
+  "You lose the marks in the dark and spend the hour finding the road again.");
+
+const PUNISHED = ev("watchmen", "Slip past the new watch",
+  "The men on the road tonight know the country better than the garrison does.", 0, 3,
+  "You get through anyway, and take what the new watch was set to guard.",
+  "You get past them, barely, and come away with something.",
+  "They turn you back at the first bend.",
+  "They were waiting at both ends of the road. You lose the hour and the way back.");
+
+const WORKSHOP = { id: "shop", title: "Workshop", blurb: "Work at the bench. There is nothing to build yet.", karma: 0, risk: -1 };
+const REST = { id: "rest", title: "Rest", blurb: "Sit the hour out. There is nothing to recover yet.", karma: 0, risk: -1 };
+
+/* --- 2b. causal items (design ch.8.2) ------------------------------------ */
+/* attr  +1 good / 0 neutral / -1 evil - decides what burns off at the
+         critical point (ch.6.4). Neutral marks always survive.
+   kind  "E" evidence: silently shifts how dangerous a place is for you.
+         "C" consumable: hangs a new action off the place, then is spent.
+   Consumable actions do not roll (ch.7.2): the main result is fixed. */
+
+function evidence(id, name, attr, place, shift, note) {
+  return { id, name, attr, kind: "E", place, shift, note };
+}
+
+function spend(id, name, attr, place, title, blurb, karma, shards, text) {
+  return { id, name, attr, kind: "C", place, act: { id: "u_" + id, title, blurb, karma, risk: -2, shards, text } };
+}
+
+const ITEMS = [
+  evidence("thanks", "The town's thanks", 1, "town", -1, "Doors in the town open before you knock."),
+  evidence("blessing", "A healer's blessing", 1, "town", -1, "The town looks for you when someone is hurt."),
+  evidence("hunted", "Hunted in the town", -1, "town", 1, "They know your shape in the town now."),
+  evidence("debtors", "Debtors in the town", -1, "town", 1, "Nobody in the town meets your eye twice."),
+  evidence("quiet", "A quiet way in", 0, "castle", -1, "You know one door the castle forgets to bar."),
+  evidence("alert", "The castle on alert", 0, "castle", 1, "The watch has been doubled since you were last inside."),
+  evidence("witness", "A witness left alive", -1, "castle", 1, "Someone inside can describe you to the guard."),
+
+  spend("map", "The castle map", 0, "castle",
+    "Take the hidden passage", "The map runs a line under the east range.", 0, 7,
+    "The passage comes out inside the wall, behind everyone. You take what you like and leave the way you came."),
+  spend("favour", "A sworn favour", 1, "town",
+    "Call in the favour", "Someone in the town said to come back if you ever needed it.", 10, 5,
+    "They do not ask what it is for. They give you what they have and shut the door quietly behind you."),
+  spend("key", "A stolen key", -1, "castle",
+    "Open the lower cells", "The key fits the corridor nobody walks after dark.", -10, 6,
+    "The doors go back one after another. What is inside is worth carrying, and nobody down there will be reporting it.")
+];
+
+const ITEM = Object.fromEntries(ITEMS.map(i => [i.id, i]));
+
+/* Which action leaves which mark, and in which outcome band (from..to).
+   Marks are earned by how it actually went, not by what you meant. */
+const GIVES = {
+  mend: [["thanks", 0, 0]],
+  ration: [["blessing", 0, 1]],
+  offering: [["hunted", 2, 3]],
+  frighten: [["hunted", 0, 3]],
+  watch: [["favour", 0, 1]],
+  drive: [["debtors", 0, 2]],
+  cage: [["quiet", 0, 1]],
+  water: [["favour", 0, 1]],
+  plate: [["map", 0, 0], ["alert", 2, 3]],
+  rope: [["key", 0, 1], ["alert", 2, 3]],
+  wounded: [["blessing", 0, 1]],
+  bind: [["witness", 0, 3]],
+  watchmen: [["alert", 2, 3]],
+  marked: [["quiet", 0, 1]]
+};
+
+const BAG = 8;
+
+/* --- 3. state ----------------------------------------------------------- */
+
+let state;
+
+function newGame() {
+  state = {
+    day: 1,
+    step: 0,          // 0..3 -> TIMES
+    karma: 10,        // never shown as a number (design ch.6.1)
+    lock: 0,          // -1 evil, 0 open, +1 good
+    shards: 0,
+    sheltered: null,  // null until day 1 ends, then true / false
+    special: null,    // "repaid" | "punished" while the day 2 payoff is live
+    place: null,
+    offers: null,     // held across a "No" so the offers do not re-roll
+    justLocked: false,
+    items: [],        // causal marks, max BAG (design ch.8.3)
+    pending: null,    // a mark waiting on an exchange because the bag is full
+    log: []           // last few lines only (design ch.9)
+  };
+}
+
+/* --- 3b. items and log --------------------------------------------------- */
+
+function note(line) {
+  state.log.push(line);
+  if (state.log.length > 4) state.log.shift();
+}
+
+function has(id) {
+  return state.items.some(i => i.id === id);
+}
+
+/* Returns false when the bag is full, and parks the mark for an exchange. */
+function take(item) {
+  if (has(item.id)) return true;
+  // Past the critical point the other colour will not stick to you any more.
+  // Ribbons are the exception: they stay whatever colour they are (ch.8.4).
+  if (state.lock && item.attr === -state.lock && !item.keep) {
+    note(`It does not stay with you: ${item.name}`);
+    return true;
   }
-};
-
-function updateStatus() {
-  status.textContent = `DAY ${state.day}　防衛HP ${state.baseHp}　虹のかけら ${state.materials}`;
+  if (state.items.length >= BAG) { state.pending = item; return false; }
+  state.items.push(item);
+  note(`Kept: ${item.name}`);
+  return true;
 }
 
-function resetDay() {
-  state.baseHp = 5;
-  state.materials = 0;
-  state.location = "";
-  state.ally = false;
-  state.weapon = false;
-  state.slot = -1;
-  state.battle = null;
-  updateStatus();
+function drop(id, why) {
+  const i = state.items.findIndex(x => x.id === id);
+  if (i < 0) return;
+  note(`${why}: ${state.items[i].name}`);
+  state.items.splice(i, 1);
 }
 
-function setScene(html) {
+/* At the critical point everything of the opposite colour burns off.
+   Neutral marks stay, and so will ribbons once they exist (ch.6.4, ch.8.4). */
+function purge() {
+  const gone = state.items.filter(i => i.attr === -state.lock && !i.keep);
+  if (!gone.length) return;
+  state.items = state.items.filter(i => !gone.includes(i));
+  // One line, so a big purge cannot push the critical line out of the log.
+  note(`Gone with it: ${gone.map(i => i.name).join(", ")}`);
+}
+
+/* Marks are earned by how it actually went, not by what you meant by it. */
+function grant(id, stage) {
+  // Only one mark can be waiting on an exchange at a time, so stop at the
+  // first one the bag cannot hold rather than overwrite what is pending.
+  for (const [item, from, to] of GIVES[id] || [])
+    if (stage >= from && stage <= to && !take(ITEM[item])) return;
+}
+
+/* Evidence quietly makes a place kinder or harsher than it reads (ch.7.4). */
+function riskOf(e) {
+  if (e.risk < 0) return e.risk;
+  let r = e.risk;
+  for (const i of state.items) if (i.kind === "E" && i.place === state.place) r += i.shift;
+  return Math.max(0, Math.min(3, r));
+}
+
+/* --- 4. helpers --------------------------------------------------------- */
+
+const rnd = n => Math.floor(Math.random() * n);
+
+function roll(risk) {
+  const odds = ODDS[risk];
+  let n = rnd(100);
+  for (let i = 0; i < 4; i++) {
+    if (n < odds[i]) return i;
+    n -= odds[i];
+  }
+  return 3;
+}
+
+function applyKarma(amount) {
+  if (!amount) return;
+  state.karma = Math.max(-100, Math.min(100, state.karma + amount));
+  if (state.lock === 0 && Math.abs(state.karma) >= 60) {
+    state.lock = state.karma > 0 ? 1 : -1;
+    state.justLocked = true;
+    note(state.lock === 1 ? "You will not come back from this." : "You will not come back from this.");
+    purge();
+  }
+  paint();
+}
+
+/* Good washes the world out, evil sinks it (design ch.6.5). No numbers.
+   Past the critical point the tone stops moving - it has already settled. */
+function paint() {
+  const k = state.lock ? state.lock * 60 : state.karma;
+  root.style.setProperty("--good", (Math.max(0, k) / 100).toFixed(2));
+  root.style.setProperty("--evil", (Math.max(0, -k) / 100).toFixed(2));
+}
+
+function show(html) {
   screen.innerHTML = html;
-  updateStatus();
 }
 
-function showTitle() {
-  setScene(`
-    <div class="hero">
-      <div>
-        <div class="hero-mark">♘</div>
-        <div class="eyebrow">A tiny defense adventure</div>
-        <h1>Unicorns & Rainbows</h1>
-        <p>探索で仲間と素材を集め、虹の力で町を守ろう。</p>
-        <button class="primary" id="start">冒険をはじめる</button>
-      </div>
-    </div>`);
-  document.querySelector("#start").onclick = showLocations;
+function on(sel, fn) {
+  document.querySelectorAll(sel).forEach(el => (el.onclick = () => fn(el)));
 }
 
-function showLocations() {
-  setScene(`
-    <div class="scene-head">
-      <div class="eyebrow">Day ${state.day} / Explore</div>
-      <h1>今日はどこを探索する？</h1>
-      <p>探索先によって行動と手に入る素材の量が変わります。</p>
-    </div>
-    <div class="two-col">
-      <button class="location town" data-place="town">
-        <div class="location-icon">⌂</div><h2>虹の町</h2>
-        <p>人々が暮らすにぎやかな町。安全に素材を探せそうだ。</p>
-      </button>
-      <button class="location castle" data-place="castle">
-        <div class="location-icon">♜</div><h2>敵の城</h2>
-        <p>危険な気配が漂う古城。貴重な素材が眠っている。</p>
-      </button>
-    </div>`);
-  document.querySelectorAll("[data-place]").forEach(button => {
-    button.onclick = () => showActions(button.dataset.place);
-  });
-}
-
-function showActions(placeKey) {
-  state.location = placeKey;
-  const place = places[placeKey];
-  setScene(`
-    <div class="scene-head">
-      <div class="eyebrow">${place.name} / Choose one</div>
-      <h1>どう行動する？</h1>
-      <p>6つの行動からひとつ選んで探索します。</p>
-    </div>
-    <div class="choice-grid">
-      ${place.actions.map((action, index) => `
-        <button class="choice" data-action="${index}">
-          <small>行動 ${index + 1}</small><h2>${action[0]}</h2><p>${action[1]}</p>
-        </button>`).join("")}
-    </div>`);
-  document.querySelectorAll("[data-action]").forEach(button => {
-    button.onclick = () => resolveExplore(Number(button.dataset.action));
-  });
-}
-
-function resolveExplore(index) {
-  const action = places[state.location].actions[index];
-  state.materials = action[2];
-  state.ally = true;
-  setScene(`
-    <div class="result-box">
-      <div class="eyebrow">Explore complete</div>
-      <h1>${action[0]}ことにした</h1>
-      <p>${action[1]}うち、赤い服の少女ルビーと出会った。<br>彼女が集めていた虹のかけらを分けてもらった。</p>
-      <div class="loot">
-        <div class="loot-item"><b>◆ × ${action[2]}</b><span>虹のかけら</span></div>
-        <div class="loot-item"><b>● ルビー</b><span>仲間になった</span></div>
-      </div>
-      <button class="primary" id="workshop">工房と配置へ</button>
-    </div>`);
-  document.querySelector("#workshop").onclick = showWorkshop;
-}
-
-function showWorkshop() {
-  setScene(`
-    <div class="scene-head">
-      <div class="eyebrow">Prepare</div>
-      <h1>武器制作と仲間の配置</h1>
-      <p>虹の槍を作り、ルビーを防衛地点の近くへ配置してください。</p>
-    </div>
-    <div class="workshop">
-      <div class="panel">
-        <h2>武器工房</h2><p>集めた素材からユニコーンのスキルを作ります。</p>
-        <div class="weapon">
-          <div class="weapon-icon">↟</div>
-          <h3>虹の槍</h3>
-          <p>戦場の敵すべてにダメージを与える、一度きりの虹色スキル。</p>
-          ${state.weapon
-            ? `<div class="made">✓ 制作済み</div>`
-            : `<button class="primary" id="craft">◆ 3個で制作</button>`}
-        </div>
-      </div>
-      <div class="panel">
-        <h2>ルビーを配置</h2><p>3つの固定枠から、守る場所をひとつ選びます。</p>
-        <div class="slots">
-          ${["入口寄り", "中央", "城門寄り"].map((label, index) => `
-            <button class="slot ${state.slot === index ? "selected" : ""}" data-slot="${index}">${label}</button>`).join("")}
-        </div>
-        <div class="helper" id="helper">${readyText()}</div>
-        <button class="primary" id="battle" ${state.weapon && state.slot >= 0 ? "" : "disabled"}>防衛戦をはじめる</button>
-      </div>
-    </div>`);
-
-  const craft = document.querySelector("#craft");
-  if (craft) craft.onclick = () => {
-    if (state.materials < 3) return;
-    state.materials -= 3;
-    state.weapon = true;
-    showWorkshop();
-  };
-  document.querySelectorAll("[data-slot]").forEach(button => {
-    button.onclick = () => {
-      state.slot = Number(button.dataset.slot);
-      showWorkshop();
-    };
-  });
-  document.querySelector("#battle").onclick = startBattle;
-}
-
-function readyText() {
-  if (!state.weapon && state.slot < 0) return "虹の槍を制作し、配置場所を選んでください。";
-  if (!state.weapon) return "虹の槍を制作してください。";
-  if (state.slot < 0) return "配置場所を選んでください。";
-  return "準備完了。敵のウェーブを迎え撃てます。";
-}
-
-const route = [[0, 45], [70, 45], [70, 125], [165, 125], [165, 50], [255, 50], [255, 110], [320, 110]];
-const slotPoints = [[84, 86], [165, 86], [245, 80]];
-const segmentLengths = route.slice(1).map((point, index) => Math.hypot(point[0] - route[index][0], point[1] - route[index][1]));
-const routeLength = segmentLengths.reduce((sum, length) => sum + length, 0);
-
-function pointOnRoute(distance) {
-  let rest = distance;
-  for (let i = 0; i < segmentLengths.length; i++) {
-    if (rest <= segmentLengths[i]) {
-      const ratio = rest / segmentLengths[i];
-      return [
-        route[i][0] + (route[i + 1][0] - route[i][0]) * ratio,
-        route[i][1] + (route[i + 1][1] - route[i][1]) * ratio
-      ];
-    }
-    rest -= segmentLengths[i];
+function status() {
+  if (!state) {
+    bar.innerHTML = "<span>Virginight</span>";
+    kit.innerHTML = "";
+    logbar.innerHTML = "";
+    return;
   }
-  return route.at(-1);
+  bar.innerHTML = `<span>Day <b>${state.day}</b> / 4</span><span>${TIMES[state.step] || "Night"}</span>
+    <span>Shards <b>${state.shards}</b></span><span>Carried <b>${state.items.length}</b> / ${BAG}</span>`;
+  kit.innerHTML = state.items.map(i =>
+    `<span class="chip a${i.attr + 1}" title="${i.note || i.act.blurb}">${i.name}</span>`).join("");
+  logbar.innerHTML = state.log.map(l => `<span>${l}</span>`).join("");
 }
 
-function startBattle() {
-  setScene(`
-    <div class="battle-wrap">
-      <div class="battle-hud">
-        <strong id="timer">残り 30.0秒</strong>
-        <span id="enemy-count">敵 0 / 10</span>
-        <span id="base-count">防衛HP 5</span>
-        <span class="spacer"></span>
-        <button class="skill" id="spear">虹の槍を使う</button>
-      </div>
-      <canvas id="battlefield" width="320" height="180"></canvas>
-      <div class="legend"><span><i class="dot girl"></i>ルビー：自動攻撃</span><span><i class="dot enemy"></i>敵：城門へ進行</span></div>
-    </div>`);
+/* --- 5. offers ---------------------------------------------------------- */
 
-  const canvas = document.querySelector("#battlefield");
-  const context = canvas.getContext("2d");
-  state.battle = {
-    canvas, context,
-    enemies: [],
-    spawned: 0,
-    escaped: 0,
-    defeated: 0,
-    spawnClock: 0,
-    attackClock: 0,
-    elapsed: 0,
-    spearUsed: false,
-    spearFlash: 0,
-    shot: null,
-    lastTime: performance.now(),
-    ended: false
-  };
-  document.querySelector("#spear").onclick = useSpear;
-  requestAnimationFrame(battleLoop);
+function pool() {
+  return EVENTS[state.place].filter(e =>
+    (state.day > 2 || Math.abs(e.karma) === 10) &&
+    !(state.lock === 1 && e.karma < 0) &&
+    !(state.lock === -1 && e.karma > 0)
+  );
 }
 
-function useSpear() {
-  const battle = state.battle;
-  if (!battle || battle.ended || battle.spearUsed) return;
-  battle.spearUsed = true;
-  battle.spearFlash = .65;
-  battle.enemies.forEach(enemy => enemy.hp -= 12);
-  document.querySelector("#spear").disabled = true;
-  document.querySelector("#spear").textContent = "虹の槍 使用済み";
-}
+function buildOffers() {
+  // Past the critical point the other side's stronghold stops feeding and
+  // housing you. Its safe actions are replaced by exploration (design ch.5.2).
+  const shut = state.place === (state.lock === 1 ? "castle" : state.lock === -1 ? "town" : "");
+  const out = shut ? [] : [WORKSHOP, REST];
+  const extra = [];
+  let slots = shut ? 4 : 2;
 
-function battleLoop(now) {
-  const battle = state.battle;
-  if (!battle || battle.ended) return;
-  const delta = Math.min((now - battle.lastTime) / 1000, .05);
-  battle.lastTime = now;
-  updateBattle(delta);
-  drawBattle();
-  if (!battle.ended) requestAnimationFrame(battleLoop);
-}
-
-function updateBattle(delta) {
-  const battle = state.battle;
-  battle.elapsed += delta;
-  battle.spawnClock -= delta;
-  battle.attackClock -= delta;
-  battle.spearFlash = Math.max(0, battle.spearFlash - delta);
-  if (battle.shot) {
-    battle.shot.life -= delta;
-    if (battle.shot.life <= 0) battle.shot = null;
+  // Day 1: the shelter choice holds an exploration slot until it is taken.
+  if (state.day === 1 && state.sheltered === null) {
+    out.push(SHELTER);
+    slots--;
+  }
+  // Day 2: refusing costs a slot, taking it in adds a fifth option
+  // (design ch.5.2 - causality is appended, never swapped in silently).
+  if (state.special === "punished") {
+    out.push(PUNISHED);
+    slots--;
+  } else if (state.special === "repaid") {
+    extra.push(REPAID);
   }
 
-  if (battle.spawned < 10 && battle.spawnClock <= 0) {
-    battle.enemies.push({ distance: 0, hp: 26, maxHp: 26, speed: 39 });
-    battle.spawned++;
-    battle.spawnClock = 1.7;
+  const rest = pool();
+  while (slots-- > 0 && rest.length) {
+    out.push(rest.splice(rnd(rest.length), 1)[0]);
   }
 
-  battle.enemies.forEach(enemy => enemy.distance += enemy.speed * delta);
+  // Anything you are carrying that this place can be used against hangs its
+  // own action off the end of the list (design ch.5.2, ch.8.2).
+  for (const i of state.items) if (i.kind === "C" && i.place === state.place) extra.push(i.act);
 
-  const girl = slotPoints[state.slot];
-  if (battle.attackClock <= 0) {
-    const targets = battle.enemies
-      .filter(enemy => enemy.hp > 0 && distanceTo(pointOnRoute(enemy.distance), girl) < 54)
-      .sort((a, b) => b.distance - a.distance);
-    if (targets[0]) {
-      targets[0].hp -= 6;
-      battle.attackClock = .48;
-      battle.shot = { from: girl, to: pointOnRoute(targets[0].distance), life: .1 };
+  return out.concat(extra);
+}
+
+/* --- 6. screens --------------------------------------------------------- */
+
+function title() {
+  state = null;
+  root.style.setProperty("--good", 0);
+  root.style.setProperty("--evil", 0);
+  status();
+  show(`<div class="center"><div>
+    <h1>VIRGINIGHT</h1>
+    <p>Four days. No one will tell you what you are for.</p>
+    <button class="go" id="x">Begin</button>
+  </div></div>`);
+  on("#x", () => { newGame(); paint(); dayStart(); });
+}
+
+function dayStart() {
+  status();
+  let echo = "";
+
+  // The day 2 callback: what you did, or what you did not do (design ch.0.1).
+  // It is live for that day only - ignoring it is also an answer.
+  state.special = null;
+  if (state.day === 2) {
+    if (state.sheltered) {
+      state.special = "repaid";
+      echo = `<div class="echo">The three you took in were gone before you woke.
+        On the milestone at the edge of the road, someone has scratched a line of
+        marks that were not there yesterday.</div>`;
+    } else {
+      state.special = "punished";
+      echo = `<div class="echo">The three you left on the road did not go far.
+        They know the country, and by this morning they are walking it for the
+        castle. Every way out is watched tonight.</div>`;
     }
   }
 
-  const alive = [];
-  battle.enemies.forEach(enemy => {
-    if (enemy.hp <= 0) battle.defeated++;
-    else if (enemy.distance >= routeLength) {
-      battle.escaped++;
-      state.baseHp--;
-    } else alive.push(enemy);
-  });
-  battle.enemies = alive;
-  updateStatus();
-
-  if (state.baseHp <= 0) finishBattle(false);
-  else if (battle.spawned === 10 && battle.enemies.length === 0) finishBattle(battle.defeated === 10);
-  else if (battle.elapsed >= 30) {
-    state.baseHp -= battle.enemies.length;
-    battle.escaped += battle.enemies.length;
-    battle.enemies = [];
-    finishBattle(state.baseHp > 0 && battle.defeated === 10);
-  }
+  show(`<div class="eyebrow">Day ${state.day}</div>
+    <h1>${["The road is quiet.", "Word has travelled.", "Fewer doors open now.", "Whatever is coming arrives tonight."][state.day - 1]}</h1>
+    <p>You have four hours of daylight.</p>
+    ${echo}
+    <button class="go" id="x">Go on</button>`);
+  on("#x", placeSelect);
 }
 
-function distanceTo(a, b) {
-  return Math.hypot(a[0] - b[0], a[1] - b[1]);
-}
-
-function drawBattle() {
-  const battle = state.battle;
-  const ctx = battle.context;
-  ctx.clearRect(0, 0, 320, 180);
-
-  ctx.fillStyle = "#182035";
-  ctx.fillRect(0, 0, 320, 180);
-  ctx.fillStyle = "#1f2940";
-  for (let x = 0; x < 320; x += 16) for (let y = 0; y < 180; y += 16) if ((x + y) % 32) ctx.fillRect(x, y, 15, 15);
-
-  ctx.strokeStyle = "#565c75";
-  ctx.lineWidth = 12;
-  ctx.lineCap = "round";
-  ctx.lineJoin = "round";
-  ctx.beginPath();
-  ctx.moveTo(route[0][0], route[0][1]);
-  route.slice(1).forEach(point => ctx.lineTo(point[0], point[1]));
-  ctx.stroke();
-  ctx.strokeStyle = "#858ba2";
-  ctx.lineWidth = 1;
-  ctx.setLineDash([3, 4]);
-  ctx.stroke();
-  ctx.setLineDash([]);
-
-  ctx.fillStyle = "#8a6dca";
-  ctx.fillRect(300, 82, 20, 42);
-  ctx.fillStyle = "#111726";
-  ctx.fillRect(308, 102, 8, 22);
-  ctx.fillStyle = "#d6c2ff";
-  ctx.font = "bold 6px monospace";
-  ctx.fillText("GATE", 300, 78);
-
-  const girl = slotPoints[state.slot];
-  ctx.fillStyle = "#ff5c74";
-  ctx.beginPath();
-  ctx.fillRect(girl[0] - 7, girl[1] - 7, 14, 14);
-  ctx.fillStyle = "#fff";
-  ctx.beginPath();
-  ctx.fillRect(girl[0] - 4, girl[1] - 3, 2, 2);
-  ctx.fillRect(girl[0] + 2, girl[1] - 3, 2, 2);
-  ctx.strokeStyle = "#ff5c7435";
-  ctx.lineWidth = 2;
-  ctx.beginPath();
-  ctx.arc(girl[0], girl[1], 54, 0, Math.PI * 2);
-  ctx.stroke();
-
-  battle.enemies.forEach(enemy => {
-    const point = pointOnRoute(enemy.distance);
-    ctx.fillStyle = "#65dfc0";
-    ctx.fillRect(point[0] - 4, point[1] - 4, 8, 8);
-    ctx.fillStyle = "#101522";
-    ctx.fillRect(point[0] - 2, point[1] - 2, 1, 1);
-    ctx.fillRect(point[0] + 1, point[1] - 2, 1, 1);
-    ctx.fillStyle = "#4b526b";
-    ctx.fillRect(point[0] - 5, point[1] - 8, 10, 2);
-    ctx.fillStyle = "#ff697d";
-    ctx.fillRect(point[0] - 5, point[1] - 8, 10 * Math.max(enemy.hp, 0) / enemy.maxHp, 2);
-  });
-
-  if (battle.shot) {
-    ctx.strokeStyle = "#ffb1bc";
-    ctx.lineWidth = 2;
-    ctx.beginPath();
-    ctx.moveTo(...battle.shot.from);
-    ctx.lineTo(...battle.shot.to);
-    ctx.stroke();
-  }
-
-  if (battle.spearFlash > 0) {
-    const gradient = ctx.createLinearGradient(0, 0, 320, 0);
-    ["#ff5c74", "#ffd85a", "#60e395", "#5ebdff", "#9c70ff"].forEach((color, index) => gradient.addColorStop(index / 4, color));
-    ctx.globalAlpha = battle.spearFlash;
-    ctx.fillStyle = gradient;
-    ctx.fillRect(0, 0, 320, 180);
-    ctx.globalAlpha = 1;
-  }
-
-  document.querySelector("#timer").textContent = `残り ${Math.max(0, 30 - battle.elapsed).toFixed(1)}秒`;
-  document.querySelector("#enemy-count").textContent = `撃破 ${battle.defeated} / 10`;
-  document.querySelector("#base-count").textContent = `防衛HP ${Math.max(0, state.baseHp)}`;
-}
-
-function finishBattle(won) {
-  const battle = state.battle;
-  if (!battle || battle.ended) return;
-  battle.ended = true;
-  const defeated = battle.defeated;
-  const escaped = battle.escaped;
-  setTimeout(() => {
-    if (won) showVictory(defeated, escaped);
-    else showDefeat(defeated, escaped);
-  }, 450);
-}
-
-function showVictory(defeated, escaped) {
-  setScene(`
-    <div class="end">
-      <div class="end-symbol">✦</div>
-      <div class="eyebrow">Defense complete</div>
-      <h1>防衛成功！</h1>
-      <p>ルビーと虹の槍の力で、敵の進行を食い止めた。<br>夜が明け、次の探索の日が始まる。</p>
-      <div class="summary">撃破 ${defeated}体　｜　侵入 ${escaped}体　｜　防衛HP ${state.baseHp}</div>
-      <button class="primary" id="next-day">${state.day + 1}日目へ進む</button>
+function placeSelect() {
+  status();
+  show(`<div class="eyebrow">${TIMES[state.step]}</div>
+    <h1>Where do you go?</h1>
+    <p>Every hour spent is a choice about where you are seen.</p>
+    <div class="pair">
+      <button data-p="town"><h2>The town</h2><small>People who still have doors to open. Nobody here is armed.</small></button>
+      <button data-p="castle"><h2>The castle</h2><small>Held, lit, and full. Nobody here expects you.</small></button>
     </div>`);
-  document.querySelector("#next-day").onclick = () => {
-    state.day++;
-    resetDay();
-    showLocations();
-  };
+  on("[data-p]", el => {
+    state.place = el.dataset.p;
+    state.offers = null;
+    actionSelect();
+  });
 }
 
-function showDefeat(defeated, escaped) {
-  setScene(`
-    <div class="end">
-      <div class="end-symbol">×</div>
-      <div class="eyebrow">Defense failed</div>
-      <h1>防衛失敗</h1>
-      <p>敵が城門を突破してしまった。探索と準備をやり直し、もう一度挑もう。</p>
-      <div class="summary">撃破 ${defeated}体　｜　侵入 ${escaped}体</div>
-      <button class="primary" id="retry">${state.day}日目をやり直す</button>
+/* What the player is told about danger - never a number (design ch.7.3).
+   Evidence they are carrying has already been folded into it. */
+function label(e) {
+  const r = riskOf(e);
+  return r === -2 ? `<span class="risk sure">Certain</span>`
+    : r >= 0 ? `<span class="risk">${RISKS[r]}</span>` : "";
+}
+
+function actionSelect() {
+  status();
+  if (!state.offers) state.offers = buildOffers();
+
+  const list = state.offers.map((e, i) => `
+    <button data-i="${i}">${label(e)}
+      <h2>${e.title}</h2><small>${e.blurb}</small>
+    </button>`).join("");
+
+  show(`<div class="eyebrow">${TIMES[state.step]} &middot; ${state.place === "town" ? "The town" : "The castle"}</div>
+    <h1>What do you do?</h1>
+    <div class="list">${list}</div>`);
+  on("[data-i]", el => confirm(state.offers[+el.dataset.i]));
+}
+
+/* Every action is confirmed. Saying no costs nothing at all - no time, no
+   roll, no karma, and the same offers are still standing (design ch.5.3). */
+function confirm(e) {
+  show(`<div class="eyebrow">${TIMES[state.step]}</div>
+    <h1>${e.title}</h1>
+    <div class="box">
+      <p>${e.blurb}</p>
+      ${riskOf(e) >= 0 ? `<p class="gain">${RISKS[riskOf(e)]}.</p>` : ""}
+      <div class="row">
+        <button class="go" id="y">Yes</button>
+        <button class="go" id="n">No</button>
+      </div>
     </div>`);
-  document.querySelector("#retry").onclick = () => {
-    resetDay();
-    showLocations();
-  };
+  on("#y", () => resolve(e));
+  on("#n", actionSelect);
 }
 
-showTitle();
+function resolve(e) {
+  // Danger is settled the moment you say yes. If this very action tips you
+  // over the critical point and burns off the evidence that was keeping the
+  // place safe, the odds you were shown still stand (ch.7.3, ch.0.1).
+  const r = riskOf(e);
+  applyKarma(e.karma);
+
+  if (e.id === "shelter") state.sheltered = true;
+  if (e.id === "marked" || e.id === "watchmen") state.special = null;
+
+  let body, stage = -1;
+
+  if (r === -2) {
+    // A mark being spent. The main result is fixed (design ch.7.2) and the
+    // mark itself is used up - no manual "use item" anywhere (ch.8.2).
+    drop(e.id.slice(2), "Spent");
+    state.shards += e.shards;
+    body = `<div class="stage great">It goes the way you were told it would</div>
+      <p>${e.text}</p><p class="gain">Rainbow shards +${e.shards}</p>`;
+  } else if (r < 0) {
+    // Workshop and Rest burn the hour and nothing else, for now.
+    body = `<div class="stage">The hour passes</div><p>${e.blurb}</p>`;
+  } else {
+    stage = roll(r);
+    const [lo, hi] = SHARDS[stage];
+    const got = lo + rnd(hi - lo + 1);
+    state.shards += got;
+    body = `<div class="stage ${STAGES[stage][0]}">${STAGES[stage][1]}</div>
+      <p>${e.out[stage]}</p>
+      ${got ? `<p class="gain">Rainbow shards +${got}</p>` : ""}`;
+    grant(e.id, stage);
+  }
+
+  if (state.justLocked) {
+    state.justLocked = false;
+    body += `<p class="gain">${state.lock === 1
+      ? "Something in you has settled. There is no walking this back."
+      : "Something in you has closed. There is no walking this back."}</p>`;
+  }
+
+  status();
+  show(`<div class="eyebrow">${e.title}</div>
+    <div class="box">${body}<button class="go" id="x">Go on</button></div>`);
+  on("#x", () => (state.pending ? exchange() : nextStep()));
+}
+
+/* The bag is full and something new has turned up. Nothing is destroyed
+   quietly - the player picks what stops mattering (design ch.8.3). */
+function exchange() {
+  const p = state.pending;
+  status();
+  show(`<div class="eyebrow">Your hands are full</div>
+    <h1>${p.name}</h1>
+    <p>You cannot carry it and everything else. Something has to be put down.</p>
+    <div class="list">
+      ${state.items.map((i, n) => i.keep ? "" :
+        `<button data-d="${n}"><h2>${i.name}</h2><small>${i.note || i.act.blurb}</small></button>`).join("")}
+      ${p.keep ? "" : `<button data-d="-1"><h2>Leave it where it is</h2><small>Walk away from ${p.name}.</small></button>`}
+    </div>`);
+  on("[data-d]", el => {
+    const n = +el.dataset.d;
+    if (n < 0) note(`Left behind: ${p.name}`);
+    else {
+      drop(state.items[n].id, "Put down");
+      state.items.push(p);
+      note(`Kept: ${p.name}`);
+    }
+    state.pending = null;
+    nextStep();
+  });
+}
+
+function nextStep() {
+  state.offers = null;
+  state.place = null;
+  state.step++;
+  if (state.step < 4) return placeSelect();
+
+  // The day is spent. Refusing the shelter for a whole day is itself an answer.
+  if (state.day === 1 && state.sheltered === null) state.sheltered = false;
+
+  status();
+  show(`<div class="eyebrow">Day ${state.day} &middot; Night</div>
+    <h1>The light goes.</h1>
+    <p>Something comes to the walls tonight. You are not able to meet it yet -
+      the defence is not built.</p>
+    <p>You wait it out, and the day turns over.</p>
+    <button class="go" id="x">${state.day < 4 ? "Next morning" : "See how it ends"}</button>`);
+  on("#x", () => {
+    if (state.day < 4) { state.day++; state.step = 0; dayStart(); }
+    else ending();
+  });
+}
+
+function ending() {
+  const k = state.karma;
+  const [name, text] = k >= 21
+    ? ["VIRGIN KNIGHT", `You go up against what is waiting and you do not come back down.
+        They will tell it properly, later, and the telling will be kinder than the four days were.`]
+    : k <= -21
+      ? ["VIRGIN NIGHT", `Nothing is left standing that could argue with you. What survives,
+        survives behind a door you keep the key to. It is quiet, and it is yours.`]
+      : ["VIRGINIGHT", `You never came down on either side of it. The men and the monsters
+        settle nothing between them, and go on not settling it for a long time after you.`];
+
+  status();
+  show(`<div class="center"><div>
+    <div class="eyebrow">Four days</div>
+    <h1>${name}</h1>
+    <p>${text}</p>
+    <button class="go" id="x">Again</button>
+  </div></div>`);
+  on("#x", title);
+}
+
+title();

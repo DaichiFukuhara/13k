@@ -1,0 +1,23 @@
+{
+  "name": "13kgame",
+  "version": "1.0.0",
+  "main": "game.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/DaichiFukuhara/13k.git"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "bugs": {
+    "url": "https://github.com/DaichiFukuhara/13k/issues"
+  },
+  "homepage": "https://github.com/DaichiFukuhara/13k#readme",
+  "description": "",
+  "devDependencies": {
+    "terser": "^5.50.0"
+  }
+}
