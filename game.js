@@ -1257,7 +1257,7 @@ function ending() {
     <p>${text}</p>
     <div class="bow">${HUES.map((h, i) =>
       `<i style="background:${state.dead.includes(i) ? "transparent" : h[1]};
-        ${state.dead.includes(i) ? "border:1px dashed #4a4566" : ""}"></i>`).join("")}</div>
+        ${state.dead.includes(i) ? "border:1px dashed var(--grey)" : ""}"></i>`).join("")}</div>
     <p>${after}</p>
     <button class="go" id="x">Again</button>
   </div></div>`);
