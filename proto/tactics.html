@@ -2,90 +2,74 @@
 <html lang="ja">
 <head>
 <meta charset="utf-8">
-<title>Virginight 夜戦プロトタイプ</title>
+<title>Virginight 夜戦プロトタイプ（タクティクス案）</title>
 <style>
 * { box-sizing: border-box; }
-body {
-  margin: 0; padding: 16px;
-  background: #14121a; color: #d8d4e0;
-  font: 14px/1.5 "Segoe UI", system-ui, sans-serif;
-}
-h1 { font-size: 15px; margin: 0 0 12px; color: #8c86a0; font-weight: 500; letter-spacing: .08em; }
-#wrap { display: flex; gap: 20px; align-items: flex-start; flex-wrap: wrap; }
-#bar { display: flex; gap: 18px; margin-bottom: 10px; font-variant-numeric: tabular-nums; }
-#bar b { color: #fff; font-weight: 600; }
+body { margin:0; padding:16px; background:#14121a; color:#d8d4e0; font:14px/1.5 "Segoe UI", system-ui, sans-serif; }
+h1 { font-size:15px; margin:0 0 4px; color:#8c86a0; font-weight:500; letter-spacing:.08em; }
+h2 { font-size:12px; margin:0 0 12px; color:#5f596e; font-weight:400; }
+#wrap { display:flex; gap:20px; align-items:flex-start; flex-wrap:wrap; }
+#bar { display:flex; gap:16px; margin-bottom:10px; font-variant-numeric:tabular-nums; }
+#bar b { color:#fff; font-weight:600; }
 
-#board {
-  display: grid;
-  grid-template-columns: repeat(7, 76px);
-  grid-template-rows: repeat(5, 76px);
-  gap: 3px; background: #232030; padding: 3px;
-}
-.cell {
-  background: #1b1926; position: relative;
-  display: flex; flex-direction: column; align-items: center; justify-content: center;
-  border: 2px solid transparent;
-}
-.cell.move { border-color: #4a7fb5; cursor: pointer; background: #1e2634; }
-.cell.atk  { border-color: #c25b5b; cursor: pointer; background: #2c1d1f; }
-.cell.sel  { border-color: #e0d060; }
-.cell.aim  { outline: 2px solid #a03c3c; outline-offset: -6px; }
-.cell.hot  { background: #2a2036; }
+#board { display:grid; grid-template-columns:repeat(7,76px); grid-template-rows:repeat(5,76px);
+         gap:3px; background:#232030; padding:3px; }
+.cell { background:#1b1926; position:relative; display:flex; flex-direction:column;
+        align-items:center; justify-content:center; border:2px solid transparent; }
+.cell.move { border-color:#4a7fb5; cursor:pointer; background:#1e2634; }
+.cell.atk  { border-color:#c25b5b; cursor:pointer; background:#2c1d1f; }
+.cell.res  { border-color:#6f9c6f; cursor:pointer; background:#1d2a1d; }
+.cell.sel  { border-color:#e0d060; }
+.cell.aim  { outline:2px solid #a03c3c; outline-offset:-6px; }
 
-.pc { font-size: 19px; font-weight: 700; }
-.pc.ally { color: #e8e4f0; }
-.pc.foe  { color: #d08a8a; }
-.hp { font-size: 11px; color: #8c86a0; font-variant-numeric: tabular-nums; }
-.done { opacity: .42; }
-.tel {
-  position: absolute; top: 2px; right: 4px;
-  font-size: 11px; font-weight: 700; color: #ff8a8a; font-variant-numeric: tabular-nums;
-}
-.tel.leth { color: #fff; background: #a02c2c; padding: 0 3px; }
-.src {
-  position: absolute; bottom: 1px; left: 0; right: 0; text-align: center;
-  font-size: 11px; color: #c07070; font-variant-numeric: tabular-nums;
-}
-.blocked {
-  position: absolute; top: 2px; left: 4px;
-  font-size: 9px; font-weight: 700; color: #7d7690; letter-spacing: .04em;
-}
+.pc { font-size:18px; font-weight:700; }
+.pc.ally { color:#e8e4f0; } .pc.foe { color:#d08a8a; }
+.pc.down { color:#7a6f8a; text-decoration:line-through; }
+.hp { font-size:11px; color:#8c86a0; font-variant-numeric:tabular-nums; }
+.sh { font-size:10px; color:#7fa8d0; }
+.done { opacity:.42; }
+.tel { position:absolute; top:2px; right:4px; font-size:11px; font-weight:700; color:#ff8a8a; font-variant-numeric:tabular-nums; }
+.tel.leth { color:#fff; background:#a02c2c; padding:0 3px; }
+.src { position:absolute; bottom:1px; left:0; right:0; text-align:center; font-size:11px; color:#c07070; }
+.dl  { position:absolute; top:2px; left:4px; font-size:10px; font-weight:700; color:#e0d060; }
+.blocked { position:absolute; top:2px; left:4px; font-size:9px; font-weight:700; color:#7d7690; }
 
-#side { width: 340px; }
-#threat { font-size: 12px; margin-bottom: 8px; min-height: 68px; }
-#threat div { color: #c08a8a; }
-#threat .t-none { color: #6f9c6f; }
-#log {
-  height: 210px; overflow-y: auto; background: #191722; padding: 8px 10px;
-  font-size: 12px; line-height: 1.6; border-left: 2px solid #2e2a3c;
-}
-.lg-r { color: #7d7690; margin-top: 6px; }
-.lg-h { color: #d08a8a; }
-.lg-w { color: #6f9c6f; }
-.lg-k { color: #e0d060; }
-
-button {
-  font: inherit; padding: 6px 12px; margin: 0 6px 6px 0;
-  background: #2b2739; color: #d8d4e0; border: 1px solid #3d3852; cursor: pointer;
-}
-button:hover:not(:disabled) { background: #383150; }
-button:disabled { opacity: .35; cursor: default; }
-#roster { font-size: 12px; margin-top: 10px; color: #8c86a0; }
-#roster b { color: #d8d4e0; }
-#hint { font-size: 12px; color: #7d7690; margin-top: 6px; min-height: 20px; }
-#result { margin-top: 10px; padding: 10px; background: #191722; font-size: 12px; white-space: pre-wrap; }
+#side { width:340px; }
+#threat { font-size:12px; margin-bottom:8px; min-height:60px; }
+#threat div { color:#c08a8a; }
+#threat .t-none { color:#6f9c6f; }
+#log { height:200px; overflow-y:auto; background:#191722; padding:8px 10px; font-size:12px;
+       line-height:1.6; border-left:2px solid #2e2a3c; }
+.lg-r { color:#7d7690; margin-top:6px; } .lg-h { color:#d08a8a; }
+.lg-w { color:#6f9c6f; } .lg-k { color:#e0d060; } .lg-d { color:#c9a0e0; }
+button { font:inherit; padding:6px 12px; margin:0 6px 6px 0; background:#2b2739;
+         color:#d8d4e0; border:1px solid #3d3852; cursor:pointer; }
+button:hover:not(:disabled) { background:#383150; }
+button:disabled { opacity:.35; cursor:default; }
+#crew { display:flex; gap:6px; margin-top:10px; }
+.cr { flex:1; padding:5px 7px; background:#191722; border:1px solid #2e2a3c; font-size:11px; }
+.cr b { display:block; font-size:12px; color:#e8e4f0; }
+.cr.dead { opacity:.3; }
+.cr.dead b { text-decoration:line-through; }
+.cr .bar { height:4px; background:#3a2530; margin-top:3px; }
+.cr .bar i { display:block; height:100%; background:#c25b5b; }
+#hint { font-size:12px; color:#7d7690; margin-top:6px; min-height:20px; }
+#result { margin-top:10px; padding:10px; background:#191722; font-size:12px; white-space:pre-wrap; }
 </style>
 </head>
 <body>
 
-<h1>VIRGINIGHT — 夜戦プロトタイプ / 検証: 4体いるのに3体しか動かせないのは悩ましいか</h1>
+<h1>VIRGINIGHT — 夜戦プロトタイプ（タクティクス案）</h1>
+<h2>3戦のミニラン / HPは持ち越し / 倒れた仲間は救出しなければ永久に失われる</h2>
 
 <div id="wrap">
   <div>
     <div id="bar">
+      <span>戦闘 <b id="s-bt">1</b> / 3</span>
       <span>ROUND <b id="s-round">1</b></span>
       <span>行動 <b id="s-acts">3</b> / 3</span>
-      <span>FOES <b id="s-foes">6</b> / 6</span>
+      <span>FOES <b id="s-foes">0</b></span>
+      <span>防いだ <b id="s-prev">0</b></span>
       <span>経過 <b id="s-time">0:00</b></span>
     </div>
     <div id="board"></div>
@@ -93,9 +77,10 @@ button:disabled { opacity: .35; cursor: default; }
       <button id="b-skip">攻撃せず終了</button>
       <button id="b-undo">フェーズやり直し</button>
       <button id="b-end">敵フェーズへ →</button>
+      <button id="b-retry">この戦闘をやり直す</button>
       <button id="b-reset">最初から</button>
     </div>
-    <div id="roster"></div>
+    <div id="crew"></div>
     <div id="hint"></div>
   </div>
 
@@ -110,435 +95,528 @@ button:disabled { opacity: .35; cursor: default; }
 'use strict';
 
 const W = 7, H = 5, ACTS = 3;
-const idx = (x, y) => y * W + x;
-const inb = (x, y) => x >= 0 && x < W && y >= 0 && y < H;
+const idx = (x,y) => y*W + x;
+const inb = (x,y) => x>=0 && x<W && y>=0 && y<H;
 const ORTH = [[0,-1],[0,1],[-1,0],[1,0]];
 const DIAG = [[-1,-1],[1,-1],[-1,1],[1,1]];
 const ALL8 = ORTH.concat(DIAG);
-const ARROW = { '0,-1':'↑', '0,1':'↓', '-1,0':'←', '1,0':'→' };
+const ARROW = { '0,-1':'↑','0,1':'↓','-1,0':'←','1,0':'→' };
 
-// --- 駒定義 -------------------------------------------------------------
+// =====================================================================
+// 駒定義
+// =====================================================================
 const DEF = {
-  U:      { name:'ユニコーン', side:'p', hp:20, dmg:4, move:'step8',   atk:'adj8'  },
-  Red:    { name:'Red',        side:'p', hp:12, dmg:6, move:'step4',   atk:'adj4'  },
+  U:      { name:'ユニコーン', side:'p', hp:20, dmg:4, move:'step8',   atk:'adj8' },
+  Red:    { name:'Red',        side:'p', hp:12, dmg:6, move:'step4',   atk:'adj4' },
   Orange: { name:'Orange',     side:'p', hp: 9, dmg:2, move:'walk2',   atk:'adj4', hits:2 },
   Blue:   { name:'Blue',       side:'p', hp: 8, dmg:2, move:'diag2lr', atk:'adj8', push:true },
-  Pawn:   { name:'Pawn',       side:'e', hp: 6, dmg:3, move:'step4',   atk:'adj4'  },
-  Archer: { name:'Archer',     side:'e', hp: 4, dmg:3, move:'step4',   atk:'line'  },
+  Pawn:   { name:'Pawn',       side:'e', hp: 6, dmg:3, move:'step4',   atk:'adj4' },
+  Archer: { name:'Archer',     side:'e', hp: 4, dmg:3, move:'step4',   atk:'line' },
+  // Armor: 最終標的はユニコーンのみ。塞がれるとRamを予告し、Ram時に自分の盾も1枚失う
+  Armor:  { name:'Armor',      side:'e', hp:14, dmg:4, move:'step4',   atk:'adj4',
+            shield:2, ram:7, huntsU:true },
 };
 
-const START = [
-  ['U',3,2], ['Red',2,2], ['Orange',3,1], ['Blue',3,3],
-  ['Pawn',0,1], ['Pawn',0,3], ['Archer',0,2],
-  ['Pawn',6,1], ['Pawn',6,3], ['Archer',6,2],
+const CREW = ['U','Red','Orange','Blue'];
+const HOME = { U:[3,2], Red:[2,2], Orange:[3,1], Blue:[3,3] };
+
+// 3戦構成：1=学習 / 2=新しい敵側ルールを1個だけ追加 / 3=新規なし・既知の組み合わせ
+const BATTLES = [
+  { name:'第一夜', foes:[['Pawn',0,1],['Archer',0,2],['Pawn',0,3],['Pawn',6,2]] },
+  { name:'第二夜', foes:[['Pawn',0,1],['Archer',0,2],['Pawn',0,3],['Pawn',6,1],['Armor',6,3]] },
+  { name:'第三夜', foes:[['Pawn',0,1],['Archer',0,2],['Pawn',0,3],['Archer',6,1],['Pawn',6,2],['Armor',6,3]] },
 ];
 
-let G;
+let R, G;   // R = ミニラン全体（持ち越し） / G = 現在の戦闘
 
-function newGame() {
-  G = {
-    pieces: START.map(([t,x,y], i) => {
-      const d = DEF[t];
-      // home: 出現側。同点時の方向優先に使う（左右対称盤面での偏りを消す）
-      return { id:i, type:t, side:d.side, x, y, hp:d.hp, max:d.hp,
-               alive:true, used:false, home: x < W/2 ? 1 : -1 };
-    }),
-    round: 1, acts: ACTS, intents: [], sel: null, moved: null, hint: '',
-    log: [], over: false, t0: Date.now(), totalActs: 0, rested: [], snap: null,
+// =====================================================================
+// ミニラン
+// =====================================================================
+function newRun() {
+  R = {
+    bt: 0,
+    hp: CREW.map(k => DEF[k].hp),
+    dead: CREW.map(() => false),
+    t0: Date.now(), over: null,
+    prevented: 0, acts: 0, rounds: 0,
+    rested: [], rescues: 0, losses: [], retries: 0,
+    startHp: [],
   };
-  say('lg-r', '── ROUND 1 ──');
-  enemyPhase();
-  snapshot();
-  render();
+  document.getElementById('result').textContent = '';
+  startBattle();
 }
 
-// --- 盤面ユーティリティ --------------------------------------------------
-const at = (x, y) => G.pieces.find(p => p.alive && p.x === x && p.y === y);
-const live = s => G.pieces.filter(p => p.alive && p.side === s);
-const md = (a, b) => Math.abs(a.x - b.x) + Math.abs(a.y - b.y);
-const say = (cls, txt) => { G.log.push({ cls, txt }); };
-
-// --- Undo：フェーズ開始地点のスナップショット ----------------------------
-function snapshot() {
-  G.snap = JSON.stringify({
-    pieces: G.pieces, intents: G.intents, acts: G.acts,
-    totalActs: G.totalActs, logLen: G.log.length,
+function startBattle() {
+  R.startHp.push(R.hp.slice());
+  const B = BATTLES[R.bt];
+  const pieces = [];
+  CREW.forEach((k,i) => {
+    if (R.dead[i]) return;
+    pieces.push({ id:pieces.length, ci:i, type:k, side:'p', x:HOME[k][0], y:HOME[k][1],
+                  hp:R.hp[i], max:DEF[k].hp, alive:true, used:false, down:false, dl:0 });
   });
+  for (const [t,x,y] of B.foes) {
+    const d = DEF[t];
+    pieces.push({ id:pieces.length, type:t, side:'e', x, y, hp:d.hp, max:d.hp,
+                  alive:true, sh:d.shield||0, home: x < W/2 ? 1 : -1 });
+  }
+  G = { pieces, round:1, acts:ACTS, intents:[], sel:null, moved:null, hint:'',
+        log:[], done:false, snap:null };
+  say('lg-r', `── ${B.name}（戦闘 ${R.bt+1}/3）ROUND 1 ──`);
+  enemyPhase(); snapshot(); render();
+}
+
+// =====================================================================
+// ユーティリティ
+// =====================================================================
+const at = (x,y) => G.pieces.find(p => p.alive && p.x===x && p.y===y);
+const live = s => G.pieces.filter(p => p.alive && p.side===s);
+const act = () => G.pieces.filter(p => p.alive && p.side==='p' && !p.down);  // 行動できる味方
+const md = (a,b) => Math.abs(a.x-b.x) + Math.abs(a.y-b.y);
+const say = (c,t) => { G.log.push({c,t}); };
+const uni = () => G.pieces.find(p => p.type==='U' && p.alive);
+
+function snapshot() {
+  G.snap = JSON.stringify({ pieces:G.pieces, intents:G.intents, acts:G.acts,
+                            rAct:R.acts, rPrev:R.prevented, logLen:G.log.length });
 }
 function restore() {
   const s = JSON.parse(G.snap);
-  G.pieces = s.pieces; G.intents = s.intents;
-  G.acts = s.acts; G.totalActs = s.totalActs;
-  G.log.length = s.logLen;
-  G.sel = null; G.moved = null; G.hint = '';
+  G.pieces = s.pieces; G.intents = s.intents; G.acts = s.acts;
+  R.acts = s.rAct; R.prevented = s.rPrev;
+  G.log.length = s.logLen; G.sel = null; G.moved = null; G.hint = '';
 }
 
-// --- 移動生成（駒種ごとに分ける）-----------------------------------------
+// =====================================================================
+// 移動生成
+// =====================================================================
 function moves(p) {
-  const out = [{ x:p.x, y:p.y }];
-  const kind = DEF[p.type].move;
-
+  const out = [{x:p.x,y:p.y}], kind = DEF[p.type].move;
   if (kind === 'step4' || kind === 'step8') {
-    for (const [dx,dy] of (kind === 'step4' ? ORTH : ALL8)) {
-      const x = p.x+dx, y = p.y+dy;
+    for (const [dx,dy] of (kind==='step4'?ORTH:ALL8)) {
+      const x=p.x+dx, y=p.y+dy;
       if (inb(x,y) && !at(x,y)) out.push({x,y});
     }
   }
-
-  if (kind === 'walk2') {                    // 直交2マス・途中で1回曲がれる
-    const seen = new Set([idx(p.x,p.y)]);
-    let front = [{x:p.x, y:p.y}];
-    for (let s = 0; s < 2; s++) {
-      const next = [];
+  if (kind === 'walk2') {
+    const seen = new Set([idx(p.x,p.y)]); let front = [{x:p.x,y:p.y}];
+    for (let s=0;s<2;s++) { const nx=[];
       for (const c of front) for (const [dx,dy] of ORTH) {
-        const x = c.x+dx, y = c.y+dy;
-        if (!inb(x,y) || at(x,y) || seen.has(idx(x,y))) continue;
-        seen.add(idx(x,y)); next.push({x,y}); out.push({x,y});
-      }
-      front = next;
-    }
+        const x=c.x+dx, y=c.y+dy;
+        if (!inb(x,y)||at(x,y)||seen.has(idx(x,y))) continue;
+        seen.add(idx(x,y)); nx.push({x,y}); out.push({x,y});
+      } front = nx; }
   }
-
-  if (kind === 'diag2lr') {                  // 斜め1〜2マス、または左右へ1マス
+  if (kind === 'diag2lr') {
     for (const [dx,dy] of DIAG) {
-      const x1 = p.x+dx, y1 = p.y+dy;
-      if (!inb(x1,y1) || at(x1,y1)) continue;
-      out.push({x:x1, y:y1});
-      const x2 = p.x+dx*2, y2 = p.y+dy*2;
-      if (inb(x2,y2) && !at(x2,y2)) out.push({x:x2, y:y2});
+      const x1=p.x+dx, y1=p.y+dy;
+      if (!inb(x1,y1)||at(x1,y1)) continue;
+      out.push({x:x1,y:y1});
+      const x2=p.x+dx*2, y2=p.y+dy*2;
+      if (inb(x2,y2)&&!at(x2,y2)) out.push({x:x2,y:y2});
     }
-    for (const dx of [-1, 1]) {              // 盤面色の固定を破るための左右1マス
-      const x = p.x+dx;
-      if (inb(x,p.y) && !at(x,p.y)) out.push({x, y:p.y});
-    }
+    for (const dx of [-1,1]) { const x=p.x+dx; if (inb(x,p.y)&&!at(x,p.y)) out.push({x,y:p.y}); }
   }
   return out;
 }
 
-// --- 攻撃対象（駒の現在位置から評価する）---------------------------------
+// 倒れた駒は攻撃対象にならない（救出機会を保証するため）
 function targets(p) {
-  const foe = p.side === 'p' ? 'e' : 'p';
-  const shape = DEF[p.type].atk;
-  const out = [];
-
-  if (shape === 'adj4' || shape === 'adj8') {
-    for (const [dx,dy] of (shape === 'adj4' ? ORTH : ALL8)) {
-      const t = at(p.x+dx, p.y+dy);
-      if (t && t.side === foe) out.push(t);
-    }
+  const foe = p.side==='p' ? 'e' : 'p', shape = DEF[p.type].atk, out = [];
+  const ok = t => t && t.side===foe && !(t.down);
+  if (shape==='adj4' || shape==='adj8') {
+    for (const [dx,dy] of (shape==='adj4'?ORTH:ALL8)) { const t = at(p.x+dx,p.y+dy); if (ok(t)) out.push(t); }
   }
-
-  if (shape === 'line') {                    // 直線2〜4マス・隣接不可・遮蔽で停止
-    for (const [dx,dy] of ORTH) {
-      for (let d = 1; d <= 4; d++) {
-        const t = at(p.x+dx*d, p.y+dy*d);
-        if (!t) continue;
-        if (d >= 2 && t.side === foe) out.push(t);
-        break;
-      }
+  if (shape==='line') {
+    for (const [dx,dy] of ORTH) for (let d=1;d<=4;d++) {
+      const t = at(p.x+dx*d, p.y+dy*d);
+      if (!t) continue;
+      if (d>=2 && ok(t)) out.push(t);
+      break;
     }
   }
   return out;
 }
 
-// 仮想位置で評価する。元の位置に自駒が残っていると自分で射線を塞ぐため、
-// 実際に一時移動させてから評価して戻す
-function evalAt(p, c, fn) {
-  const ox = p.x, oy = p.y;
-  p.x = c.x; p.y = c.y;
-  const r = fn();
-  p.x = ox; p.y = oy;
-  return r;
-}
+function evalAt(p,c,fn) { const ox=p.x, oy=p.y; p.x=c.x; p.y=c.y; const r=fn(); p.x=ox; p.y=oy; return r; }
+const cmp = (a,b) => { for (let i=0;i<a.length;i++) if (a[i]!==b[i]) return a[i]-b[i]; return 0; };
 
-const cmp = (a, b) => { for (let i=0;i<a.length;i++) if (a[i]!==b[i]) return a[i]-b[i]; return 0; };
-
-// --- 敵フェーズ：移動 → 意図確定 -----------------------------------------
+// =====================================================================
+// 敵フェーズ
+// =====================================================================
 function enemyPhase() {
-  const allies = live('p');
+  const allies = act();
   if (!allies.length) return;
+  const u = uni();
 
-  // 固定ID順に一体ずつ。次の敵は更新後の盤面を見る
-  for (const e of live('e').sort((a,b) => a.id - b.id)) {
+  for (const e of live('e').sort((a,b)=>a.id-b.id)) {
+    const hunts = DEF[e.type].huntsU;
     const cands = moves(e);
-    let best = null, bestKey = null;
-
+    let best=null, bestKey=null;
     for (const c of cands) {
       const r = evalAt(e, c, () => ({
         hit: targets(e).length > 0,
-        adj: ALL8.some(([dx,dy]) => { const t = at(c.x+dx, c.y+dy); return t && t.side === 'p'; }),
+        onU: u ? ORTH.some(([dx,dy]) => { const t=at(c.x+dx,c.y+dy); return t===u; }) : false,
+        adj: ALL8.some(([dx,dy]) => { const t=at(c.x+dx,c.y+dy); return t && t.side==='p' && !t.down; }),
       }));
       let near = 99;
-      for (const a of allies) near = Math.min(near, Math.abs(c.x-a.x) + Math.abs(c.y-a.y));
-      const stay = (c.x === e.x && c.y === e.y) ? 0 : 1;
-      const fwd  = -(c.x - e.x) * e.home;     // 出現側から盤面中央へ向かう向きを優先
-
-      // 辞書順の優先規則。Archer は撃てるなら動かず、隣接を避ける
-      const key = e.type === 'Archer'
-        ? [r.hit ? 0 : 1, r.adj ? 1 : 0, stay, near, fwd, idx(c.x,c.y)]
-        : [r.hit ? 0 : 1, near, fwd, idx(c.x,c.y)];
-
-      if (!bestKey || cmp(key, bestKey) < 0) { bestKey = key; best = c; }
+      if (hunts) near = u ? Math.abs(c.x-u.x)+Math.abs(c.y-u.y) : 0;
+      else for (const a of allies) near = Math.min(near, Math.abs(c.x-a.x)+Math.abs(c.y-a.y));
+      const stay = (c.x===e.x && c.y===e.y) ? 0 : 1;
+      const fwd  = -(c.x-e.x) * e.home;
+      const key = e.type==='Archer'
+        ? [r.hit?0:1, r.adj?1:0, stay, near, fwd, idx(c.x,c.y)]
+        : hunts ? [r.onU?0:1, near, fwd, idx(c.x,c.y)]
+                : [r.hit?0:1, near, fwd, idx(c.x,c.y)];
+      if (!bestKey || cmp(key,bestKey)<0) { bestKey=key; best=c; }
     }
-    e.x = best.x; e.y = best.y;
+    e.x=best.x; e.y=best.y;
   }
 
-  // 意図の確定。以後この方向と距離は変えない
   G.intents = [];
-  for (const e of live('e').sort((a,b) => a.id - b.id)) {
+  for (const e of live('e').sort((a,b)=>a.id-b.id)) {
     const ts = targets(e);
     if (!ts.length) continue;
-    ts.sort((a,b) => md(e,a) - md(e,b) || idx(a.x,a.y) - idx(b.x,b.y));
-    const t = ts[0];
-    G.intents.push({
-      id: e.id,
-      dx: Math.sign(t.x - e.x), dy: Math.sign(t.y - e.y),
-      r: Math.max(Math.abs(t.x - e.x), Math.abs(t.y - e.y)),
-      dmg: DEF[e.type].dmg,
-    });
+    const hunts = DEF[e.type].huntsU;
+    let t;
+    if (hunts) {
+      // Armor はユニコーンだけを最終標的にする。塞がれている場合はRam
+      t = ts.find(q => q.type==='U');
+      if (!t) {
+        t = ts[0];
+        G.intents.push({ id:e.id, dx:Math.sign(t.x-e.x), dy:Math.sign(t.y-e.y), r:1,
+                         dmg:DEF[e.type].ram, ram:true });
+        continue;
+      }
+    } else {
+      ts.sort((a,b)=>md(e,a)-md(e,b) || idx(a.x,a.y)-idx(b.x,b.y));
+      t = ts[0];
+    }
+    G.intents.push({ id:e.id, dx:Math.sign(t.x-e.x), dy:Math.sign(t.y-e.y),
+                     r:Math.max(Math.abs(t.x-e.x),Math.abs(t.y-e.y)), dmg:DEF[e.type].dmg });
   }
 }
 
-function aimCell(it) {
-  const e = G.pieces[it.id];
-  if (!e.alive) return null;
-  return { x: e.x + it.dx * it.r, y: e.y + it.dy * it.r };
-}
+function aimCell(it) { const e=G.pieces[it.id]; if (!e.alive) return null;
+  return { x:e.x+it.dx*it.r, y:e.y+it.dy*it.r }; }
 
-// --- 敵攻撃の一括解決 ---------------------------------------------------
+// =====================================================================
+// 敵攻撃の解決
+// =====================================================================
 function resolve() {
   for (const it of G.intents) {
     const e = G.pieces[it.id];
-    if (!e.alive) continue;                  // 倒された敵の意図は消滅
+    if (!e.alive) continue;
     const c = aimCell(it);
-    const t = at(c.x, c.y);
-    if (!t || t.side !== 'p') { say('lg-w', `${DEF[e.type].name} の攻撃 → 空振り`); continue; }
+    const t = c && inb(c.x,c.y) ? at(c.x,c.y) : null;
+    if (!t || t.side!=='p' || t.down) {
+      // 因果の表示：何ダメージを防げたのかを見せる
+      R.prevented += it.dmg;
+      say('lg-w', `${DEF[e.type].name} の攻撃 → 空振り（${it.dmg} 防いだ）`);
+      continue;
+    }
     t.hp -= it.dmg;
-    say('lg-h', `${DEF[e.type].name} → ${DEF[t.type].name} に ${it.dmg}`);
-    if (t.hp <= 0) { t.alive = false; say('lg-k', `${DEF[t.type].name} 倒れる`); }
+    say('lg-h', `${DEF[e.type].name} → ${DEF[t.type].name} に ${it.dmg}${it.ram?'（RAM）':''}`);
+    if (it.ram && e.sh > 0) { e.sh--; say('', `${DEF[e.type].name} の盾が1枚剥がれた（残り ${e.sh}）`); }
+    if (t.hp <= 0) downPiece(t);
   }
   G.intents = [];
 }
 
-// --- プレイヤー行動 -----------------------------------------------------
+// HP0 は即死亡ではなく Downed。次のプレイヤーフェーズ終了までが救出期限
+function downPiece(t) {
+  t.hp = 0;
+  if (t.type === 'U') { say('lg-k','ユニコーンが倒れた'); endRun(false); return; }
+  t.down = true; t.dl = G.round + 1;
+  say('lg-d', `${DEF[t.type].name} が倒れた — ROUND ${t.dl} のフェーズ終了までに救出しないと永久に失う`);
+}
+
+// =====================================================================
+// プレイヤー行動
+// =====================================================================
 function activate(p, cell) {
-  p.x = cell.x; p.y = cell.y;
-  G.moved = p; G.sel = null;
-  if (!targets(p).length) finishAct(); else render();
+  p.x=cell.x; p.y=cell.y; G.moved=p; G.sel=null;
+  const ts = targets(p), rs = rescuable(p);
+  if (!ts.length && !rs.length) finishAct(); else render();
+}
+
+function rescuable(p) {
+  if (p.type !== 'U') return [];
+  return ORTH.map(([dx,dy]) => at(p.x+dx,p.y+dy)).filter(t => t && t.side==='p' && t.down);
+}
+
+function rescue(t) {
+  t.down = false; t.alive = false;              // 盤外へ退避
+  R.hp[t.ci] = 1; R.rescues++;
+  say('lg-w', `${DEF[t.type].name} を救出した（HP1で離脱。次の戦闘には出られる）`);
+  finishAct();
 }
 
 function attack(p, t) {
   const d = DEF[p.type], n = d.hits || 1;
-  t.hp -= d.dmg * n;
-  say('', `${d.name} → ${DEF[t.type].name} に ${d.dmg*n}${n>1 ? ` (${d.dmg}×${n})` : ''}`);
+  let dealt = 0, stripped = 0;
+  for (let i=0;i<n;i++) {
+    if (t.sh > 0) { t.sh--; stripped++; }        // 盾は多段攻撃で剥がれる＝Orangeの役割
+    else { t.hp -= d.dmg; dealt += d.dmg; }
+  }
+  say('', `${d.name} → ${DEF[t.type].name}` +
+          (stripped ? ` 盾 ${stripped} 枚` : '') + (dealt ? ` に ${dealt}` : ''));
 
-  if (t.hp <= 0) {
-    t.alive = false;
-    say('lg-k', `${DEF[t.type].name} 撃破`);
-  } else if (d.push) {
-    const px = t.x + Math.sign(t.x - p.x), py = t.y + Math.sign(t.y - p.y);
+  if (t.hp <= 0) { t.alive=false; say('lg-k', `${DEF[t.type].name} 撃破`); }
+  else if (d.push) {
+    const px = t.x + Math.sign(t.x-p.x), py = t.y + Math.sign(t.y-p.y);
     if (inb(px,py) && !at(px,py)) {
-      t.x = px; t.y = py;
-      // 意図は方向と距離を保つため、起点が動けば着弾マスも動く
-      const moved = G.intents.some(i => i.id === t.id);
-      say('', `${DEF[t.type].name} を押し出す${moved ? '（射線がずれた）' : ''}`);
+      const it = G.intents.find(i=>i.id===t.id);
+      const before = it ? aimCell(it) : null;
+      t.x=px; t.y=py;
+      const after = it ? aimCell(it) : null;
+      const hitBefore = before && inb(before.x,before.y) && at(before.x,before.y)?.side==='p';
+      const hitAfter  = after  && inb(after.x,after.y)  && at(after.x,after.y)?.side==='p';
+      say(hitBefore && !hitAfter ? 'lg-w' : '',
+          `${DEF[t.type].name} を押し出す` +
+          (hitBefore && !hitAfter ? `（射線がずれ、${it.dmg} を防いだ）` : ''));
     } else {
-      say('lg-w', `${DEF[t.type].name} は押し出せなかった（${inb(px,py) ? '駒がいる' : '盤外'}）`);
+      say('lg-w', `${DEF[t.type].name} は押し出せなかった（${inb(px,py)?'駒がいる':'盤外'}）`);
     }
   }
   finishAct();
 }
 
 function finishAct() {
-  G.moved.used = true;
-  G.moved = null; G.sel = null; G.hint = '';
-  G.acts--; G.totalActs++;
-  if (checkOver()) return;
+  G.moved.used = true; G.moved=null; G.sel=null; G.hint='';
+  G.acts--; R.acts++;
+  if (checkBattle()) return;
   if (G.acts <= 0) endPlayerPhase(); else render();
 }
 
-function idleNames() {
-  return live('p').filter(p => !p.used).map(p => DEF[p.type].name);
-}
-
 function endPlayerPhase() {
-  const idle = idleNames();
-  G.rested.push({ r: G.round, names: idle, partial: false });
-  say('', `休ませた駒: ${idle.join('・') || 'なし'}`);
+  const idle = act().filter(p => !p.used).map(p => DEF[p.type].name);
+  R.rested.push({ bt:R.bt+1, r:G.round, names:idle, partial:false });
+  R.rounds++;
+
+  // 救出期限の判定
+  for (const p of G.pieces.filter(q => q.alive && q.down)) {
+    if (G.round >= p.dl) {
+      p.alive = false; R.dead[p.ci] = true; R.hp[p.ci] = 0;
+      R.losses.push(`${DEF[p.type].name}（戦闘${R.bt+1} ROUND${G.round}）`);
+      say('lg-k', `${DEF[p.type].name} を救えなかった。永久に失った`);
+    }
+  }
+  if (R.over) return;
 
   resolve();
-  if (checkOver()) return;
+  if (checkBattle()) return;
+  syncHp();
 
   G.round++; G.acts = ACTS;
   G.pieces.forEach(p => p.used = false);
-  G.sel = null; G.moved = null;
+  G.sel=null; G.moved=null;
   say('lg-r', `── ROUND ${G.round} ──`);
   enemyPhase();
-  if (checkOver()) return;
-  snapshot();
-  render();
+  if (checkBattle()) return;
+  snapshot(); render();
 }
 
-function checkOver() {
-  if (!G.pieces[0].alive) { finish(false); return true; }
-  if (!live('e').length) { finish(true); return true; }
+const syncHp = () => G.pieces.filter(p=>p.side==='p'&&p.alive).forEach(p => R.hp[p.ci] = p.hp);
+
+function checkBattle() {
+  if (R.over) return true;
+  if (!live('e').length) { winBattle(); return true; }
   return false;
 }
 
-const fmt = s => `${Math.floor(s/60)}:${String(s%60).padStart(2,'0')}`;
-
-function finish(won) {
-  G.over = true;
-  // 決着ラウンドは途中で終わっているため、集計から除外する印を付けて記録する
-  if (!G.rested.length || G.rested[G.rested.length-1].r !== G.round) {
-    G.rested.push({ r: G.round, names: idleNames(), partial: true });
+function winBattle() {
+  // 勝利時、期限が来ていない Downed は自動救出（急ぐ理由がないため）
+  for (const p of G.pieces.filter(q => q.alive && q.down)) {
+    p.down = false; R.hp[p.ci] = Math.max(1, p.hp); R.rescues++;
+    say('lg-w', `${DEF[p.type].name} を回収した`);
   }
-  say('lg-r', won ? '── 勝利 ──' : '── 敗北 ──');
+  syncHp();
+  G.done = true;
+  say('lg-r', `── ${BATTLES[R.bt].name} を凌いだ ──`);
+  R.bt++;
+  if (R.bt >= BATTLES.length) { endRun(true); return; }
+  render();
+  setTimeout(() => { if (!R.over) startBattle(); }, 900);
+}
 
-  const secs = Math.round((Date.now() - G.t0) / 1000);
-  const full = G.rested.filter(r => !r.partial);
+// =====================================================================
+// 結果
+// =====================================================================
+function endRun(won) {
+  R.over = won ? 'win' : 'lose';
+  G.done = true;
+  say('lg-r', won ? '── 4つ目の夜明け ──' : '── ユニコーンが倒れた ──');
+
+  const secs = Math.round((Date.now()-R.t0)/1000);
+  const full = R.rested.filter(r => !r.partial);
   const uniq = new Set(full.map(r => r.names.join('・')));
-  const ok = n => n ? '✅' : '❌';
+  const ok = b => b ? '✅' : '❌';
+  const fm = s => `${Math.floor(s/60)}:${String(s%60).padStart(2,'0')}`;
 
   document.getElementById('result').textContent =
-    `${won ? '勝利' : '敗北'}\n` +
-    `${ok(secs<=180)} 所要時間 ${fmt(secs)}   （初見3分以内 / 習熟後2分以内）\n` +
-    `${ok(G.round>=3&&G.round<=5)} ラウンド ${G.round}   （3〜5）\n` +
-    `${ok(G.totalActs>=9&&G.totalActs<=15)} 総アクティベーション ${G.totalActs}   （9〜15）\n\n` +
-    `【合格基準1】ラウンドごとに休ませた駒\n` +
-    G.rested.map(r =>
-      `  R${r.r}: ${r.names.join('・') || 'なし'}${r.partial ? '  ※決着ラウンド・集計対象外' : ''}`
-    ).join('\n') +
-    `\n\n  ${ok(uniq.size>=2)} 集計対象 ${full.length} ラウンド中 ${uniq.size} 通り\n` +
-    (uniq.size >= 2
-      ? '  → 休ませる駒が変化している'
-      : '  → 固定化している。実質的な出撃枠3でしかない');
+    `${won ? '踏破' : '敗北'}（戦闘 ${Math.min(R.bt+1,3)}/3）\n` +
+    `${ok(secs<=420)} 所要時間 ${fm(secs)}   （3戦合計 5〜7分）\n` +
+    `${ok(R.rounds>=9&&R.rounds<=18)} 総ラウンド ${R.rounds}   （9〜18）\n` +
+    `${ok(R.acts>=27&&R.acts<=54)} 総アクティベーション ${R.acts}   （27〜54）\n\n` +
+    `【1】ラウンドごとに休ませる駒が変わったか\n` +
+    `  ${ok(uniq.size>=3)} ${full.length} ラウンド中 ${uniq.size} 通り   （3通り以上）\n\n` +
+    `【2】予告を読んで被害を減らしたか\n` +
+    `  ${ok(R.prevented>=12)} 防いだダメージ ${R.prevented}   （12以上）\n` +
+    `  ※ 回避・押し出しで空振りさせた合計。予告を使っていなければ増えない\n\n` +
+    `【3】損失が次の戦闘を変えたか\n` +
+    `  救出 ${R.rescues} 回 / 永久に失った仲間 ${R.losses.length} 人\n` +
+    (R.losses.length ? R.losses.map(s=>'  ・'+s).join('\n')+'\n' : '') +
+    `  戦闘開始時のHP:\n` +
+    R.startHp.map((h,i) => `    戦闘${i+1}: ` +
+      CREW.map((k,j) => `${DEF[k].name} ${h[j]}`).join(' / ')).join('\n') +
+    `\n\n【休ませた駒の推移】\n` +
+    R.rested.map(r => `  戦闘${r.bt} R${r.r}: ${r.names.join('・')||'なし'}`).join('\n');
   render();
 }
 
-// --- 描画 ---------------------------------------------------------------
-const $board = document.getElementById('board');
+// =====================================================================
+// 描画
+// =====================================================================
+const $b = document.getElementById('board');
 
 function render() {
-  const aims = new Map();                     // 着弾マス → 合算ダメージ
-  const srcs = new Map();                     // 攻撃元マス → 表示文字列
-  const lines = [];
+  const aims = new Map(), srcs = new Map(), lines = [];
   for (const it of G.intents) {
     const c = aimCell(it);
-    if (!c || !inb(c.x, c.y)) continue;
-    aims.set(idx(c.x,c.y), (aims.get(idx(c.x,c.y)) || 0) + it.dmg);
+    if (!c || !inb(c.x,c.y)) continue;
+    aims.set(idx(c.x,c.y), (aims.get(idx(c.x,c.y))||0) + it.dmg);
     const e = G.pieces[it.id];
-    srcs.set(idx(e.x,e.y), `${ARROW[`${it.dx},${it.dy}`] || '·'}${it.dmg}`);
-    const t = at(c.x, c.y);
-    lines.push(`${DEF[e.type].name} ${ARROW[`${it.dx},${it.dy}`] || ''} ${t ? DEF[t.type].name : '空マス'} -${it.dmg}`);
+    srcs.set(idx(e.x,e.y), `${ARROW[`${it.dx},${it.dy}`]||'·'}${it.dmg}`);
+    const t = at(c.x,c.y);
+    lines.push(`${DEF[e.type].name} ${ARROW[`${it.dx},${it.dy}`]||''} ${t&&!t.down?DEF[t.type].name:'空マス'} -${it.dmg}${it.ram?' RAM':''}`);
   }
 
   const mv = G.sel && !G.moved ? moves(G.sel) : [];
   const tg = G.moved ? targets(G.moved) : [];
+  const rs = G.moved ? rescuable(G.moved) : [];
 
-  $board.innerHTML = '';
-  for (let y = 0; y < H; y++) for (let x = 0; x < W; x++) {
+  $b.innerHTML = '';
+  for (let y=0;y<H;y++) for (let x=0;x<W;x++) {
     const d = document.createElement('div');
     d.className = 'cell';
-    const p = at(x, y);
+    const p = at(x,y);
 
     if (aims.has(idx(x,y))) {
       d.classList.add('aim');
       const dm = aims.get(idx(x,y));
-      const lethal = p && p.side === 'p' && dm >= p.hp;
-      const t = document.createElement('span');
-      t.className = 'tel' + (lethal ? ' leth' : '');
-      t.textContent = lethal ? `${dm} LETHAL` : `-${dm}`;
-      d.appendChild(t);
+      const lethal = p && p.side==='p' && !p.down && dm >= p.hp;
+      const s = document.createElement('span');
+      s.className = 'tel' + (lethal?' leth':'');
+      s.textContent = lethal ? `${dm} LETHAL` : `-${dm}`;
+      d.appendChild(s);
     }
 
-    if (!G.over) {
-      if (mv.some(c => c.x === x && c.y === y)) {
+    if (!G.done) {
+      if (mv.some(c=>c.x===x&&c.y===y)) {
         d.classList.add('move');
-        d.onclick = () => activate(G.sel, {x,y});
-        d.onmouseenter = () => { G.hint = previewMove(G.sel, {x,y}); paintHint(); };
+        d.onclick = () => activate(G.sel,{x,y});
+        d.onmouseenter = () => { G.hint = preview(G.sel,{x,y}); paint(); };
       }
-      if (tg.some(t => t.x === x && t.y === y)) {
+      if (tg.some(t=>t.x===x&&t.y===y)) {
         d.classList.add('atk');
-        d.onclick = () => attack(G.moved, p);
+        d.onclick = () => attack(G.moved,p);
         if (DEF[G.moved.type].push) {
-          const px = p.x + Math.sign(p.x - G.moved.x), py = p.y + Math.sign(p.y - G.moved.y);
-          if (!inb(px,py) || at(px,py)) {
-            const b = document.createElement('span');
-            b.className = 'blocked'; b.textContent = 'PUSH×';
-            d.appendChild(b);
+          const px=p.x+Math.sign(p.x-G.moved.x), py=p.y+Math.sign(p.y-G.moved.y);
+          if (!inb(px,py)||at(px,py)) {
+            const b=document.createElement('span'); b.className='blocked'; b.textContent='PUSH×'; d.appendChild(b);
           }
         }
+      }
+      if (rs.some(t=>t.x===x&&t.y===y)) {
+        d.classList.add('res');
+        d.onclick = () => rescue(p);
       }
     }
 
     if (p) {
-      if (G.sel === p || G.moved === p) d.classList.add('sel');
+      if (G.sel===p||G.moved===p) d.classList.add('sel');
       const n = document.createElement('span');
-      n.className = 'pc ' + (p.side === 'p' ? 'ally' : 'foe') + (p.used && p.side === 'p' ? ' done' : '');
-      n.textContent = p.type === 'U' ? 'U' : p.type;
+      n.className = 'pc ' + (p.side==='p'?'ally':'foe') + (p.down?' down':'') +
+                    (p.used&&p.side==='p'&&!p.down?' done':'');
+      n.textContent = p.type==='U'?'U':p.type;
+      d.appendChild(n);
       const h = document.createElement('span');
-      h.className = 'hp'; h.textContent = `${p.hp}/${p.max}`;
-      d.appendChild(n); d.appendChild(h);
-
-      if (srcs.has(idx(x,y))) {
-        const s = document.createElement('span');
-        s.className = 'src'; s.textContent = srcs.get(idx(x,y));
-        d.appendChild(s);
-      }
-      if (!G.over && !G.moved && p.side === 'p' && !p.used) {
-        d.style.cursor = 'pointer';
-        d.onclick = () => { G.sel = (G.sel === p ? null : p); G.hint=''; render(); };
+      h.className='hp'; h.textContent = p.down ? 'DOWN' : `${p.hp}/${p.max}`;
+      d.appendChild(h);
+      if (p.sh > 0) { const s=document.createElement('span'); s.className='sh';
+                      s.textContent='◆'.repeat(p.sh); d.appendChild(s); }
+      if (p.down) { const s=document.createElement('span'); s.className='dl';
+                    s.textContent=`R${p.dl}まで`; d.appendChild(s); }
+      if (srcs.has(idx(x,y))) { const s=document.createElement('span');
+                    s.className='src'; s.textContent=srcs.get(idx(x,y)); d.appendChild(s); }
+      if (!G.done && !G.moved && p.side==='p' && !p.used && !p.down) {
+        d.style.cursor='pointer';
+        d.onclick = () => { G.sel = (G.sel===p?null:p); G.hint=''; render(); };
       }
     }
-    $board.appendChild(d);
+    $b.appendChild(d);
   }
 
-  document.getElementById('s-round').textContent = G.round;
-  document.getElementById('s-acts').textContent = G.acts;
-  document.getElementById('s-foes').textContent = live('e').length;
-  document.getElementById('s-time').textContent = fmt(Math.round((Date.now()-G.t0)/1000));
+  const q = id => document.getElementById(id);
+  q('s-bt').textContent = Math.min(R.bt+1, 3);
+  q('s-round').textContent = G.round;
+  q('s-acts').textContent = G.acts;
+  q('s-foes').textContent = live('e').length;
+  q('s-prev').textContent = R.prevented;
+  q('s-time').textContent = `${Math.floor((Date.now()-R.t0)/60000)}:${String(Math.round((Date.now()-R.t0)/1000)%60).padStart(2,'0')}`;
 
-  document.getElementById('threat').innerHTML = lines.length
-    ? lines.map(l => `<div>${l}</div>`).join('')
-    : '<div class="t-none">今ラウンドの敵攻撃なし</div>';
+  q('threat').innerHTML = lines.length ? lines.map(l=>`<div>${l}</div>`).join('')
+                                       : '<div class="t-none">今ラウンドの敵攻撃なし</div>';
+  q('crew').innerHTML = CREW.map((k,i) => {
+    const p = G.pieces.find(z=>z.ci===i&&z.alive);
+    const hp = p ? p.hp : R.hp[i];
+    return `<div class="cr ${R.dead[i]?'dead':''}">
+      <b>${DEF[k].name}</b>${R.dead[i]?'失った':(p&&p.down?'DOWN':`${hp}/${DEF[k].hp}`)}
+      <span class="bar"><i style="width:${100*Math.max(0,hp)/DEF[k].hp}%"></i></span></div>`;
+  }).join('');
 
-  document.getElementById('roster').innerHTML = live('p')
-    .map(p => `${p.used ? '　' : '<b>●</b>'} ${DEF[p.type].name} ${p.hp}/${p.max}`).join('　');
+  q('b-skip').disabled = !G.moved;
+  q('b-undo').disabled = G.done || !G.snap;
+  q('b-end').disabled  = G.done || !!G.moved;
 
-  document.getElementById('b-skip').disabled = !G.moved;
-  document.getElementById('b-undo').disabled = G.over || !G.snap;
-  document.getElementById('b-end').disabled = G.over || !!G.moved;
-
-  const lg = document.getElementById('log');
-  lg.innerHTML = G.log.map(l => `<div class="${l.cls}">${l.txt}</div>`).join('');
+  const lg = q('log');
+  lg.innerHTML = G.log.map(l=>`<div class="${l.c}">${l.t}</div>`).join('');
   lg.scrollTop = lg.scrollHeight;
-  paintHint();
+  paint();
 }
 
-// 移動先を確定する前に、そこから何ができるかを見せる
-function previewMove(p, c) {
-  const ts = evalAt(p, c, () => targets(p).map(t => DEF[t.type].name));
-  const safe = !G.intents.some(it => {
-    const a = aimCell(it); return a && a.x === c.x && a.y === c.y;
-  });
-  return `→ (${c.x},${c.y})　攻撃可能: ${ts.length ? ts.join('・') : 'なし'}　${safe ? '被弾なし' : '被弾する'}`;
+function preview(p,c) {
+  const r = evalAt(p, c, () => ({
+    ts: targets(p).map(t=>DEF[t.type].name),
+    rs: rescuable(p).map(t=>DEF[t.type].name),
+  }));
+  const hit = G.intents.reduce((n,it) => {
+    const a = aimCell(it); return a && a.x===c.x && a.y===c.y ? n+it.dmg : n; }, 0);
+  return `→ (${c.x},${c.y})　攻撃: ${r.ts.join('・')||'なし'}` +
+         (r.rs.length ? `　救出可: ${r.rs.join('・')}` : '') +
+         `　${hit ? `被弾 -${hit}` : '被弾なし'}`;
 }
-const paintHint = () => { document.getElementById('hint').textContent = G.hint; };
+const paint = () => { document.getElementById('hint').textContent = G.hint; };
 
-// --- 操作 ---------------------------------------------------------------
+// =====================================================================
+// 操作
+// =====================================================================
 document.getElementById('b-skip').onclick  = () => { if (G.moved) finishAct(); };
-document.getElementById('b-end').onclick   = () => { if (!G.over && !G.moved) endPlayerPhase(); };
-document.getElementById('b-reset').onclick = () => { document.getElementById('result').textContent=''; newGame(); };
-document.getElementById('b-undo').onclick  = () => {
-  if (!G.snap) return;
-  restore(); say('', '（フェーズをやり直した）'); render();
+document.getElementById('b-end').onclick   = () => { if (!G.done && !G.moved) endPlayerPhase(); };
+document.getElementById('b-undo').onclick  = () => { if (G.snap) { restore(); say('','（フェーズをやり直した）'); render(); } };
+document.getElementById('b-reset').onclick = () => newRun();
+document.getElementById('b-retry').onclick = () => {
+  // 敗北してもやり直しても、失った仲間は戻らない
+  R.over = null; R.retries++;
+  R.hp = R.startHp[R.startHp.length-1].slice();
+  R.startHp.pop();
+  document.getElementById('result').textContent = '';
+  startBattle();
 };
 
-newGame();
-setInterval(() => {
-  if (!G.over) document.getElementById('s-time').textContent = fmt(Math.round((Date.now()-G.t0)/1000));
-}, 1000);
+newRun();
+setInterval(() => { if (!R.over) render(); }, 1000);
 </script>
 </body>
 </html>
