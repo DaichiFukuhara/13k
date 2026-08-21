@@ -3,6 +3,7 @@ import {runInNewContext} from "node:vm";
 
 const source=readFileSync(new URL("game.js",import.meta.url),"utf8");
 const box={console,Math,Number};
+// DOMを起動しないNode環境で本体を評価し、生成関数だけを直接検査する。
 runInNewContext(source,box,{filename:"game.js"});
 
 let checked=0;
@@ -11,6 +12,7 @@ for(let seed=1;seed<=10000;seed++){
   for(let tier=0;tier<3;tier++){
     const boss=box.generateBoss(seed,tier);
     const again=box.generateBoss(seed,tier);
+    // 同じseed/tierが技順・数値・外見を含めて完全一致することを保証する。
     if(JSON.stringify(boss)!==JSON.stringify(again))throw Error(`non-deterministic seed ${seed}/${tier}`);
     const errors=box.validateBoss(boss);
     if(errors.length)throw Error(`invalid seed ${seed}/${tier}: ${errors.join(", ")}\n${JSON.stringify(boss.moves)}`);

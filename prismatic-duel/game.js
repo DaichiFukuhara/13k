@@ -11,6 +11,8 @@ const SHAPE_NAME=["SWEEP","THRUST","SLAM","CHARGE","SHOT","RAIN"];
 const WEAPON_NAME=["BLADE","LANCE","HAMMER","HORN","ORBIT","CROWN"];
 const DEF_NAME=["","ARMOR","BARRIER","SHIELD"];
 const PARRY=1,JUMPABLE=2,MOVEABLE=4;
+// 技は容量を抑えるため配列で保持する。各添字は shape, damage, range,
+// windup, active, recovery, tracking, repeat, flags の順。
 const S=0,D=1,R=2,W=3,A=4,C=5,T=6,N=7,F=8;
 const DMG_COST=[0,1,3,6,9],RANGE_COST=[0,0,1,3,5],WIND_COST=[0,4,2,0,-2],REC_COST=[0,0,-1,-3,-5];
 
@@ -21,6 +23,7 @@ const CHAR=[
 ];
 
 function seeded(seed){
+  // Mulberry32。ゲーム中のMath.randomとは分離し、シードから技構成を再現する。
   let x=seed>>>0||1;
   return()=>{
     let z=x+=0x6d2b79f5;
@@ -32,6 +35,7 @@ function seeded(seed){
 function pick(r,a){return a[(r()*a.length)|0]}
 function clamp(v,a,b){return v<a?a:v>b?b:v}
 function threat(m){
+  // 長い予備動作・硬直は負のコスト。高威力でも十分な隙があれば許可する。
   return DMG_COST[m[D]]+RANGE_COST[m[R]]+WIND_COST[m[W]]+REC_COST[m[C]]+
     m[T]*2+(m[N]-1)*2+(m[A]===3?2:0);
 }
@@ -39,6 +43,7 @@ function limits(tier,signature){
   return signature?[6+tier,8+tier*2]:[3+tier,6+tier];
 }
 function harden(m){
+  // 合計値だけでは防げない理不尽な組み合わせを、個別規則で禁止する。
   if(m[W]===1){m[D]=Math.min(2,m[D]);m[T]=Math.min(1,m[T]);m[N]=1}
   if(m[D]===4&&m[R]===4){m[W]=Math.max(3,m[W]);m[C]=Math.max(3,m[C])}
   if(m[R]===4&&m[T]===2){m[D]=Math.min(2,m[D]);m[W]=Math.max(2,m[W])}
@@ -47,6 +52,8 @@ function harden(m){
   return m;
 }
 function balance(m,tier,signature){
+  // 危険度が帯域外なら、まず予備動作と硬直で補正する。威力・射程を
+  // 変更するのは、それだけでは収まらない場合に限定する。
   const [lo,hi]=limits(tier,signature);
   for(let i=0;i<24;i++){
     harden(m);
@@ -69,6 +76,7 @@ function balance(m,tier,signature){
   return harden(m);
 }
 function makeMove(r,shape,tier,signature){
+  // 連続値を直接生成せず、調整可能な段階値を引いてから安全側へ補正する。
   const ranges=[[2,3],[1,3],[1,2],[3,4],[3,4],[3,4]][shape];
   let range=ranges[0]+((r()*(ranges[1]-ranges[0]+1))|0);
   let damage=1+((r()*Math.min(4,2+tier+(signature?1:0)))|0);
@@ -83,16 +91,20 @@ function makeMove(r,shape,tier,signature){
   return balance([shape,damage,range,wind,active,recovery,track,repeat,flags],tier,signature);
 }
 function generateBoss(seed,tier){
+  // 役割枠を先に決めることで「全技が近接」「接近手段がない」を防ぐ。
   const r=seeded((seed^Math.imul(tier+1,0x9e3779b9))>>>0);
   const shapes=tier===0?
     [1,0,pick(r,[3,4]),pick(r,[2,5])]:
     [1,0,pick(r,[3,4]),pick(r,[4,5]),pick(r,[2,3,5])];
   const moves=shapes.map((s,i)=>makeMove(r,s,tier,i===shapes.length-1));
   if(moves[2][S]!==3){
+    // GAP枠が突進でない場合は、必ず全域へ届く遠距離技にする。
     const m=moves[2],hi=limits(tier,0)[1];m[R]=4;harden(m);
     for(let k=0;k<8&&threat(m)>hi;k++){if(m[C]<4)m[C]++;else if(m[W]<4)m[W]++;else if(m[D]>1)m[D]--;else break;harden(m)}
   }
   const open=i=>{
+    // 最低2技には反撃可能な長い硬直を残す。硬直を戻さず他の特性で
+    // 下限へ近づけるため、危険技だけでなく明確な攻撃機会も生成される。
     const m=moves[i],lo=limits(tier,i===moves.length-1)[0]-2;m[C]=Math.max(3,m[C]);
     for(let k=0;k<8&&threat(m)<lo;k++){
       const old=m.join();
@@ -106,6 +118,7 @@ function generateBoss(seed,tier){
   }
   let fast=0;
   moves.forEach((m,i)=>{
+    // 24f級の高速技は一体につき一つまで。追加分は36fへ落とす。
     if(m[W]===1&&fast++){
       m[W]=2;const lo=limits(tier,i===moves.length-1)[0];
       for(let k=0;k<8&&threat(m)<lo;k++){if(m[D]<4)m[D]++;else if(m[R]<4)m[R]++;else if(m[C]>1)m[C]--;else break}
@@ -114,6 +127,7 @@ function generateBoss(seed,tier){
   });
   const defense=tier?1+(r()*3|0):0;
   const traits=[];
+  // 外見色はランダム装飾ではなく、実際に生成された特徴候補から選ぶ。
   if(moves.some(m=>m[D]>=3))traits.push(0);
   if(moves.some(m=>m[A]===3))traits.push(1);
   if(moves.some(m=>m[W]<=2))traits.push(2);
@@ -130,6 +144,8 @@ function generateBoss(seed,tier){
   };
 }
 function validateBoss(b){
+  // 開発専用。Terserでは未使用関数として提出版から消える。
+  // test.mjsが30,000体に対して同じ不変条件を検査する。
   const errors=[],tier=b.tier;
   if(b.moves.length!==4+(tier>0))errors.push("move count");
   if(!b.moves.some(m=>m[F]&JUMPABLE))errors.push("no jump answer");
@@ -148,6 +164,8 @@ function validateBoss(b){
   return errors;
 }
 
+/* ---------------------------- browser runtime --------------------------- */
+
 let cv,cx,mode="title",seed=1,run,p,b,keys={},tap={},shots=[],parts=[],stars=[];
 let acc=0,last=0,freeze=0,shake=0,msg="",msgTime=0,audio;
 
@@ -158,6 +176,7 @@ function boot(){
   const sr=seeded(71);for(let i=0;i<70;i++)stars.push([sr()*CW,sr()*220,sr()*1.8+.3]);
   addEventListener("keydown",e=>{
     if(["ArrowLeft","ArrowRight","ArrowDown","Space","KeyA","KeyD","KeyW","KeyS","KeyJ","KeyK","KeyL","KeyZ","KeyX","KeyC","Enter","KeyR","KeyN","Escape"].includes(e.code))e.preventDefault();
+    // tapは一回だけ使う入力、keysは押し続ける移動入力として分ける。
     if(!e.repeat)tap[e.code]=1;keys[e.code]=1;wakeAudio();
   });
   addEventListener("keyup",e=>keys[e.code]=0);
@@ -184,6 +203,7 @@ function newRun(s=seed){
   seed=s>>>0;run={boss:0,time:0,hits:0,parries:0,swaps:0};startBoss();
 }
 function startBoss(){
+  // リトライ時もrunSeedは変わらないため、同じ敵を学び直せる。
   const cfg=generateBoss(runSeed(run.boss),run.boss);
   b={...cfg,hp:cfg.maxHp,posture:cfg.maxPosture,x:500,y:FLOOR-72,face:-1,phase:"wait",timer:70,
     deck:[],move:0,attack:0,pulse:0,target:140,aimY:FLOOR-18,targets:[],lastGuard:-1,attacks:0,broken:0,barrier:0,mutated:0};
@@ -210,9 +230,12 @@ function begin(a){p.action=a;p.timer=0;p.vx=0}
 function isRollInv(){return p.action==="roll"&&p.timer>=4&&p.timer<=14}
 function isParry(){return p.action==="parry"&&p.timer>=4&&p.timer<=9}
 
+/* --------------------------- player state machine ----------------------- */
+
 function playerStep(){
   if(p.inv)p.inv--;if(p.swapCd)p.swapCd--;
   for(let i=0;i<3;i++){
+    // 奥に下がったキャラは能動キャラより速く回復し、交代に資源上の意味を持たせる。
     if(p.delay[i])p.delay[i]--;
     else p.st[i]=Math.min(100,p.st[i]+(i===p.cur?.3:.5));
   }
@@ -225,6 +248,7 @@ function playerStep(){
   if(pressed("ArrowDown","KeyS"))p.swapBuf=5;
 
   if(p.action){
+    // 行動中は原則キャンセル不可。パリィ成功だけがp.actionを直接解除する。
     p.timer++;
     if(p.action==="attack"){
       const c=CHAR[p.cur];
@@ -261,12 +285,14 @@ function playerStep(){
   if(hit(boxPlayer(),boxBoss())&&p.action!=="roll")p.x=b.x>p.x?b.x-13:b.x+38;
 }
 function playerStrike(c){
+  // 遠近とも発生フレームは同じ入口を通り、当たり判定だけを分岐する。
   sound(p.cur===1?90:220,.08,p.cur===2?"sawtooth":"square",.025);
   if(c.shot){shots.push({x:p.x+9,y:p.y+12,vx:p.face*5.4,vy:0,owner:0,dmg:c.dmg,post:c.post,col:c.col,life:150});return}
   const q={x:p.face>0?p.x+15:p.x-c.reach,y:p.y+2,w:c.reach,h:29};
   if(hit(q,boxBoss()))bossDamage(c.dmg,c.post,"melee");
 }
 function bossDamage(dmg,post,kind){
+  // HPと体勢を独立させ、遠距離の安全性と近距離・パリィの報酬を分ける。
   if(mode!=="fight"||b.phase==="shift")return;
   if(b.phase==="guard"){dmg*=.3;post*=.35}
   if(b.defense===2&&kind==="shot"&&!b.barrier)dmg*=.3;
@@ -277,6 +303,7 @@ function bossDamage(dmg,post,kind){
   spark(b.x+20,b.y+28,PAL[b.hue],7);freeze=kind==="melee"?3:1;shake=kind==="melee"?3:1;
   if(b.hp<=0){mode="bosswin";sound(70,.5,"sawtooth",.05);return}
   if(b.tier===2&&!b.mutated&&b.hp<=b.maxHp/2){
+    // 最終形態は既知の固有技を強化するだけで、別の回避規則には変えない。
     b.mutated=1;const m=b.moves[b.moves.length-1];m[D]=Math.min(4,m[D]+1);m[W]=Math.min(4,m[W]+1);m[C]=Math.min(4,m[C]+1);harden(m);
     b.phase="shift";b.timer=75;shots=shots.filter(s=>s.owner===0);say("THE PRISM CHANGES",100);sound(65,.35,"sawtooth",.04);return;
   }
@@ -286,6 +313,7 @@ function breakBoss(){
   b.phase="stagger";b.timer=110;b.posture=0;freeze=6;shake=6;spark(b.x+22,b.y+30,"#fff",22);say("POSTURE BROKEN",70);sound(880,.18,"square",.05);
 }
 function hurtPlayer(dmg,id){
+  // idは「攻撃番号:多段番号」。同じ判定が複数フレーム重なっても一度だけ被弾する。
   if(mode!=="fight"||p.inv||isRollInv()||p.lastHit===id)return;
   p.lastHit=id;p.hp[p.cur]=Math.max(0,p.hp[p.cur]-dmg);p.inv=42;run.hits++;shake=5;freeze=4;
   spark(p.x+9,p.y+12,CHAR[p.cur].col,12);sound(75,.16,"sawtooth",.045);
@@ -302,13 +330,18 @@ function parryBoss(id){
   if(!b.posture)breakBoss();else{b.phase="recover";b.timer=42}
 }
 function bossContact(q,id,parryable){
+  // 回避、パリィ、被弾の優先順を一か所へ集約する。
   if(!hit(q,boxPlayer()))return;
   if(isParry()&&parryable){parryBoss(id);return}
   hurtPlayer(b.moves[b.move][D],id);
 }
 
+/* ---------------------------- boss state machine ------------------------ */
+
 function shuffle(a,r){for(let i=a.length-1;i;i--){const j=r()*(i+1)|0;[a[i],a[j]]=[a[j],a[i]]}return a}
 function nextMove(){
+  // 山札を一巡するまで各技を一度ずつ使う。距離条件は先頭3枚の並べ替えだけで、
+  // プレイヤー入力を読んだ完全カウンターAIにはしない。
   if(!b.deck.length){b.cycle=(b.cycle||0)+1;b.deck=shuffle(b.moves.map((_,i)=>i),seeded((b.seed+b.cycle*97)>>>0))}
   let k=0;
   for(let i=0;i<Math.min(3,b.deck.length);i++){
@@ -318,12 +351,15 @@ function nextMove(){
   return b.deck.splice(k,1)[0];
 }
 function startMove(){
+  // WINDUP開始時に向き・標的・多段位置を確定する。追尾技のみ前半まで更新可能。
   b.move=nextMove();const m=b.moves[b.move];b.phase="wind";b.timer=WIND[m[W]-1];b.attack++;b.attacks++;b.pulse=0;
   b.face=p.x<b.x?-1:1;b.target=p.x+8;b.aimY=p.y+14;b.targets=[];
   for(let i=0;i<m[N];i++)b.targets.push(clamp(b.target+(i?((i%2?1:-1)*(55+18*i)):0),30,CW-30));
   say(SHAPE_NAME[m[S]]+"  "+m[D]+"·"+m[R],Math.min(55,b.timer));
 }
 function bossStep(){
+  // wait → wind → active → recover が通常遷移。guard/stagger/shiftは
+  // 明示的な割り込み状態で、recoverを途中キャンセルしない。
   if(b.barrier)b.barrier--;
   if(b.phase==="wait"){
     const enemyShots=shots.some(s=>s.owner===1);
@@ -354,6 +390,7 @@ function bossStep(){
   b.x=clamp(b.x,45,CW-65);
 }
 function moveRect(m,pulse=0){
+  // 予告描画と実ダメージが同じ矩形を参照する、公平性上の中心関数。
   const reach=REACH[m[R]-1],dir=b.face;
   if(m[S]===0)return{x:dir<0?b.x-reach:b.x+40,y:FLOOR-24,w:reach,h:24};
   if(m[S]===1)return{x:dir<0?b.x-reach:b.x+38,y:b.y+26,w:reach,h:18};
@@ -363,6 +400,7 @@ function moveRect(m,pulse=0){
   return{x:0,y:0,w:0,h:0};
 }
 function activeBossMove(){
+  // 多段技は active + 10f の固定間隔を繰り返し、各段に別のhit idを割り当てる。
   const m=b.moves[b.move],span=ACTIVE[m[A]-1]+10,pulse=Math.min(m[N]-1,(b.timer/span)|0),local=b.timer%span;
   if(pulse!==b.pulse){b.pulse=pulse;if(m[S]===4)spawnBossShot(m,pulse)}
   if(local<ACTIVE[m[A]-1]&&m[S]!==4){
@@ -379,6 +417,7 @@ function spawnBossShot(m,pulse){
   sound(130,.09,"sawtooth",.028);
 }
 function shotsStep(){
+  // 飛び道具はボス状態から独立して更新する。敵弾はパリィで所有権を反転できる。
   for(const s of shots){
     if(s.track&&s.owner===1)s.vy=clamp(s.vy+Math.sign((p.y+14)-s.y)*s.track,-1.3,1.3);
     s.x+=s.vx;s.y+=s.vy;s.life--;
@@ -392,6 +431,8 @@ function shotsStep(){
   shots=shots.filter(s=>s.life>0&&s.x>-30&&s.x<CW+30&&s.y>-30&&s.y<CH+30);
 }
 function partsStep(){for(const q of parts){q.x+=q.vx;q.y+=q.vy;q.vy+=.09;q.life--}parts=parts.filter(q=>q.life>0)}
+
+/* ---------------------------- run flow ---------------------------------- */
 
 function step(){
   if(pressed("Escape")){mode=mode==="pause"?"fight":mode==="fight"?"pause":mode}
@@ -416,6 +457,8 @@ function step(){
   tap={};
 }
 
+/* ---------------------------- rendering --------------------------------- */
+
 function bar(x,y,w,h,v,max,col){cx.fillStyle="#1b1d32";cx.fillRect(x,y,w,h);cx.fillStyle=col;cx.fillRect(x+1,y+1,(w-2)*Math.max(0,v/max),h-2)}
 function text(t,x,y,size=10,col="#dfe1f1",align="left"){
   cx.font=`${size}px system-ui,sans-serif`;cx.textAlign=align;cx.fillStyle=col;cx.fillText(t,x,y);
@@ -430,6 +473,7 @@ function attackColor(m){
   if(m[D]>=4)return PAL[0];if(m[T]>=1)return PAL[5];if(m[W]===1)return PAL[2];if(m[R]===4)return PAL[4];if(m[N]>1)return PAL[6];return PAL[b.hue];
 }
 function drawTelegraph(){
+  // wind中は薄い予告、active中は濃い判定。同じmoveRectを使うため表示と判定がずれない。
   if(!b||!(b.phase==="wind"||b.phase==="active"))return;
   const m=b.moves[b.move],col=attackColor(m);
   if(b.phase==="wind"){
@@ -492,6 +536,7 @@ function draw(){
   else if(mode==="pause")overlay("PAUSED","The duel waits.","ENTER / ESC  RESUME");
 }
 function loop(now){
+  // 大きなフレーム遅延は最大5stepに丸め、復帰直後の高速消化を防ぐ。
   if(!last)last=now;acc=Math.min(acc+now-last,STEP*5);last=now;
   while(acc>=STEP){step();acc-=STEP}draw();requestAnimationFrame(loop);
 }

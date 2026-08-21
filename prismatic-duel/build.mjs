@@ -4,6 +4,7 @@ import {minify} from "terser";
 
 const root=new URL("./",import.meta.url),limit=13312;
 const read=name=>readFileSync(new URL(name,root),"utf8");
+// コメントはレビュー用ソースに残し、提出版ではTerserが除去する。
 const js=(await minify(read("game.js"),{
   ecma:2020,
   compress:{passes:3,unsafe_arrows:true,pure_getters:true,booleans_as_integers:true},
@@ -19,6 +20,7 @@ const html=read("index.html")
 const table=Array.from({length:256},(_,i)=>{let c=i;for(let k=0;k<8;k++)c=c&1?0xedb88320^(c>>>1):c>>>1;return c>>>0});
 function crc32(data){let c=0xffffffff;for(const byte of data)c=table[(c^byte)&255]^(c>>>8);return(c^0xffffffff)>>>0}
 function zip(name,data){
+  // 外部ZIPツールに依存せず、index.htmlだけを含む最小アーカイブを作る。
   const body=deflateRawSync(data,{level:9}),nm=Buffer.from(name),crc=crc32(data);
   const local=Buffer.alloc(30),central=Buffer.alloc(46),end=Buffer.alloc(22);
   local.writeUInt32LE(0x04034b50);local.writeUInt16LE(20,4);local.writeUInt16LE(8,8);local.writeUInt32LE(crc,14);local.writeUInt32LE(body.length,18);local.writeUInt32LE(data.length,22);local.writeUInt16LE(nm.length,26);
