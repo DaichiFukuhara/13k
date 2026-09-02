@@ -1,0 +1,588 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<style>html,body{margin:0}</style>
+</head>
+<body>
+<title>13,312 バイトの設計台帳</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Zen+Old+Mincho:wght@600;700;900&family=Zen+Kaku+Gothic+New:wght@400;500;700&family=JetBrains+Mono:wght@400;600&display=swap">
+
+<style>
+  :root{
+    --ground:#F6F4F8;
+    --panel:#FFFFFF;
+    --panel-2:#EFEBF3;
+    --ink:#191622;
+    --ink-2:#4A4356;
+    --ink-3:#7C7389;
+    --rule:#DCD5E4;
+    --rule-2:#C7BED2;
+    --accent:#9A6510;
+    --accent-soft:#F4E7CE;
+    --crit:#A81F41;
+    --crit-soft:#F8DFE5;
+    --warn:#8A6210;
+    --warn-soft:#F7EBD2;
+    --ok:#2C6B4F;
+
+    --h-red:#C2334B;
+    --h-orange:#B8631B;
+    --h-yellow:#8E7307;
+    --h-green:#2F7048;
+    --h-blue:#2A5FA8;
+    --h-indigo:#5245A6;
+    --h-violet:#8B3E96;
+
+    --shadow:0 1px 2px rgba(25,22,34,.05), 0 8px 24px -12px rgba(25,22,34,.18);
+    --measure:68ch;
+  }
+  @media (prefers-color-scheme: dark){
+    :root:not([data-theme="light"]){
+      --ground:#131019;
+      --panel:#1B1724;
+      --panel-2:#241E30;
+      --ink:#EDE8F5;
+      --ink-2:#B6ADC4;
+      --ink-3:#847A94;
+      --rule:#2E2740;
+      --rule-2:#403654;
+      --accent:#E5A544;
+      --accent-soft:#3A2C13;
+      --crit:#FF7591;
+      --crit-soft:#3D1622;
+      --warn:#E5A544;
+      --warn-soft:#3A2C13;
+      --ok:#68C79A;
+
+      --h-red:#F2778A;
+      --h-orange:#E9964F;
+      --h-yellow:#D7BC45;
+      --h-green:#68C79A;
+      --h-blue:#71A8F0;
+      --h-indigo:#9B8DF0;
+      --h-violet:#D181DE;
+
+      --shadow:0 1px 2px rgba(0,0,0,.4), 0 10px 30px -14px rgba(0,0,0,.8);
+    }
+  }
+  :root[data-theme="dark"]{
+    --ground:#131019;
+    --panel:#1B1724;
+    --panel-2:#241E30;
+    --ink:#EDE8F5;
+    --ink-2:#B6ADC4;
+    --ink-3:#847A94;
+    --rule:#2E2740;
+    --rule-2:#403654;
+    --accent:#E5A544;
+    --accent-soft:#3A2C13;
+    --crit:#FF7591;
+    --crit-soft:#3D1622;
+    --warn:#E5A544;
+    --warn-soft:#3A2C13;
+    --ok:#68C79A;
+
+    --h-red:#F2778A;
+    --h-orange:#E9964F;
+    --h-yellow:#D7BC45;
+    --h-green:#68C79A;
+    --h-blue:#71A8F0;
+    --h-indigo:#9B8DF0;
+    --h-violet:#D181DE;
+
+    --shadow:0 1px 2px rgba(0,0,0,.4), 0 10px 30px -14px rgba(0,0,0,.8);
+  }
+
+  *{box-sizing:border-box;}
+
+  body{
+    background:var(--ground);
+    color:var(--ink);
+    font-family:"Zen Kaku Gothic New","Hiragino Sans","Yu Gothic UI",system-ui,sans-serif;
+    font-size:16px;
+    line-height:1.85;
+    -webkit-font-smoothing:antialiased;
+    padding:0 24px 96px;
+  }
+
+  .wrap{max-width:940px;margin:0 auto;}
+
+  /* ---------- masthead ---------- */
+  .mast{
+    padding:72px 0 40px;
+    border-bottom:1px solid var(--rule);
+    display:flex;flex-direction:column;gap:20px;
+  }
+  .eyebrow{
+    font-family:"JetBrains Mono",ui-monospace,monospace;
+    font-size:12px;letter-spacing:.14em;text-transform:uppercase;
+    color:var(--ink-3);
+    display:flex;flex-wrap:wrap;gap:8px 18px;align-items:center;
+  }
+  h1{
+    font-family:"Zen Old Mincho",serif;
+    font-weight:900;
+    font-size:clamp(34px,6vw,60px);
+    line-height:1.18;
+    letter-spacing:.01em;
+    margin:0;
+    text-wrap:balance;
+  }
+  .lede{
+    font-size:clamp(16px,2.1vw,19px);
+    color:var(--ink-2);
+    max-width:var(--measure);
+    margin:0;
+  }
+  .lede strong{color:var(--ink);font-weight:700;}
+
+  /* ---------- alert ---------- */
+  .alert{
+    margin:40px 0 0;
+    background:var(--crit-soft);
+    border:1px solid var(--crit);
+    padding:22px 24px;
+    display:flex;flex-direction:column;gap:10px;
+  }
+  .alert .tag{
+    font-family:"JetBrains Mono",ui-monospace,monospace;
+    font-size:11px;letter-spacing:.16em;text-transform:uppercase;
+    color:var(--crit);font-weight:600;
+  }
+  .alert p{margin:0;max-width:var(--measure);}
+  .alert .big{
+    font-family:"Zen Old Mincho",serif;
+    font-size:clamp(20px,3.2vw,27px);
+    font-weight:700;line-height:1.45;color:var(--ink);
+    text-wrap:balance;
+  }
+
+  /* ---------- sections ---------- */
+  section{padding:64px 0 0;}
+  h2{
+    font-family:"Zen Old Mincho",serif;
+    font-weight:700;
+    font-size:clamp(23px,3.4vw,31px);
+    line-height:1.35;margin:0 0 6px;
+    text-wrap:balance;
+  }
+  .sub{
+    color:var(--ink-3);font-size:14px;margin:0 0 28px;
+    max-width:var(--measure);
+  }
+  h3{
+    font-size:17px;font-weight:700;margin:34px 0 10px;
+    letter-spacing:.01em;
+  }
+  p{max-width:var(--measure);margin:0 0 16px;}
+  .stack{display:flex;flex-direction:column;gap:16px;}
+
+  code,.mono{
+    font-family:"JetBrains Mono",ui-monospace,monospace;
+    font-size:.88em;
+  }
+  code{
+    background:var(--panel-2);
+    padding:.1em .38em;border-radius:2px;
+    color:var(--ink);
+  }
+  em.q{
+    display:block;
+    font-style:normal;
+    border-left:2px solid var(--accent);
+    padding:6px 0 6px 18px;
+    color:var(--ink-2);
+    max-width:var(--measure);
+  }
+
+  /* ---------- tables ---------- */
+  .scroll{overflow-x:auto;margin:0 0 8px;}
+  table{
+    border-collapse:collapse;width:100%;min-width:460px;
+    font-size:15px;
+  }
+  th,td{
+    text-align:left;padding:11px 14px;
+    border-bottom:1px solid var(--rule);
+    vertical-align:top;
+  }
+  thead th{
+    font-size:12px;letter-spacing:.09em;text-transform:uppercase;
+    color:var(--ink-3);font-weight:700;
+    border-bottom:1px solid var(--rule-2);
+    white-space:nowrap;
+  }
+  td.num,th.num{text-align:right;font-variant-numeric:tabular-nums;font-family:"JetBrains Mono",ui-monospace,monospace;white-space:nowrap;}
+  tbody tr:last-child td{border-bottom:none;}
+
+  /* ---------- rainbow vocabulary ---------- */
+  .hues{
+    display:grid;
+    grid-template-columns:repeat(auto-fit,minmax(210px,1fr));
+    gap:1px;background:var(--rule);border:1px solid var(--rule);
+  }
+  .hue{
+    background:var(--panel);padding:14px 16px;
+    display:flex;align-items:baseline;gap:12px;
+  }
+  .hue .swatch{
+    width:11px;height:11px;flex:none;border-radius:50%;
+    transform:translateY(1px);
+  }
+  .hue .name{font-weight:700;font-size:14px;flex:none;}
+  .hue .meaning{color:var(--ink-2);font-size:14px;}
+
+  /* ---------- findings ---------- */
+  .finding{
+    background:var(--panel);
+    border:1px solid var(--rule);
+    padding:24px;
+    box-shadow:var(--shadow);
+  }
+  .finding + .finding{margin-top:16px;}
+  .fhead{
+    display:flex;flex-wrap:wrap;align-items:center;gap:12px;
+    margin-bottom:14px;
+  }
+  .chip{
+    font-family:"JetBrains Mono",ui-monospace,monospace;
+    font-size:11px;letter-spacing:.12em;text-transform:uppercase;
+    font-weight:600;padding:3px 9px;white-space:nowrap;
+  }
+  .chip.crit{background:var(--crit);color:var(--panel);}
+  .chip.warn{background:var(--warn-soft);color:var(--warn);border:1px solid var(--warn);}
+  .chip.fixed{background:transparent;color:var(--ok);border:1px solid var(--ok);}
+  .fid{
+    font-family:"JetBrains Mono",ui-monospace,monospace;
+    font-size:13px;color:var(--ink-3);font-weight:600;
+  }
+  .ftitle{
+    font-family:"Zen Old Mincho",serif;
+    font-weight:700;font-size:19px;line-height:1.4;
+    flex-basis:100%;text-wrap:balance;
+  }
+  .finding p:last-child{margin-bottom:0;}
+
+  .chain{
+    font-family:"JetBrains Mono",ui-monospace,monospace;
+    font-size:13px;line-height:2;
+    background:var(--panel-2);padding:16px 18px;
+    margin:4px 0 16px;overflow-x:auto;
+    color:var(--ink-2);
+  }
+  .chain b{color:var(--crit);font-weight:600;}
+
+  /* ---------- deadline ledger ---------- */
+  .ledger{
+    background:var(--panel-2);
+    border:1px solid var(--rule-2);
+    padding:32px;
+  }
+  .ledger h3{margin-top:0;}
+  .rows{display:flex;flex-direction:column;}
+  .row{
+    display:flex;justify-content:space-between;align-items:baseline;gap:16px;
+    padding:9px 0;border-bottom:1px solid var(--rule);
+  }
+  .row:last-child{border-bottom:none;}
+  .row .k{color:var(--ink-2);font-size:15px;}
+  .row .v{
+    font-family:"JetBrains Mono",ui-monospace,monospace;
+    font-variant-numeric:tabular-nums;
+    font-weight:600;font-size:15px;white-space:nowrap;
+  }
+  .row.hot .v{color:var(--crit);}
+  .row.hot .k{color:var(--ink);font-weight:700;}
+
+  .verdict{
+    margin-top:24px;padding-top:22px;border-top:1px solid var(--rule-2);
+    font-family:"Zen Old Mincho",serif;
+    font-size:clamp(18px,2.6vw,22px);line-height:1.55;font-weight:700;
+    text-wrap:balance;
+  }
+
+  /* ---------- decision ---------- */
+  .opts{display:flex;flex-direction:column;gap:1px;background:var(--rule);border:1px solid var(--rule);}
+  .opt{background:var(--panel);padding:20px 22px;display:flex;flex-direction:column;gap:6px;}
+  .opt .t{font-weight:700;font-size:16px;display:flex;align-items:center;gap:10px;flex-wrap:wrap;}
+  .opt .d{color:var(--ink-2);font-size:15px;max-width:var(--measure);}
+  .rec{
+    font-family:"JetBrains Mono",ui-monospace,monospace;
+    font-size:10px;letter-spacing:.14em;text-transform:uppercase;
+    background:var(--accent-soft);color:var(--accent);
+    border:1px solid var(--accent);padding:2px 7px;font-weight:600;
+  }
+
+  ul{margin:0 0 16px;padding-left:1.15em;max-width:var(--measure);}
+  li{margin-bottom:7px;}
+  li::marker{color:var(--ink-3);}
+
+  .note{
+    font-size:14px;color:var(--ink-3);
+    border-top:1px solid var(--rule);
+    margin-top:64px;padding-top:24px;
+    max-width:var(--measure);
+  }
+  a{color:var(--accent);text-underline-offset:3px;}
+  a:focus-visible,summary:focus-visible{outline:2px solid var(--accent);outline-offset:3px;}
+
+  @media (max-width:620px){
+    body{padding:0 18px 72px;}
+    .mast{padding-top:52px;}
+    .finding,.ledger{padding:20px;}
+  }
+  @media (prefers-reduced-motion:reduce){
+    *{animation:none!important;transition:none!important;}
+  }
+</style>
+
+<div class="wrap">
+
+  <header class="mast">
+    <div class="eyebrow">
+      <span>js13kGames 2026</span>
+      <span>Unicorns and Rainbows</span>
+      <span>更新 2026-09-02</span>
+    </div>
+    <h1>13,312 バイトの設計台帳</h1>
+    <p class="lede">
+      シードから<strong>技構成だけ</strong>を生成した未知の敵を観察し、移動・ジャンプ・ローリング・パリィで崩す、
+      1画面固定の2Dボスアクション。<br>
+      設計は AIDE ハーネスで進めている。<strong>いま差し戻し中で、実装は未着手。</strong>
+    </p>
+  </header>
+
+  <div class="alert">
+    <div class="tag">最優先の所見</div>
+    <p class="big">根が自分で書いた「設計を止めて実装へ移る」判断の発動条件が、2026-09-02 に満たされた。</p>
+    <p>根1ノードに4日かけて、まだ承認されていない。残り11日で深さ3まで到達するには約20ノードある。設計ハーネスは正しく機能している — 問題は品質ではなく<strong>速度</strong>で、それは根自身が予見していた。</p>
+  </div>
+
+  <section>
+    <h2>ゲームの中身</h2>
+    <p class="sub">この企画の中心は、生成する / しないの境界そのものにある。</p>
+
+    <p><strong>生成するのは敵の「技構成」だけ。戦闘が始まったあとの判定は一切生成しない。</strong></p>
+
+    <div class="scroll">
+      <table>
+        <thead><tr><th>区分</th><th>中身</th></tr></thead>
+        <tbody>
+          <tr><td><strong>生成する</strong></td><td>攻撃技4〜5個（形状・数値・修飾子）／防御能力0〜1個／外見／技の山札／最終ボスの第2形態変異</td></tr>
+          <tr><td><strong>生成しない</strong></td><td>当たり判定の形状／発生時刻／標的位置／攻撃後硬直／パリィ可能性／プレイヤー性能／リトライ時の技セット</td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <p>だからプレイヤーが向き合うのは乱数ではなく、<strong>未知だが固定された相手</strong>。死ぬたびに別の正解を引くのではなく、同じ相手を観察して学習する。ソウルライクとして成立する条件そのものが、この一線に乗っている。</p>
+
+    <h3>ルール</h3>
+    <ul>
+      <li><strong>操作は1人。</strong>手段は 移動 / ジャンプ / ローリング / パリィ の4つだけ</li>
+      <li><strong>資源はスタミナ1本。</strong>回避も攻撃も食い、消費後は回復が止まる。「回避し続ける」も「殴り続ける」もできない</li>
+      <li><strong>すべての生成攻撃に、最低2種類の対処がある。</strong>反射神経を要求しない方法（早めの移動・距離を取る・ジャンプで越える）と、難しいが反撃しやすい方法（懐へロール・パリィ・近距離維持）</li>
+      <li><strong>強い特性には必ず代償。</strong>理不尽な敵が出ることを、運ではなく構造で防ぐ</li>
+      <li><strong>1画面固定・横軸1本。</strong>スクロールなし、落下死なし、足場なし、奥行きなし</li>
+    </ul>
+
+    <h3>虹は装飾ではなくルール</h3>
+    <p>7色が攻撃特性の語彙になっている。ボスの主色は「最も危険度へ寄与した特性」から決まるので、<strong>見た目が生成結果の関数</strong>になっている。</p>
+
+    <div class="hues">
+      <div class="hue"><span class="swatch" style="background:var(--h-red)"></span><span class="name">赤</span><span class="meaning">高威力</span></div>
+      <div class="hue"><span class="swatch" style="background:var(--h-orange)"></span><span class="name">橙</span><span class="meaning">長い攻撃判定・残留</span></div>
+      <div class="hue"><span class="swatch" style="background:var(--h-yellow)"></span><span class="name">黄</span><span class="meaning">短い予備動作</span></div>
+      <div class="hue"><span class="swatch" style="background:var(--h-green)"></span><span class="name">緑</span><span class="meaning">防御能力</span></div>
+      <div class="hue"><span class="swatch" style="background:var(--h-blue)"></span><span class="name">青</span><span class="meaning">長射程</span></div>
+      <div class="hue"><span class="swatch" style="background:var(--h-indigo)"></span><span class="name">藍</span><span class="meaning">追尾</span></div>
+      <div class="hue"><span class="swatch" style="background:var(--h-violet)"></span><span class="name">紫</span><span class="meaning">多段・特殊変化</span></div>
+    </div>
+
+    <p style="margin-top:20px">ただし<strong>色だけに依存させない</strong>。範囲・時間・動きでも同じことを示す。これがテーマ条件の答えにもなっている。</p>
+    <em class="q">色を取り除くと、敵の性格を推測する手段が予備動作の観察だけになり、初見の判断が推測から反応へ落ちる。虹を外すとゲームが別物になる。</em>
+
+    <h3>「完成した」の判定は2点だけ</h3>
+    <p>機能数でも生成パターン数でもない。</p>
+    <ul>
+      <li>生成された攻撃が、<strong>初見では緊張し、一度見れば理解できる</strong>（＝理不尽でないこと）</li>
+      <li>同じ敵への再挑戦で、乱数ではなく<strong>学習によって勝率が上がる</strong>（＝上達が起きること）</li>
+    </ul>
+  </section>
+
+  <section>
+    <h2>いま設計はどうなっているか</h2>
+    <p class="sub">課題を3つに割ったが、その割り方が確定していない。子ノードはすべて停止中。</p>
+
+    <div class="scroll">
+      <table>
+        <thead><tr><th>ノード</th><th>引き受ける課題</th><th>状態</th></tr></thead>
+        <tbody>
+          <tr><td><code>duel</code></td><td>生成された敵とプレイヤーが噛み合わず、回避不能な攻撃が出る</td><td>停止中</td></tr>
+          <tr><td><code>read</code></td><td>何が・いつ・どこへ来るかが伝わらず、学習ではなく反射になる</td><td>停止中</td></tr>
+          <tr><td><code>ship</code></td><td>13,312 bytes と締切に収まらず、提出する1本が一意に決まらない</td><td>停止中・存続未定</td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <h3>分割提案は4つ出て、4つとも生きていない</h3>
+    <div class="scroll">
+      <table>
+        <thead><tr><th>提案</th><th>中身</th><th>状態</th></tr></thead>
+        <tbody>
+          <tr><td><code>split-1</code></td><td>子3つ・seam 5本と申告（実際は8端点）</td><td>superseded</td></tr>
+          <tr><td><code>split-2</code></td><td>案 A。子3つ・12端点</td><td>withdrawn</td></tr>
+          <tr><td><code>split-3</code></td><td>案 B。<code>ship</code> を親へ畳む・2端点と主張</td><td>rejected</td></tr>
+          <tr><td><code>split-4</code></td><td>案 B′。8端点（兄弟2＋親子6）</td><td>pending</td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <h3>Codex による前検査を3周。1周も通っていない</h3>
+    <div class="scroll">
+      <table>
+        <thead><tr><th class="num">回</th><th>対象</th><th>結果</th></tr></thead>
+        <tbody>
+          <tr><td class="num">1</td><td><code>split-1</code>（承認済みだった）</td><td>重大5・軽微2 → 修正のうえ再提案</td></tr>
+          <tr><td class="num">2</td><td><code>split-3</code></td><td>重大8・軽微3 → 判定不能</td></tr>
+          <tr><td class="num">3</td><td><code>split-4</code></td><td>重大8・軽微4 → 判定不能</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+  <section>
+    <h2>見直しで見つかったこと</h2>
+    <p class="sub">前検査3周はすべて分割提案が対象だった。決定本文（1〜7）そのものは一度も体系的に検査されていない。そこを読んだ。</p>
+
+    <div class="finding">
+      <div class="fhead">
+        <span class="chip crit">重大</span><span class="chip fixed">修正済み</span>
+        <span class="fid">A</span>
+        <span class="ftitle">「交代」の消し残しが、もう1件あった</span>
+      </div>
+      <p><code>1.8</code> に「1体ごとに<strong>全員</strong>回復し」と残っていた。操作キャラは1人なので「全員」はおかしい。</p>
+      <p>これは Codex が重大5として見つけた「本文1に『交代』が残っていた」と<strong>まったく同じ型</strong>で、<strong>同じ改訂の消し残し</strong>。3周の前検査すべてが見落とした。改訂のたびに全節を突き合わせる工程が無く、1箇所直して他を放置する型がこの木では2回起きている。</p>
+    </div>
+
+    <div class="finding">
+      <div class="fhead">
+        <span class="chip crit">重大</span>
+        <span class="fid">B</span>
+        <span class="ftitle">公平性の保証が、論理的に壊れた条項に乗っている</span>
+      </div>
+      <em class="q">高威力・長射程・追尾・多段・<strong>短い予備動作</strong>といった強い特性には、必ず<strong>長い予備動作</strong>か長い攻撃後硬直を対応させる</em>
+      <p style="margin-top:16px"><strong>「短い予備動作」の代償が「長い予備動作」になっている。</strong>同じ攻撃が両方を持つことはできないので、黄（＝短い予備動作）の代償は実質「長い攻撃後硬直」1択しかない。特性リストと代償リストが独立に書かれ、<code>短い予備動作</code> が両方に入っているのが原因。</p>
+      <p>表現の粗さでは済まない。依存が積み上がっている。</p>
+      <div class="chain">不変条件10（反射神経に依存しない回答を最低1つ持つ）<br>&nbsp;&nbsp;&nbsp;↑ 依存<br>1.4（すべての生成攻撃は最低2種類の対処を持つ）<br>&nbsp;&nbsp;&nbsp;↑ 依存<br><b>1.3（強い特性には必ず代償）← ここが壊れている</b></div>
+      <p>さらに黄は <code>s2.read-floor</code>（読むために必要な最低予備動作長・暫定18F）とも衝突する。最低長で下から抑えると、黄は「絶対的に短い」のではなく「他より短い」になる。初見のプレイヤーは比べる材料を持っていないので、<strong>色を絶対値として読めない</strong>。受け入れ条件「初見」に直接効く。</p>
+    </div>
+
+    <div class="finding">
+      <div class="fhead">
+        <span class="chip crit">重大</span>
+        <span class="fid">C</span>
+        <span class="ftitle">容量配分の単位が、どこにも書かれていない</span>
+      </div>
+      <p><code>13,312 bytes</code> は ZIP のサイズ。一方、容量配分の表はモジュールごとに「2.2〜2.8KB」のように割り当て、合計 8.3〜11.2KB・自主ゲート 11.8KB と 13,312 bytes の隣に並べている。<strong>この KB がソース由来なのか ZIP 由来なのかが書かれていない。</strong></p>
+      <ul>
+        <li>ZIP バイトだとすると、<strong>圧縮は全体で効くのでモジュール単位に按分できない</strong>（配分が無意味）</li>
+        <li>ソースバイトだとすると、<strong>13,312 bytes と直接比べられない</strong>（比較が無意味）</li>
+      </ul>
+      <p>どちらに解釈しても表が壊れる。しかもこの数字はプロジェクトで最も影響が大きい制約であり、<code>duel</code> と <code>read</code> の両方の「継承する制約」に確定値として降りる予定になっている。</p>
+    </div>
+
+    <div class="finding">
+      <div class="fhead">
+        <span class="chip warn">要確認</span>
+        <span class="fid">D</span>
+        <span class="ftitle">「戦闘座標は横軸1本だけ」と「ジャンプで越える」</span>
+      </div>
+      <p><code>1.7</code> は「戦闘座標は横軸1本だけ」「奥行きを持たない」とする。一方 <code>1.4</code> は回答手段にジャンプを挙げ、「ジャンプで<strong>越える</strong>」と書く。</p>
+      <p>越えるには縦方向の座標が要る。1.7 が否定しているのは Z軸（奥行き）なので、おそらく Y軸（高さ）は存在する意図だが、「横軸1本だけ」という文はそう読めない。<strong>実装者が最初に止まる箇所。</strong></p>
+    </div>
+
+    <div class="finding">
+      <div class="fhead">
+        <span class="chip warn">要確認</span><span class="chip fixed">修正済み</span>
+        <span class="fid">E</span>
+        <span class="ftitle">日数の直書きが古くなっていた</span>
+      </div>
+      <p><code>3</code> と <code>7-1</code> が「残り13日」と書いていた（8/31 時点の数）。実際は11日。この文書は残り日数を根拠に判断を下している箇所が複数あり（ボス体数・完成範囲・打ち切り判断）、古い日数はその前提を静かに崩す。締切日時を書く形へ直した。</p>
+    </div>
+  </section>
+
+  <section>
+    <h2>締切の算数</h2>
+    <p class="sub">根の 7-5 が「回り切らない場合、設計を止めて実装へ移る判断が要る」と書いていた、その状態。</p>
+
+    <div class="ledger">
+      <div class="rows">
+        <div class="row"><span class="k">根の起草開始</span><span class="v">2026-08-30</span></div>
+        <div class="row"><span class="k">経過</span><span class="v">4 日</span></div>
+        <div class="row"><span class="k">根の決定</span><span class="v">未承認</span></div>
+        <div class="row"><span class="k">有効な分割提案</span><span class="v">0 件</span></div>
+        <div class="row"><span class="k">深さ1で完了したノード</span><span class="v">0 / 2〜3</span></div>
+        <div class="row"><span class="k">実装</span><span class="v">未着手</span></div>
+        <div class="row hot"><span class="k">残り（2026-09-13 20:00 JST）</span><span class="v">11 日</span></div>
+      </div>
+
+      <p style="margin-top:26px">深さ3まで行くには、深さ1（2〜3）＋深さ2（4〜6）＋深さ3（10〜15）で<strong>およそ20ノード</strong>。各ノードが interview（7問を人間へ1問ずつ）→ 決定承認 → 分割提案 → 別実装 AI の前検査 → 分割承認 → 転記 を要する。</p>
+
+      <div class="verdict">根1ノードに4日かけて未承認。極めて楽観的に1ノード0.5日としても10日かかり、実装に残るのは1日。</div>
+    </div>
+
+    <p style="margin-top:24px">設計ハーネスは正しく機能している。前検査は本物の欠陥を3周連続で検出し、承認済みだった決定の矛盾まで見つけた。<strong>問題は品質ではなく速度で、それは根自身が 7-5 で予見していた。</strong></p>
+  </section>
+
+  <section>
+    <h2>決めるべきこと</h2>
+    <p class="sub">最優先は 7-5 の判断 — 続けるか、切り替えるか。</p>
+
+    <div class="opts">
+      <div class="opt">
+        <div class="t">設計を止めて実装へ移る <span class="rec">推奨</span></div>
+        <div class="d">根の決定（1〜7）は十分に詰まっている。深さ1〜3を省き、根から直接実装する。ハーネスは「設計は期限に従属する」と明記しており、これは規約違反ではなく<strong>規約が用意した出口</strong>。</div>
+      </div>
+      <div class="opt">
+        <div class="t">深さ1だけ回して実装へ</div>
+        <div class="d"><code>duel</code> / <code>read</code> の課題認識と解決法まで決めて、深さ2以降を省く。</div>
+      </div>
+      <div class="opt">
+        <div class="t">設計を続ける</div>
+        <div class="d">締切に間に合わない可能性が高い。</div>
+      </div>
+    </div>
+
+    <h3>上の判断の前に直すべき本文の欠陥</h3>
+    <ul>
+      <li><strong>B</strong> — <code>1.3</code> の「短い予備動作」の代償を書き直す（公平性の保証がここに乗っている）</li>
+      <li><strong>C</strong> — 容量配分の単位を決める（ソースバイトか ZIP バイトか）</li>
+      <li><strong>D</strong> — <code>1.7</code> の「横軸1本だけ」とジャンプの関係を明記する</li>
+    </ul>
+
+    <h3>設計を続ける場合にだけ要るもの</h3>
+    <ul>
+      <li><code>reports</code> か <code>seam_inbox</code> か（提案側が人間の判断を読み替えた件の差し戻し）</li>
+      <li>「期限」を誰が判定するか（<code>implement</code> からの完了報告経路が無い）</li>
+      <li><code>implement</code> が締切に間に合わない場合の代替</li>
+    </ul>
+
+    <h3>未決のまま残っているもの</h3>
+    <ul>
+      <li>ボス何体で1ランか、1体あたり何分か — <strong>実装量が見積もれない直接の原因</strong></li>
+      <li>実装基盤（<code>prismatic-duel/game.js</code> を土台にするか・書き直すか）— <code>deferred</code></li>
+      <li>「初見」テストの被験者を確保できるか — 代替判定が無い</li>
+      <li>操作キャラ1人は「とりあえず」の決定</li>
+    </ul>
+  </section>
+
+  <p class="note">
+    これは要約であって、正ではない。唯一の正は <code>design/tree/index.md</code> と各子ノードの <code>index.md</code>。矛盾したら常にツリー側が正しい。cold start した子チャットはこれを読まない — 閉包は自ノードと祖先の <code>index.md</code> だけ。
+  </p>
+
+</div>
+
+</body>
+</html>
