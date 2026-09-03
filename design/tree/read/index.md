@@ -54,8 +54,10 @@ uses_seams: [s1.presentation-state]   # duel から受け取る
     成立しなければ `boundary_request` で根へ返す
   - 容量の目安 **9,500 inlined bytes**（**シェル（`index.html`・CSS・起動）を含む**・
     設計時見積もり・親に残すもの9）。実測と再調停は実装段階へ `deferred`
-  - 実装基盤は `deferred`（再開条件: 最初の深さ2の分割承認まで）なので、
-    **深さ1では基盤を前提にしない**
+  - **実装基盤は `prismatic-duel/game.js`**（2026-09-04・人間の決定。根の本文 6.1・親に残すもの11）。
+    ~~`deferred`（再開条件: 最初の深さ2の分割承認まで）~~。
+    **土台にするのはコードと build 環境**であって `prismatic-duel` のゲーム設計ではない —
+    設計はこのツリーが正本であり、合わない実装は捨てる
 
 - **割り当てられた受け入れ条件**: テーマ、初見（主）、学習（前提としての可読性）
 
@@ -67,7 +69,8 @@ uses_seams: [s1.presentation-state]   # duel から受け取る
 
 - **開く順序**: **2番目**（`duel` の `s1` が親に権威化されてから）
 
-- **parent_decision_ref**: `root@2026-09-03-decision-6` ＋ `root@2026-09-03-split-6`
+- **parent_decision_ref**: `root@2026-09-04-decision-7` ＋ `root@2026-09-04-split-7`
+  <!-- 2026-09-04: decision-6 / split-6 から更新。実装基盤の deferred 解除により版が切り直された -->
 
 ## 1. これは何を決めるものか
 

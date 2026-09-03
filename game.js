@@ -1,4 +1,10 @@
 /* ==========================================================================
+   ⚠️ NOT SUBMITTED. This implementation is not adopted (2026-09-04,
+   root@2026-09-04-decision-7 section 6.1). The single entry for js13kGames
+   2026 is designed in design/tree/ and built on prismatic-duel/.
+   Kept as material and history. Do not extend.
+   ==========================================================================
+
    Virginight - stage 1 (see VIRGINIGHT_DESIGN.md ch.19).
 
    Exploration, time, karma and one guaranteed causality loop.

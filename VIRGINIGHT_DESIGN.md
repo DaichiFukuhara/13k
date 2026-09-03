@@ -1,5 +1,13 @@
 # Virginight ゲーム設計書
 
+> **⚠️ 本書は採用されていない。**（2026-09-04・根の決定 `root@2026-09-04-decision-7` 本文 6.1）
+>
+> js13kGames 2026 へ提出する1本の設計は **[`design/tree/`](design/tree/index.md)** が正本で、
+> **1画面固定の2Dボスアクション**である。Virginight 系（本書・
+> [`NIGHT_TACTICS_DESIGN.md`](NIGHT_TACTICS_DESIGN.md) / [`NIGHT_TD_DESIGN.md`](NIGHT_TD_DESIGN.md) /
+> ルート直下の `game.js` `index.html` `style.css`）は**別の企画**であり、提出しない。
+> 素材・経緯として残す。
+
 最終更新: 2026-08-16  
 状態: 基本設計確定、イベント内容・数値バランス・背景詳細は未確定
 

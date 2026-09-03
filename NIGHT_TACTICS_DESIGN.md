@@ -1,5 +1,10 @@
 # Virginight 夜フェーズ設計書 — ターン制タクティクス
 
+> **⚠️ 本書は採用されていない。**（2026-09-04・根の決定 `root@2026-09-04-decision-7` 本文 6.1）
+>
+> Virginight 系は提出しない。提出する1本の設計は
+> **[`design/tree/`](design/tree/index.md)** が正本である。素材・経緯として残す。
+
 最終更新: 2026-08-18
 状態: 設計案 v1（Codex との共同設計・未レビュー・未実装）
 対象: 夜フェーズのみ。昼フェーズは既存の [VIRGINIGHT_DESIGN.md](VIRGINIGHT_DESIGN.md) を維持する
