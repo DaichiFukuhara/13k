@@ -1956,7 +1956,11 @@ cold start した子が見落とすため（Codex `split-4` 重大4）。
 
 ## 分割提案 split-6
 
-status: **pending**（前検査1回目「判定不能」→ 重大4・軽微4を反映済み。2回目待ち）
+status: **approved**（`root@2026-09-03-split-6` / `waiver-1` による委任承認。`children-created`）
+<!-- 2026-09-04: 旧 status「pending（2回目待ち）」の消し残しを直した。
+     Codex `duel-split-1` 前検査 軽微4。承認証跡の有効状態表が正である -->
+前検査: 1回目 2026-09-03「判定不能」（重大4・軽微4）を全件反映。
+**2回目は未実施のまま承認した**（Codex が使用上限。理由は承認証跡の `split-6` の項）
 前提: **`root@2026-09-03-decision-6`**（本文1〜7）
 前検査: 1回目 2026-09-03「判定不能」（重大4・軽微4）。**全件反映済み。**本節末尾
 経緯: `split-1`（superseded）→ `split-2`（withdrawn）→ `split-3`（rejected）→
@@ -2405,7 +2409,10 @@ design/harness/README.md に従って design/tree/duel を進めてください�
   機構を足して直すのをやめ、**剥がす**方針で `split-6` へ差し替えた
 
 - **`root@2026-09-03-decision-5`** / 承認者: 提案側（Claude、`waiver-1` により）/
-  日時: 2026-09-03 / 種別: `decision` / 承認者の種別: **AI（委任）** / **status: active**
+  日時: 2026-09-03 / 種別: `decision` / 承認者の種別: **AI（委任）** /
+  **status: superseded（2026-09-03・同日。`decision-6` へ）**
+  <!-- 2026-09-04: 「status: active」の消し残しを直した。Codex `duel-split-1` 前検査 軽微4。
+       下の decision-6 の項が「decision-5 は失効」と書いており、そちらが正である -->
   対象: 本文1〜7
 
   `decision-4` からの差分は **`1.3` の再修正1点のみ**（Codex 前検査2回目 重大2）。
