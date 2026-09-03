@@ -7,7 +7,15 @@ status: children-created   # 決定 root@2026-09-04-decision-7 / 分割 root@202
                         # いずれも waiver-1 による委任承認。振り分けの転記まで完了。
                         # 2026-09-04: 実装基盤の deferred を解除した（本文 6.1）。
                         # prismatic-duel/game.js を土台にし、不採用物は無効と明記して残す。
-                        # 深さ1は duel が split 差し戻し中（duel-split-1 は判定不能）
+                        #
+                        # 2026-09-04: ツリー全体が深さ3へ到達した。葉は13枚。
+                        #   duel/gen/{move,audit,roster}  duel/fight/{avatar,foe,arena}
+                        #   read/tell/{telegraph,palette,actors}
+                        #   read/frame/{hud,screens,sound,shell}
+                        # 深さ1〜3の決定と分割はすべて waiver-1 による委任承認で、
+                        # 前検査を1度も経ていない（Codex がリソース上限）。
+                        # waiver-1 は「深さ3到達まで」なので、ここで委任は終わる。
+                        # 実装は人間が改めて承認する
 seams: [s1.presentation-state]   # duel -> read の片方向1本。逆向きは無い
 uses_seams: []
 ---
