@@ -3,7 +3,7 @@ id: duel.fight.avatar
 parent: duel.fight
 depth: 3
 children: []           # 深さ3は葉。分割しない
-status: decision-approved   # avatar@2026-09-04-decision-1（waiver-1 による委任承認）
+status: decision-approved   # avatar@2026-09-04-decision-1（人間の承認 root@2026-09-04-approval-1）
 seams: []
 uses_seams: [f3.avatar-verdict]
 ---
@@ -244,8 +244,8 @@ uses_seams: [f3.avatar-verdict]
 
 **深さ3は子を作らないため、分割の承認は無い。**
 
-- **`avatar@2026-09-04-decision-1`** / 承認者: 提案側（Claude、`root@2026-09-03-waiver-1` により）/
-  日時: 2026-09-04 / 種別: `decision` / 承認者の種別: **AI（委任）** / **status: active**
+- **`avatar@2026-09-04-decision-1`** / 承認者: **人間（DaichiFukuhara、`root@2026-09-04-approval-1` により）**/
+  日時: 2026-09-04 / 種別: `decision` / 承認者の種別: **人間** / **status: active**
   対象: 本文1〜7
 
   **決定の要点**: 実装の実測を並べた結果、**プレイヤー能力契約の値が誤っていることが分かった。**
@@ -259,4 +259,5 @@ uses_seams: [f3.avatar-verdict]
   実装からは**足すより削るほうが多い**（3人交代・控え・自動交代）。
   受け入れ条件に「交代が存在しない」を grep で判定する形で入れた。
 
-  **`waiver-1` は深さ3到達までの委任である。ここから先（実装）は人間が改めて承認する。**
+  **2026-09-04、人間が `root@2026-09-04-approval-1` で明示的に承認した。**
+  `waiver-1`（AI への委任）は深さ3到達をもって終了している。

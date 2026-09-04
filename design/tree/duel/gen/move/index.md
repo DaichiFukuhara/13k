@@ -3,7 +3,7 @@ id: duel.gen.move
 parent: duel.gen
 depth: 3
 children: []           # 深さ3は葉。分割しない
-status: decision-approved   # move@2026-09-04-decision-1（waiver-1 による委任承認）
+status: decision-approved   # move@2026-09-04-decision-1（人間の承認 root@2026-09-04-approval-1）
 seams: []
 uses_seams: [g1.move-request]
 ---
@@ -191,8 +191,12 @@ uses_seams: [g1.move-request]
 
 ## 7. 分からないこと・仮置きしていること
 
-1. **危険度予算の定義がツリーと実装でずれている。**
-   根は「ボス1体が持てる合計」、実装は「技1つの帯域」。
+1. ~~危険度予算の定義がツリーと実装でずれている~~ → **解消**（2026-09-04）。
+   **根が 1.3 で2層に定義し直した**（`root@2026-09-04-decision-8`）ので、
+   `move` は**技の帯域**を持ち、**ボスの合計上限は `roster` が持つ。**
+   旧文は「実装のまま技ごとの帯を採る」と `boundary_request` 無しに決めており、
+   Codex 監査の**着手前8**で「**子による祖先決定の再選択**」と指摘された。
+   以下は当時の記録である。
 
    **仮置き: 実装のまま「技1つの帯域」を採る。**`provisional: true`。理由は2つ。
    - **合計上限を課すと、`roster` の引き直しが増える**（1技を直すと合計が動く）
@@ -217,8 +221,8 @@ uses_seams: [g1.move-request]
 
 **深さ3は子を作らないため、分割の承認は無い**（`harness/README.md`「承認の原則」）。
 
-- **`move@2026-09-04-decision-1`** / 承認者: 提案側（Claude、`root@2026-09-03-waiver-1` により）/
-  日時: 2026-09-04 / 種別: `decision` / 承認者の種別: **AI（委任）** / **status: active**
+- **`move@2026-09-04-decision-1`** / 承認者: **人間（DaichiFukuhara、`root@2026-09-04-approval-1` により）**/
+  日時: 2026-09-04 / 種別: `decision` / 承認者の種別: **人間** / **status: active**
   対象: 本文1〜7（実装するシステムの境界・振る舞い・受け入れ条件）
 
   **本文1のほぼ全部が `prismatic-duel/` の実測である**

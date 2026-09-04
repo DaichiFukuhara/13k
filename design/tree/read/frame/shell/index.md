@@ -3,7 +3,7 @@ id: read.frame.shell
 parent: read.frame
 depth: 3
 children: []           # 深さ3は葉
-status: decision-approved   # shell@2026-09-04-decision-1（waiver-1 による委任承認）
+status: decision-approved   # shell@2026-09-04-decision-1（人間の承認 root@2026-09-04-approval-1）
 seams: []
 uses_seams: []
 ---
@@ -38,7 +38,7 @@ uses_seams: []
 
 | ファイル | 中身 |
 | --- | --- |
-| `index.html` | `<canvas>` 1枚 ＋ **操作の常時表示**（`screens` の 1.2）＋ 読み込み |
+| `index.html` | `<canvas>` 1枚 ＋ **操作説明を置く空の場所**（中身は `screens` が `s1.controls` から生成する。`frame` の親に残すもの6）＋ 読み込み |
 | CSS | 画面中央寄せ・**16:9 の維持**・背景・ピクセル補間なし |
 
 **CSS の要点**（実装から）:
@@ -173,7 +173,7 @@ headroom  4,394 bytes
 - `index.html` の文言と構造
 - ZIP の作り方（実装は手書き。**ライブラリを足さないこと**が条件）
 - `dist/` の場所と名前
-- **狭い画面で操作の段落を隠すかどうか**（実装は 700px 未満で隠す。`screens` の 7-3）
+- ~~狭い画面で操作の段落を隠すかどうか~~ → **隠さない**（7-2 で凍結）
 
 **今回は決めない**
 
@@ -198,8 +198,11 @@ headroom  4,394 bytes
 2. **狭い窓で操作の提示が消える**（`screens` の 7-3 から引き継ぎ）。
    実装は 700px 未満で `<p>` を隠す。
    **審査員がノートPCの狭い窓で開くと、操作が分からない。**
-   仮置き: 隠さない形へ変えるか、Canvas 内へ操作を描く。`provisional: true`。
-   **`screens` の担当と重なるので、どちらが直すかは実装時に決める**
+   > 🔒 **凍結（`shell@2026-09-04-decision-2`）。隠さない。**
+   > 審査員がノートPCの狭い窓で開くと操作が分からなくなり、
+   > **受け入れ条件「初見（操作の提示）」が落ちる。**
+   > 幅が足りなければ**折り返して2行にする。**表示そのものは消さない。
+   > **文字列は `screens` が持つ**（`frame` の親に残すもの6）ので、`shell` は場所だけ用意する。
 
 3. **inlined と ZIP の比 2.31x は経験則であって保証ではない**（根の 5-A-1 の ⚠️）。
    コードの性質が変わると比も変わる。**ZIP の実測だけを信じる**
@@ -216,8 +219,8 @@ headroom  4,394 bytes
 
 **深さ3は子を作らないため、分割の承認は無い。**
 
-- **`shell@2026-09-04-decision-1`** / 承認者: 提案側（Claude、`root@2026-09-03-waiver-1` により）/
-  日時: 2026-09-04 / 種別: `decision` / 承認者の種別: **AI（委任）** / **status: active**
+- **`shell@2026-09-04-decision-1`** / 承認者: **人間（DaichiFukuhara、`root@2026-09-04-approval-1` により）**/
+  日時: 2026-09-04 / 種別: `decision` / 承認者の種別: **人間** / **status: active**
 
   **決定の要点**: 器とビルドは実装のものをそのまま採った。
   **根の親に残すもの10 が「`prismatic-duel/build.mjs` は仕様を満たしている（流用可）」と

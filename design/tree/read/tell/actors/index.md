@@ -3,9 +3,9 @@ id: read.tell.actors
 parent: read.tell
 depth: 3
 children: []           # 深さ3は葉
-status: decision-approved   # actors@2026-09-04-decision-1（waiver-1 による委任承認）
+status: decision-approved   # actors@2026-09-04-decision-1（人間の承認 root@2026-09-04-approval-1）
 seams: []
-uses_seams: [r1.screen-state]
+uses_seams: [r1.screen-state, t2.color-result]
 ---
 
 # actors（システム: プレイヤー・ボス・弾・効果・背景を描き、姿から性格を推測させる）
@@ -27,9 +27,9 @@ uses_seams: [r1.screen-state]
   **操作キャラは1人**（根の親に残すもの8。控えの描画を持たない）。
   容量の目安 **2,400 inlined bytes**
 - **割り当てられた受け入れ条件**: 初見（主）、色を取り除いても遊べる（規則の実行）
-- **uses_seams**: `r1.screen-state`
-- **提供する seam**: なし
-- **parent_decision_ref**: `tell@2026-09-04-decision-1` ＋ `tell@2026-09-04-split-1`
+- **uses_seams**: `r1.screen-state`, `t2.color-result`（`palette` から色と冗長化の指示）
+- **提供する seam**: `t1.color-request`（`palette` へ）
+- **parent_decision_ref**: `tell@2026-09-04-decision-2` ＋ `tell@2026-09-04-split-2`
 
 ## 1. これは何を決めるものか
 
@@ -192,8 +192,8 @@ uses_seams: [r1.screen-state]
 
 **深さ3は子を作らないため、分割の承認は無い。**
 
-- **`actors@2026-09-04-decision-1`** / 承認者: 提案側（Claude、`root@2026-09-03-waiver-1` により）/
-  日時: 2026-09-04 / 種別: `decision` / 承認者の種別: **AI（委任）** / **status: active**
+- **`actors@2026-09-04-decision-1`** / 承認者: **人間（DaichiFukuhara、`root@2026-09-04-approval-1` により）**/
+  日時: 2026-09-04 / 種別: `decision` / 承認者の種別: **人間** / **status: active**
 
   **決定の要点**: 受け入れ条件に「**姿から性格が読める**」を入れた。
   `telegraph` が「予告が読めること」を引き受けるので、
@@ -208,4 +208,5 @@ uses_seams: [r1.screen-state]
   **7色の帯**（実装のボス胴部）は、ツリーが書いていなかったが**残す価値がある** —
   7本並んで1本だけ明るいので、**色の語彙の存在そのものが説明なしに伝わる。**
 
-  **`waiver-1` は深さ3到達までの委任である。ここから先（実装）は人間が改めて承認する。**
+  **2026-09-04、人間が `root@2026-09-04-approval-1` で明示的に承認した。**
+  `waiver-1`（AI への委任）は深さ3到達をもって終了している。

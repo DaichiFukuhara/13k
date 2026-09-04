@@ -4,7 +4,8 @@ parent: read
 depth: 2
 children: [hud, screens, sound, shell]
 status: children-created   # 決定 frame@2026-09-04-decision-1 / 分割 frame@2026-09-04-split-1。
-                        # いずれも waiver-1 による委任承認。前検査は未実施（Codex がリソース上限）
+                        # いずれも人間の承認 root@2026-09-04-approval-1。
+                        # Codex 深さ3監査（2026-09-04・判定不能）の指摘を反映済み
 seams: []               # 子同士の接続は無い（4子とも s1 と親の定数だけを読む）
 uses_seams: []
 ---
@@ -63,6 +64,7 @@ uses_seams: []
 ```
 
 **子同士の seam が1本も無い。**4子とも `s1` と親の定数だけを読む。
+**操作説明の所有者は `screens` に固定した**（親に残すもの6。`shell` は場所だけ用意する）。
 
 **`r1.screen-state` を `tell` へ渡すのは `screens` の決定に基づくが、
 `frame` の代表として親が権威化して降ろす**（親に残すもの5）。
@@ -179,9 +181,9 @@ uses_seams: []
 
 ## 分割提案 frame-split-1
 
-status: **approved**（`frame@2026-09-04-split-1` / `waiver-1` による委任承認。`children-created`）
+status: **approved**（`frame@2026-09-04-split-1` / 人間の承認 `root@2026-09-04-approval-1`。`children-created`）
 前提: `frame@2026-09-04-decision-1`
-前検査: **未実施**（Codex がリソース上限）
+前検査: **深さ3全体監査で1回**（2026-09-04・Codex・判定不能）。指摘を反映済み
 
 ### 子
 
@@ -216,7 +218,21 @@ status: **approved**（`frame@2026-09-04-split-1` / `waiver-1` による委任�
 
 5. **`r1.screen-state` の内容と権威化**: `screens` が画面状態を決め、
    **`frame` が権威化して `tell` へ降ろす。**`screens` から `tell` への直接の線は作らない
-6. **容量の目安**（`frame` の 4,500 inlined bytes を分ける）
+
+6. **操作説明の所有者は `screens` に固定する**
+
+   > 🔒 **凍結（`frame@2026-09-04-decision-2`）。**Codex 監査（**実装しながら5**）:
+   > **「操作説明を `screens` と `shell` の双方が所有している。
+   > `frame` の『子間 seam 無し』と `shell` の画面内操作文が衝突する。」**
+   >
+   > | 何を | 誰が |
+   > | --- | --- |
+   > | **操作説明の文字列を `s1` の操作割当から生成する** | **`screens` だけ** |
+   > | `index.html` にそれを**置く場所を用意する** | `shell`（**中身は書かない**） |
+   >
+   > **`s1.controls` から一度だけ生成する。**二重管理にしない。
+
+7. **容量の目安**（`frame` の 4,500 inlined bytes を分ける）
 
    | 子 | 目安 |
    | --- | ---: |
@@ -226,7 +242,7 @@ status: **approved**（`frame@2026-09-04-split-1` / `waiver-1` による委任�
    | `shell` | **600** |
    | 親 | 200 |
 
-7. 予算: 深さ3・子数5。**子は4つで上限内。子は深さ3なのでこれ以上分割しない**
+8. 予算: 深さ3・子数5。**子は4つで上限内。子は深さ3なのでこれ以上分割しない**
 
 ### 受け入れ条件の割り当て
 
@@ -328,7 +344,9 @@ status: **approved**（`frame@2026-09-04-split-1` / `waiver-1` による委任�
 
 ### precheck（frame-split-1）
 
-<!-- Codex による前検査の結果をここへ追記する。2026-09-04 時点でリソース上限のため未実施 -->
+**深さ3全体の監査に含まれる**（2026-09-04・Codex・判定不能）。
+全文は [`tree/duel/index.md`](../../index.md) の `precheck（duel-split-2）`。
+このノードに関わる指摘は本文の 🔒 で反映済み。
 
 ## boundary_requests
 
@@ -341,8 +359,8 @@ status: **approved**（`frame@2026-09-04-split-1` / `waiver-1` による委任�
 | **決定** | `frame@2026-09-04-decision-1` | **active** |
 | **分割** | `frame@2026-09-04-split-1` | **active**（承認済み・`children-created`） |
 
-- **`frame@2026-09-04-decision-1`** / 承認者: 提案側（Claude、`root@2026-09-03-waiver-1` により）/
-  日時: 2026-09-04 / 種別: `decision` / 承認者の種別: **AI（委任）** / **status: active**
+- **`frame@2026-09-04-decision-1`** / 承認者: **人間（DaichiFukuhara、`root@2026-09-04-approval-1` により）**/
+  日時: 2026-09-04 / 種別: `decision` / 承認者の種別: **人間** / **status: active**
 
   **決定の要点**: 受け入れ条件「初見」を**3つの要求へ分解**し、担当を割り当てた
   （操作を理解する＝`screens` / 敗北まで到達する＝`hud` ＋ `tell` /
@@ -356,7 +374,7 @@ status: **approved**（`frame@2026-09-04-split-1` / `waiver-1` による委任�
   （ZIP 8,918 bytes・上限の 67.0%）。根はこれを `deferred` にしているが、
   **`shell` の実体は動いている。**
 
-- **`frame@2026-09-04-split-1`** / 承認者: 提案側（Claude、`waiver-1` により）/
-  日時: 2026-09-04 / 種別: `split` / 承認者の種別: **AI（委任）** / **status: active**
+- **`frame@2026-09-04-split-1`** / 承認者: **人間（DaichiFukuhara、`root@2026-09-04-approval-1` により）**/
+  日時: 2026-09-04 / 種別: `split` / 承認者の種別: **人間** / **status: active**
 
   **前検査を経ずに承認した。**理由は `duel` の `split-2` の承認証跡と同じ。

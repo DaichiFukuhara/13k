@@ -3,7 +3,7 @@ id: read.frame.screens
 parent: read.frame
 depth: 3
 children: []           # 深さ3は葉
-status: decision-approved   # screens@2026-09-04-decision-1（waiver-1 による委任承認）
+status: decision-approved   # screens@2026-09-04-decision-1（人間の承認 root@2026-09-04-approval-1）
 seams: []
 uses_seams: []
 ---
@@ -206,8 +206,8 @@ title ──Enter──► fight ──撃破──► bosswin ──Enter──
 
 **深さ3は子を作らないため、分割の承認は無い。**
 
-- **`screens@2026-09-04-decision-1`** / 承認者: 提案側（Claude、`root@2026-09-03-waiver-1` により）/
-  日時: 2026-09-04 / 種別: `decision` / 承認者の種別: **AI（委任）** / **status: active**
+- **`screens@2026-09-04-decision-1`** / 承認者: **人間（DaichiFukuhara、`root@2026-09-04-approval-1` により）**/
+  日時: 2026-09-04 / 種別: `decision` / 承認者の種別: **人間** / **status: active**
 
   **決定の要点**: 「説明文を読まずに操作を理解する」を、
   **「今押せるキーだけを出す」＋「戦闘の操作は Canvas の外に常時置く」**の2段で解いた。
@@ -219,4 +219,5 @@ title ──Enter──► fight ──撃破──► bosswin ──Enter──
   `s1` の操作割当として `duel` が持つ形にしたが、
   `avatar` 側はそれを実装へ委任しており、**どちらも持っていない状態**になっている。
 
-  **`waiver-1` は深さ3到達までの委任である。ここから先（実装）は人間が改めて承認する。**
+  **2026-09-04、人間が `root@2026-09-04-approval-1` で明示的に承認した。**
+  `waiver-1`（AI への委任）は深さ3到達をもって終了している。

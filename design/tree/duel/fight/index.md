@@ -4,7 +4,8 @@ parent: duel
 depth: 2
 children: [avatar, foe, arena]
 status: children-created   # 決定 fight@2026-09-04-decision-1 / 分割 fight@2026-09-04-split-1。
-                        # いずれも waiver-1 による委任承認。前検査は未実施（Codex がリソース上限）
+                        # いずれも人間の承認 root@2026-09-04-approval-1。
+                        # Codex 深さ3監査（2026-09-04・判定不能）の指摘を反映済み
 seams: [f1.avatar-state, f2.foe-state, f3.avatar-verdict, f4.foe-verdict]
 uses_seams: [d1.run-definition]   # gen から受け取る
 ---
@@ -211,9 +212,9 @@ uses_seams: [d1.run-definition]   # gen から受け取る
 
 ## 分割提案 fight-split-1
 
-status: **approved**（`fight@2026-09-04-split-1` / `waiver-1` による委任承認。`children-created`）
+status: **approved**（`fight@2026-09-04-split-1` / 人間の承認 `root@2026-09-04-approval-1`。`children-created`）
 前提: `fight@2026-09-04-decision-1`
-前検査: **未実施**（Codex がリソース上限）。理由は承認証跡へ記録した
+前検査: **深さ3全体監査で1回**（2026-09-04・Codex・判定不能）。指摘を反映済み
 
 ### 子
 
@@ -228,10 +229,20 @@ status: **approved**（`fight@2026-09-04-split-1` / `waiver-1` による委任�
 
 | id | 多重度 | from → to | 内容 |
 | --- | --- | --- | --- |
-| `f1.avatar-state` | 1:1 | `avatar` → `arena` | 当たり判定矩形 / 接地・滞空 / 無敵中か / **パリィ受付中か** / 現在の行動 |
-| `f2.foe-state` | 1:1 | `foe` → `arena` | ボス矩形 / 向き / 現在技の添字と段 / 状態（`wind`/`active`/`recover`/…）/ 経過フレーム |
+| `f1.avatar-state` | 1:1 | `avatar` → `arena` | **中心座標**（X, Y）/ 当たり判定矩形 / 向き / 接地・滞空 / 無敵中か / **パリィ受付中か** / 現在の行動 / HP / スタミナ |
+| `f2.foe-state` | 1:1 | `foe` → `arena` | **中心座標**（X, Y）/ ボス矩形 / 向き / 現在技の添字と段 / 状態（`wait`/`wind`/`active`/`recover`/`guard`/`stagger`/`shift`）/ 経過フレームと全長 / **SHOT の固定照準**（X, Y）/ **RAIN の段ごとの落下 X** / HP / 体勢 / **第2形態へ移行済みか** |
 | `f3.avatar-verdict` | 1:1 | `arena` → `avatar` | 被弾（ダメージ・ノックバック・無敵付与）/ パリィ成立 / 戦闘の開始とリセット |
-| `f4.foe-verdict` | 1:1 | `arena` → `foe` | 被ダメージ / 体勢の削り / **パリィ成立（`recover` か `stagger` へ）** / 開始とリセット |
+| `f4.foe-verdict` | 1:1 | `arena` → `foe` | 被ダメージ / 体勢の削り / **パリィ成立（`recover` か `stagger` へ）** / **プレイヤーの中心 X**（黄の選択時条件の判定に使う）/ **現在の安全席テーブル**（`d1` から。第2形態なら変異後の版）/ 開始とリセット |
+
+> 🔒 **凍結（`fight@2026-09-04-decision-2`）。**2026-09-04 の Codex 監査（**着手前6**）で、
+> **`foe` 1.3 が「黄判定用のプレイヤー中心を `f4` から受ける」と書いているのに、
+> `f4` の表にプレイヤー位置も安全席も無かった**ことが指摘された。
+> **`f2` にも SHOT の固定照準と RAIN の落下 X が無く、`s1` へ載せられなかった。**
+> 3本とも実利用箇所に合わせて補完した。
+>
+> **`f1` と `f2` に座標を足したのは `s1` の凍結に対応するためでもある**
+> （根の `split-8`）。`arena` は `f1` / `f2` / `d1` だけから `s1` を組み立てるので、
+> **`s1` が要求する値は必ずこの3本のどれかに入っていなければならない。**
 
 **`avatar` と `foe` の間に線は無い。**開く順序は `avatar` → `foe` → `arena`。
 
@@ -361,7 +372,9 @@ status: **approved**（`fight@2026-09-04-split-1` / `waiver-1` による委任�
 
 ### precheck（fight-split-1）
 
-<!-- Codex による前検査の結果をここへ追記する。2026-09-04 時点でリソース上限のため未実施 -->
+**深さ3全体の監査に含まれる**（2026-09-04・Codex・判定不能）。
+全文は [`tree/duel/index.md`](../../index.md) の `precheck（duel-split-2）`。
+このノードに関わる指摘は本文の 🔒 で反映済み。
 
 ## boundary_requests
 
@@ -382,8 +395,8 @@ status: **approved**（`fight@2026-09-04-split-1` / `waiver-1` による委任�
 
 ---
 
-- **`fight@2026-09-04-decision-1`** / 承認者: 提案側（Claude、`root@2026-09-03-waiver-1` により）/
-  日時: 2026-09-04 / 種別: `decision` / 承認者の種別: **AI（委任）** / **status: active**
+- **`fight@2026-09-04-decision-1`** / 承認者: **人間（DaichiFukuhara、`root@2026-09-04-approval-1` により）**/
+  日時: 2026-09-04 / 種別: `decision` / 承認者の種別: **人間** / **status: active**
   対象: 本文1〜7（親の決定の詳細化と、それに伴う機能）
 
   **決定の要点**: 敵側／プレイヤー側で切れないという2回の却下を受けて、
@@ -398,8 +411,8 @@ status: **approved**（`fight@2026-09-04-split-1` / `waiver-1` による委任�
   本文の多くは [`design/AS_BUILT.md`](../../../AS_BUILT.md) の実測に基づく。
   ただし**「選択時の条件」だけは実装に無い**（実装は距離だけを見る）。
 
-- **`fight@2026-09-04-split-1`** / 承認者: 提案側（Claude、`waiver-1` により）/
-  日時: 2026-09-04 / 種別: `split` / 承認者の種別: **AI（委任）** / **status: active**
+- **`fight@2026-09-04-split-1`** / 承認者: **人間（DaichiFukuhara、`root@2026-09-04-approval-1` により）**/
+  日時: 2026-09-04 / 種別: `split` / 承認者の種別: **人間** / **status: active**
   対象: 分割提案 `fight-split-1`（子3つ `avatar` / `foe` / `arena`、seam 4端点）
 
   **前検査を経ずに承認した。**理由は親（`duel`）の `split-2` の承認証跡と同じ。

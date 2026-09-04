@@ -3,9 +3,10 @@ id: read.tell
 parent: read
 depth: 2
 children: [telegraph, palette, actors]
-status: children-created   # 決定 tell@2026-09-04-decision-1 / 分割 tell@2026-09-04-split-1。
-                        # いずれも waiver-1 による委任承認。前検査は未実施（Codex がリソース上限）
-seams: []               # 子同士の接続は無い（3子とも s1 と親の定数だけを読む）
+status: children-created   # 決定 tell@2026-09-04-decision-2 / 分割 tell@2026-09-04-split-2。
+                        # 人間の承認 root@2026-09-04-approval-1。
+                        # Codex 深さ3監査の着手前9（palette の結合）を反映した版
+seams: [t1.color-request, t2.color-result]   # palette がハブ。telegraph <-> actors の線は無い
 uses_seams: [r1.screen-state]
 ---
 
@@ -52,19 +53,27 @@ uses_seams: [r1.screen-state]
 | **色で特性を示す** | 7色の語彙・優先順・**色以外での冗長化** | 色を取り除いても遊べる / テーマ |
 | **人と物を描く** | プレイヤー・ボス・弾・火花・背景。**姿から性格を推測させる** | 初見 |
 
-### 構造: 3子は互いを知らない
+### 構造: `palette` がハブ
 
 ```
-   s1.presentation-state ──┬──► telegraph  （予告）
-   （親が加工せず渡す）      ├──► palette    （色の語彙）
-                            └──► actors     （人と物）
+   s1 ──┬──► telegraph ──┐
+        │                ├── t1.color-request ──► palette
+        └──► actors ─────┘                          │
+              ▲                                     │
+              └──────── t2.color-result ────────────┘
 ```
 
-**子同士の seam が1本も無い。**3子とも `s1` と親の定数（色の表・描画順序・解像度）だけを読む。
+**`telegraph` と `actors` の間に線は無い。**`palette` がハブである。
+`gen` が `roster`、`fight` が `arena` をハブにしているのと同じ形。
 
-**`palette` は「色を決める関数」であって、描画しない。**
-`telegraph` と `actors` が呼ぶ側だが、**呼ぶのは関数であって seam ではない** —
-色の語彙は**親（`read`）が持つ表**であり、`palette` はその写し方を実装するだけ。
+**`palette` は描画しない。**色を返し、**その色に対応する「色を使わない手がかり」の指示**を
+一緒に返す（`t2`）。
+
+> 🔒 **凍結（`tell@2026-09-04-decision-2`）。旧文は「子同士の seam が1本も無い。
+> `palette` を呼ぶのは関数であって seam ではない」だった。**
+> 2026-09-04 の Codex 監査（**着手前9**）で、
+> **`precedents.md` の「結合を別名にして指標の外へ置いた」（`split-4` の誤り）と同型**
+> だと指摘された。**3回目の同型再発。**seam として数え直した。
 
 > 🧭 **`palette` を独立させた理由は、不変条件11 の実効化点を1箇所にするためである。**
 > 「色だけに依存させない」を守っているかは、**色を決める場所が散らばっていると検査できない。**
@@ -140,7 +149,8 @@ uses_seams: [r1.screen-state]
 
 8. **色を決めるのは `palette` だけ。**`telegraph` も `actors` も色値を直書きしない。
    散らばるとグレースケール検査が通せない
-9. **3子は互いを呼ばない。**共有するのは `s1` と親の定数だけ
+9. **`telegraph` と `actors` は互いを呼ばない。**色は必ず `palette` 経由（`t1`/`t2`）で得る。
+   共有するのは `s1` と親の定数だけ
 
 ## 6. 決めないこと・任せること
 
@@ -174,11 +184,12 @@ uses_seams: [r1.screen-state]
    **1技が複数の特性を持つとき、どれを見せるかの判断**である。
    **`palette` の担当だが、順序の根拠は実装に書かれていない**
 
-## 分割提案 tell-split-1
+## 分割提案 tell-split-2
 
-status: **approved**（`tell@2026-09-04-split-1` / `waiver-1` による委任承認。`children-created`）
-前提: `tell@2026-09-04-decision-1`
-前検査: **未実施**（Codex がリソース上限）
+status: **approved**（`tell@2026-09-04-split-2` / **人間の承認 `root@2026-09-04-approval-1`**。`children-created`）
+前提: `tell@2026-09-04-decision-2`
+前検査: **深さ3全体監査で1回**（2026-09-04・Codex・判定不能）。**着手前9 を反映して `split-2` へ**。
+`tell-split-1` は superseded（`palette` の結合を seam として数えていなかった）
 
 ### 子
 
@@ -189,16 +200,34 @@ status: **approved**（`tell@2026-09-04-split-1` / `waiver-1` による委任承
 - `actors`: **人と物。**プレイヤー・ボス・弾・火花・背景。
   **姿から性格を推測させる**（武器シルエットの太さと長さ・主色・緑の輪郭）
 
-### seam
+### seam（2 ID / 2端点。`palette` が端点の一方）
 
-**無い。**3子とも `s1.presentation-state` と親の定数（色の表・描画順序・解像度）だけを読み、
-互いを呼ばない。
+| id | 多重度 | from → to | 内容 |
+| --- | --- | --- | --- |
+| `t1.color-request` | N:1 | `telegraph`, `actors` → `palette` | 特性ベクトル（または対象の種別）と、それが何を示すか |
+| `t2.color-result` | 1:N | `palette` → `telegraph`, `actors` | **色値**と、**その色に対応する「色を使わない手がかり」の指示**（冗長化の規則） |
 
-> 🧭 **`palette` は関数であって seam の端点ではない。**
-> 色の語彙の**正本は親（`read`）が持つ表**（`親に残すもの3`）で、
-> `palette` はその写し方を実装するだけである。
-> `telegraph` と `actors` は**親の表**を根拠に色を得るのであって、
-> `palette` の決定に依存しない。（2026-09-04）
+**`telegraph` と `actors` の間に線は無い。**`palette` がハブである。
+
+> 🔒 **凍結（`tell@2026-09-04-decision-2`）。旧文は「seam は無い」だった。**
+>
+> 2026-09-04 の Codex 監査（**着手前9**）:
+> **「`telegraph` と `actors` は `palette` 関数を直接呼ぶ。
+> 『関数なので seam ではない』という説明は、
+> 名称変更だけで結合を除外できないという前例と衝突する。」**
+>
+> **`precedents.md` に自分で記録した誤りの型である**
+> （`split-4`「結合を別名にして指標の外へ置いた。**自己申告しても判定は改善しない**」）。
+> **3回目の同型再発。**
+>
+> **seam として明記した。**構造は変えていない（`palette` は元からハブだった）。
+> **変えたのは、それを結合として数えることである。**
+> `gen` が `roster`、`fight` が `arena` をハブにしているのと同じ形で、
+> **`tell` は `palette` がハブ**である。
+>
+> あわせて **`t2` に冗長化の指示を載せた** — `palette` が色を返すとき、
+> **「この色に対応する色以外の手がかりは何か」を一緒に返す。**
+> これで冗長化の規則（`palette` 1.4）が**呼ぶ側で必ず実行される。**
 
 ### 親に残すもの
 
@@ -245,9 +274,9 @@ status: **approved**（`tell@2026-09-04-split-1` / `waiver-1` による委任承
     容量の目安 1,400 inlined bytes
   割り当てられた受け入れ条件: 予告と判定が一致する（主）、知覚の下限の検証（主）、
     初見（予告が読めること）、色を取り除いても遊べる（規則の実行）
-  uses_seams: [r1.screen-state]
-  提供する seam: なし
-  parent_decision_ref: tell@2026-09-04-decision-1 ＋ tell@2026-09-04-split-1
+  uses_seams: [r1.screen-state, t2.color-result]
+  提供する seam: t1.color-request（palette へ）
+  parent_decision_ref: tell@2026-09-04-decision-2 ＋ tell@2026-09-04-split-2
 
 - child: palette
   責任: 7色を特性の語彙として運用し、色以外でも同じ情報が出ていることを保証する
@@ -258,9 +287,9 @@ status: **approved**（`tell@2026-09-04-split-1` / `waiver-1` による委任承
     7色の語彙は read が持つ表であり、対応を変えない（親に残すもの3）。
     描画しない。容量の目安 600 inlined bytes
   割り当てられた受け入れ条件: 色を取り除いても遊べる（主）、テーマ（主）
-  uses_seams: []
-  提供する seam: なし
-  parent_decision_ref: tell@2026-09-04-decision-1 ＋ tell@2026-09-04-split-1
+  uses_seams: [t1.color-request]
+  提供する seam: t2.color-result（telegraph と actors へ）
+  parent_decision_ref: tell@2026-09-04-decision-2 ＋ tell@2026-09-04-split-2
 
 - child: actors
   責任: プレイヤー・ボス・弾・効果・背景を描き、姿から性格を推測させる
@@ -272,9 +301,9 @@ status: **approved**（`tell@2026-09-04-split-1` / `waiver-1` による委任承
     操作キャラは1人（根の親に残すもの8。控えの描画を持たない）。
     容量の目安 2,400 inlined bytes
   割り当てられた受け入れ条件: 初見（主）、色を取り除いても遊べる（規則の実行）
-  uses_seams: [r1.screen-state]
-  提供する seam: なし
-  parent_decision_ref: tell@2026-09-04-decision-1 ＋ tell@2026-09-04-split-1
+  uses_seams: [r1.screen-state, t2.color-result]
+  提供する seam: t1.color-request（palette へ）
+  parent_decision_ref: tell@2026-09-04-decision-2 ＋ tell@2026-09-04-split-2
 ```
 
 ### 他の切り方との比較
@@ -300,7 +329,9 @@ status: **approved**（`tell@2026-09-04-split-1` / `waiver-1` による委任承
 
 ### precheck（tell-split-1）
 
-<!-- Codex による前検査の結果をここへ追記する。2026-09-04 時点でリソース上限のため未実施 -->
+**深さ3全体の監査に含まれる**（2026-09-04・Codex・判定不能）。
+全文は [`tree/duel/index.md`](../../index.md) の `precheck（duel-split-2）`。
+このノードに関わる指摘は本文の 🔒 で反映済み。
 
 ## boundary_requests
 
@@ -310,11 +341,11 @@ status: **approved**（`tell@2026-09-04-split-1` / `waiver-1` による委任承
 
 | 種別 | 版参照 | status |
 | --- | --- | --- |
-| **決定** | `tell@2026-09-04-decision-1` | **active** |
-| **分割** | `tell@2026-09-04-split-1` | **active**（承認済み・`children-created`） |
+| **決定** | `tell@2026-09-04-decision-2` | **active**（人間の承認 `approval-1`） |
+| **分割** | `tell@2026-09-04-split-2` | **active**（同上・`children-created`） |
 
-- **`tell@2026-09-04-decision-1`** / 承認者: 提案側（Claude、`root@2026-09-03-waiver-1` により）/
-  日時: 2026-09-04 / 種別: `decision` / 承認者の種別: **AI（委任）** / **status: active**
+- **`tell@2026-09-04-decision-1`** / 承認者: **人間（DaichiFukuhara、`root@2026-09-04-approval-1` により）**/
+  日時: 2026-09-04 / 種別: `decision` / 承認者の種別: **人間** / **status: active**
 
   **決定の要点**: **色を決める場所を `palette` 1箇所に閉じた。**
   不変条件11（色だけに依存させない）は、
@@ -324,7 +355,7 @@ status: **approved**（`tell@2026-09-04-split-1` / `waiver-1` による委任承
   実装では `attackColor()` が描画関数の中に埋まっている
   （[`design/AS_BUILT.md`](../../../AS_BUILT.md) §3）。**そこを引き剥がす。**
 
-- **`tell@2026-09-04-split-1`** / 承認者: 提案側（Claude、`waiver-1` により）/
-  日時: 2026-09-04 / 種別: `split` / 承認者の種別: **AI（委任）** / **status: active**
+- **`tell@2026-09-04-split-1`** / 承認者: **人間（DaichiFukuhara、`root@2026-09-04-approval-1` により）**/
+  日時: 2026-09-04 / 種別: `split` / 承認者の種別: **人間** / **status: active**
 
   **前検査を経ずに承認した。**理由は `duel` の `split-2` の承認証跡と同じ。
