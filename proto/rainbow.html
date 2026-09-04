@@ -1,0 +1,507 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Rainbow Duel 音ゲープロトタイプ（Online部門案）</title>
+<style>
+* { box-sizing: border-box; }
+body { margin:0; padding:16px; background:#14121a; color:#d8d4e0; font:14px/1.5 "Segoe UI", system-ui, sans-serif; }
+h1 { font-size:15px; margin:0 0 4px; color:#8c86a0; font-weight:500; letter-spacing:.08em; }
+h2 { font-size:12px; margin:0 0 12px; color:#5f596e; font-weight:400; }
+#wrap { display:flex; gap:20px; align-items:flex-start; flex-wrap:wrap; }
+#main { width:560px; }
+#side { width:320px; }
+
+/* 設定パネル */
+#setup { background:#191722; border:1px solid #2e2a3c; padding:10px 12px; margin-bottom:12px; font-size:12px; }
+#setup label { color:#8c86a0; margin-right:10px; }
+#setup .row { margin-bottom:7px; display:flex; align-items:center; gap:8px; flex-wrap:wrap; }
+#setup input[type=text] { background:#14121a; border:1px solid #3d3852; color:#d8d4e0; font:inherit; padding:3px 6px; width:210px; }
+#setup select { background:#2b2739; border:1px solid #3d3852; color:#d8d4e0; font:inherit; padding:3px 6px; }
+.hint { font-size:11px; color:#5f596e; }
+
+/* 鍵盤 */
+#keys { display:grid; grid-template-columns:repeat(7,1fr); gap:4px; margin:14px 0 10px; }
+.key { height:110px; border:2px solid transparent; border-radius:3px; display:flex; flex-direction:column;
+       align-items:center; justify-content:flex-end; padding-bottom:8px; cursor:pointer;
+       font-size:13px; font-weight:700; color:#14121a; opacity:.42; transition:opacity .12s, transform .06s; user-select:none; }
+.key .kk { font-size:10px; font-weight:400; opacity:.7; margin-top:2px; }
+.key.lit { opacity:1; transform:translateY(-3px); box-shadow:0 0 22px currentColor; }
+.key.dead { cursor:default; opacity:.18; }
+#keys.locked .key { cursor:default; }
+
+/* 進行表示 */
+#dots { display:flex; flex-wrap:wrap; gap:4px; min-height:24px; margin-bottom:8px; }
+.dot { width:12px; height:12px; border-radius:50%; background:#2e2a3c; }
+.dot.done { background:#6f9c6f; }
+.dot.now  { background:#e0d060; box-shadow:0 0 8px #e0d060; }
+.dot.rev  { border:1px solid #14121a; }
+
+#bar { display:flex; gap:16px; font-variant-numeric:tabular-nums; margin-bottom:6px; }
+#bar b { color:#fff; font-weight:600; }
+#timer { height:4px; background:#2e2a3c; margin-bottom:10px; }
+#timer i { display:block; height:100%; width:100%; background:#c25b5b; transition:width linear; }
+#phase { font-size:13px; min-height:22px; color:#e8e4f0; }
+#phase.you { color:#e0d060; }
+#phase.foe { color:#7fa8d0; }
+#net { font-size:11px; color:#7d7690; margin-bottom:6px; }
+#net.ok { color:#6f9c6f; }
+#net.ng { color:#c08a8a; }
+
+#log { height:230px; overflow-y:auto; background:#191722; padding:8px 10px; font-size:12px;
+       line-height:1.6; border-left:2px solid #2e2a3c; }
+.lg-y { color:#e0d060; } .lg-f { color:#7fa8d0; } .lg-s { color:#7d7690; }
+.lg-w { color:#6f9c6f; } .lg-l { color:#d08a8a; }
+button { font:inherit; padding:6px 12px; margin:0 6px 6px 0; background:#2b2739;
+         color:#d8d4e0; border:1px solid #3d3852; cursor:pointer; }
+button:hover:not(:disabled) { background:#383150; }
+button:disabled { opacity:.35; cursor:default; }
+#result { margin-top:10px; padding:10px; background:#191722; font-size:12px; white-space:pre-wrap; min-height:20px; }
+#reveal { display:flex; flex-wrap:wrap; gap:3px; margin-top:6px; }
+.rv { width:16px; height:16px; border-radius:3px; font-size:9px; color:#14121a; text-align:center; line-height:16px; font-weight:700; }
+.rules { font-size:11px; color:#5f596e; margin-top:12px; line-height:1.7; }
+.rules b { color:#8c86a0; font-weight:600; }
+</style>
+</head>
+<body>
+<h1>RAINBOW DUEL — Online部門プロトタイプ</h1>
+<h2>虹の7色 ＝ ド〜シの7音。交互に1音ずつ足し、先に再現できなくなった方が負け。</h2>
+
+<div id="wrap">
+<div id="main">
+
+  <div id="setup">
+    <div class="row">
+      <label>対戦相手</label>
+      <select id="mode">
+        <option value="cpu">CPU（オフライン・1人）</option>
+        <option value="local">ローカル2タブ（BroadcastChannel）</option>
+        <option value="ws">リレー接続（本番WebSocket）</option>
+      </select>
+      <span id="cpuOpt"><label>強さ</label>
+        <select id="diff"><option value="4">やさしい</option><option value="8" selected>ふつう</option><option value="14">つよい</option></select>
+      </span>
+    </div>
+    <div class="row" id="roomRow" style="display:none">
+      <label>ルーム</label><input type="text" id="room" value="test">
+      <span class="hint">同じ文字列にした2つのタブが繋がります</span>
+    </div>
+    <div class="row" id="urlRow" style="display:none">
+      <label>リレーURL</label><input type="text" id="url" placeholder="wss://...（下書き登録後に発行）">
+    </div>
+    <div class="row">
+      <button id="start">開始</button>
+      <button id="quit" disabled>中断</button>
+    </div>
+  </div>
+
+  <div id="net">未接続</div>
+  <div id="bar"><span>音数 <b id="len">0</b></span><span>手番 <b id="turn">-</b></span><span>あなた <b id="who">-</b></span></div>
+  <div id="timer"><i id="tbar"></i></div>
+  <div id="dots"></div>
+  <div id="keys"></div>
+  <div id="phase">「開始」を押してください。</div>
+  <div id="result"></div>
+
+  <div class="rules">
+    <b>ルール</b>：手番になったら、これまでに積み上がった音列を<b>最初から全部</b>再現し、最後に好きな1音を足して相手へ渡す。<br>
+    1音でも違う色を押すか、制限時間を超えたら負け。音列の再生補助はなし（積まれた瞬間の音を覚えておく）。<br>
+    <b>キー操作</b>：1〜7 / クリック。
+  </div>
+</div>
+
+<div id="side">
+  <div id="log"></div>
+  <div id="reveal"></div>
+</div>
+</div>
+
+<script>
+'use strict';
+/* ============================================================
+   Rainbow Duel — Online部門プロトタイプ
+   検証したいこと:
+   1. Simon式の記憶勝負が対戦として成立するか（テンポ・緊張感）
+   2. js13kのリレー前提の通信設計（ターン制・遅延非依存）が破綻しないか
+   3. オフライン(CPU)とオンラインで同じゲームロジックを共有できるか
+   ============================================================ */
+
+/* ---- 定数 ---- */
+const SEMI   = [0,2,4,5,7,9,11];              // ド レ ミ ファ ソ ラ シ
+const NAMES  = ['ド','レ','ミ','ファ','ソ','ラ','シ'];
+const COLORS = ['#e34b4b','#e8862e','#e8cf2e','#4cbf5a','#3d7fd9','#4a46c8','#9b47c4'];
+const LIMIT   = 3000;   // 再現1音あたりの制限時間(ms)
+const ADD     = 6000;   // 足す音を選ぶ時間(ms)。再現より緩くしないと理不尽になる
+const CPU_SPD = 420;    // CPUの再現テンポ(ms/音)
+
+/* ---- 状態 ---- */
+let seq = [];           // 積み上がった音列
+let idx = 0;            // 再現中の位置
+let phase = 'idle';     // idle | replay | add | wait | over
+let myTurn = false;
+let net = null;         // 通信アダプタ（null = CPU戦）
+let peer = null;        // 相手のクライアントID
+let myId = null;
+let isP1 = false;
+let cpuCap = 8;
+let timerId = null;
+
+const $ = s => document.querySelector(s);
+const keysEl = $('#keys'), dotsEl = $('#dots'), logEl = $('#log');
+
+/* ---- 音 ---- */
+let ac = null;
+function tone(i, dur){
+  dur = dur || .32;
+  try {
+    if(!ac) ac = new (window.AudioContext || window.webkitAudioContext)();
+    if(ac.state === 'suspended') ac.resume();
+    const t = ac.currentTime;
+    const o = ac.createOscillator(), g = ac.createGain();
+    o.type = 'triangle';
+    o.frequency.value = 261.63 * Math.pow(2, SEMI[i]/12);
+    g.gain.setValueAtTime(.0001, t);
+    g.gain.exponentialRampToValueAtTime(.30, t + .012);
+    g.gain.exponentialRampToValueAtTime(.0001, t + dur);
+    o.connect(g); g.connect(ac.destination);
+    o.start(t); o.stop(t + dur + .02);
+  } catch(e){ /* 音が出なくてもゲームは進む */ }
+}
+function buzz(){
+  try {
+    if(!ac) ac = new (window.AudioContext || window.webkitAudioContext)();
+    const t = ac.currentTime;
+    const o = ac.createOscillator(), g = ac.createGain();
+    o.type = 'sawtooth'; o.frequency.setValueAtTime(180, t);
+    o.frequency.exponentialRampToValueAtTime(60, t + .45);
+    g.gain.setValueAtTime(.25, t);
+    g.gain.exponentialRampToValueAtTime(.0001, t + .5);
+    o.connect(g); g.connect(ac.destination);
+    o.start(t); o.stop(t + .52);
+  } catch(e){}
+}
+
+/* ---- 描画 ---- */
+function buildKeys(){
+  keysEl.innerHTML = '';
+  for(let i=0;i<7;i++){
+    const d = document.createElement('div');
+    d.className = 'key'; d.style.background = COLORS[i]; d.style.color = COLORS[i];
+    d.innerHTML = '<span>'+NAMES[i]+'</span><span class="kk">'+(i+1)+'</span>';
+    d.onclick = () => press(i);
+    keysEl.appendChild(d);
+  }
+}
+function flash(i, ms){
+  const k = keysEl.children[i];
+  if(!k) return;
+  k.classList.add('lit');
+  setTimeout(() => k.classList.remove('lit'), ms || 200);
+}
+function drawDots(){
+  dotsEl.innerHTML = '';
+  for(let i=0;i<seq.length;i++){
+    const d = document.createElement('div');
+    d.className = 'dot' + (phase==='replay' && i<idx ? ' done' : '') + (phase==='replay' && i===idx ? ' now' : '');
+    dotsEl.appendChild(d);
+  }
+}
+function log(msg, cls){
+  const d = document.createElement('div');
+  if(cls) d.className = 'lg-'+cls;
+  d.textContent = msg;
+  logEl.appendChild(d); logEl.scrollTop = logEl.scrollHeight;
+}
+function say(msg, cls){ const p = $('#phase'); p.textContent = msg; p.className = cls || ''; }
+function hud(){
+  $('#len').textContent = seq.length;
+  $('#turn').textContent = phase==='over' ? '終了' : (myTurn ? 'あなた' : '相手');
+  $('#who').textContent = net ? (isP1 ? '先手' : '後手') : '先手';
+}
+
+/* ---- 制限時間 ---- */
+function startTimer(ms){
+  stopTimer();
+  const b = $('#tbar');
+  b.style.transition = 'none'; b.style.width = '100%';
+  void b.offsetWidth;                       // reflow
+  b.style.transition = 'width '+ms+'ms linear';
+  b.style.width = '0%';
+  timerId = setTimeout(() => { if(phase==='replay'||phase==='add') lose('time'); }, ms);
+}
+function stopTimer(){
+  if(timerId){ clearTimeout(timerId); timerId = null; }
+  const b = $('#tbar');
+  b.style.transition = 'none'; b.style.width = '100%';
+}
+
+/* ============================================================
+   通信アダプタ
+   本番リレーのプロトコルに合わせる:
+     受信 '@id'  → 自分のID
+     受信 '+id'  → 誰かが参加
+     受信 '-id'  → 誰かが離脱
+     送信 '@id|payload' → 名指し送信
+     それ以外   → ルーム全員へブロードキャスト
+   ※ 自作ペイロードの先頭に @ + - を使わないこと（システムメッセージと衝突する）
+   ============================================================ */
+
+/* ローカル検証用: BroadcastChannelで上のプロトコルを再現する */
+function LocalRelay(room, on){
+  const ch = new BroadcastChannel('rd-' + room);
+  const id = Math.random().toString(36).slice(2, 8);
+  ch.onmessage = e => {
+    const m = e.data;
+    if(m.t === 'join'){ on.sys('+' + m.id); }
+    else if(m.t === 'leave'){ on.sys('-' + m.id); }
+    else if(m.t === 'msg'){
+      if(m.to && m.to !== id) return;        // 名指しは対象だけに届く
+      on.msg(m.data);
+    }
+  };
+  const leave = () => ch.postMessage({t:'leave', id:id});
+  addEventListener('pagehide', leave);
+  setTimeout(() => { on.sys('@' + id); ch.postMessage({t:'join', id:id}); }, 0);
+  return {
+    send(s){
+      const m = s.match(/^@([^|]+)\|([\s\S]*)$/);
+      if(m) ch.postMessage({t:'msg', to:m[1], data:m[2]});
+      else  ch.postMessage({t:'msg', data:s});
+    },
+    close(){ leave(); ch.close(); }
+  };
+}
+
+/* 本番用: 発行されたリレーURLへ素のWebSocketで繋ぐ */
+function WsRelay(url, on){
+  const ws = new WebSocket(url);
+  ws.onopen    = () => on.open();
+  ws.onclose   = () => on.down('切断されました');
+  ws.onerror   = () => on.down('接続エラー');
+  ws.onmessage = e => {
+    const s = e.data;
+    if(typeof s !== 'string') return;
+    if(s[0]==='@' || s[0]==='+' || s[0]==='-') on.sys(s);
+    else on.msg(s);
+  };
+  return { send(s){ if(ws.readyState===1) ws.send(s); }, close(){ ws.close(); } };
+}
+
+/* ゲームメッセージは必ず「自分のID|本体」の形で送る。
+   理由: ブロードキャストが送信者自身にも返ってくるリレー実装かどうかが未確認のため、
+   自分の音を二重に積んでしまう事故を、実装依存なしで防げる。 */
+function tx(s){ if(net) net.send(myId + '|' + s); }
+
+/* 受け取ったシステム/ゲームメッセージの処理 */
+const handlers = {
+  open(){ setNet('接続済み。相手を待っています…', 'ok'); },
+  down(msg){ setNet(msg, 'ng'); if(phase!=='over' && phase!=='idle'){ say(msg); finish(null, msg); } },
+  sys(s){
+    const kind = s[0], id = s.slice(1);
+    // 参加直後に届くのは自分のIDだけで、先客の一覧はもらえない。
+    // そこで「入ったら名乗る／誰か入ってきたら名乗り返す」で相手を把握する。
+    if(kind === '@'){ myId = id; setNet('接続済み ID:'+id+' / 相手待ち', 'ok'); tx('h'); }
+    else if(kind === '+'){ tx('h'); }
+    else if(kind === '-'){ if(id === peer){ setNet('相手が離脱しました', 'ng'); finish(true, '相手が切断しました'); } }
+  },
+  msg(s){
+    const bar = s.indexOf('|');
+    if(bar < 0) return;                         // 想定外の形式は捨てる
+    const from = s.slice(0, bar), k = s[bar+1], body = s.slice(bar+2);
+    if(!myId || from === myId) return;          // 自分の発言が返ってきた場合は無視
+    if(!peer) meet(from);
+    if(from !== peer) return;                   // 3人目以降は無視（1ルーム＝1試合）
+    if(k === 'h') return;                       // 名乗りは meet() で処理済み
+    if(phase === 'idle' || phase === 'over') return;
+    if(k === 'p'){                              // 相手が1音再現した
+      const n = +body; flash(n); tone(n);
+    } else if(k === 'n'){                       // 相手が1音足した → こちらの手番
+      const n = +body; seq.push(n); flash(n, 320); tone(n, .42);
+      log('相手が ' + NAMES[n] + ' を足した（' + seq.length + '音）', 'f');
+      setTimeout(beginMyTurn, 520);
+    } else if(k === 'x'){                       // 相手が失敗した
+      finish(true, '相手が再現に失敗しました');
+    }
+  }
+};
+function setNet(msg, cls){ const n = $('#net'); n.textContent = msg; n.className = cls || ''; }
+
+/* 相手を認識したら先手/後手を決めて開始（IDの辞書順で決定＝交渉不要） */
+function meet(id){
+  if(peer || id === myId || !myId) return;
+  peer = id;
+  isP1 = myId < peer;
+  setNet('対戦相手と接続（あなたは' + (isP1 ? '先手' : '後手') + '）', 'ok');
+  log('対戦開始。あなたは' + (isP1 ? '先手' : '後手') + '。', 's');
+  startMatch();
+}
+
+/* ============================================================
+   ゲーム進行
+   ============================================================ */
+function startMatch(){
+  seq = []; idx = 0; phase = 'wait'; $('#result').textContent = ''; $('#reveal').innerHTML = '';
+  if(!net || isP1) beginMyTurn();
+  else { myTurn = false; say('相手の手番です。音をよく聞いてください。', 'foe'); hud(); drawDots(); }
+}
+
+function beginMyTurn(){
+  if(phase === 'over') return;
+  myTurn = true; idx = 0;
+  if(seq.length === 0){
+    phase = 'add';
+    say('最初の1音を選んでください。', 'you');
+  } else {
+    phase = 'replay';
+    say('あなたの手番：' + seq.length + '音を最初から再現してください。', 'you');
+  }
+  keysEl.classList.remove('locked');
+  hud(); drawDots(); startTimer(phase === 'add' ? ADD : LIMIT);
+}
+
+function press(i){
+  if(!myTurn || (phase !== 'replay' && phase !== 'add')) return;
+
+  if(phase === 'replay'){
+    if(i !== seq[idx]){                       // 記憶ミス＝敗北
+      flash(i, 400); buzz();
+      lose('miss');
+      return;
+    }
+    flash(i); tone(i);
+    tx('p' + i);                              // 相手の画面でも同じ音を鳴らす
+    idx++;
+    drawDots();
+    if(idx >= seq.length){
+      phase = 'add';
+      say('再現成功。最後に1音足して相手へ渡してください。', 'you');
+    }
+    startTimer(phase === 'add' ? ADD : LIMIT);
+    return;
+  }
+
+  // phase === 'add'
+  stopTimer();
+  seq.push(i); flash(i, 320); tone(i, .42);
+  log('あなたが ' + NAMES[i] + ' を足した（' + seq.length + '音）', 'y');
+  myTurn = false; phase = 'wait';
+  keysEl.classList.add('locked');
+  hud(); drawDots();
+  if(net){
+    tx('n' + i);
+    say('相手の手番です。音をよく聞いてください。', 'foe');
+  } else {
+    say('CPUの手番です。', 'foe');
+    cpuTurn();
+  }
+}
+
+function lose(why){
+  stopTimer();
+  tx('x');
+  finish(false, why === 'time' ? '時間切れ（' + (idx+1) + '音目）' : (idx+1) + '音目で間違えました');
+}
+
+/* ---- CPU ---- */
+function cpuTurn(){
+  // 音列が cpuCap を超えたあたりから記憶が怪しくなる
+  const over = Math.max(0, seq.length - cpuCap);
+  const failChance = Math.min(.85, over * .11);
+  const willFail = Math.random() < failChance;
+  const failAt = willFail ? Math.floor(Math.random() * seq.length) : -1;
+  let i = 0;
+  const step = () => {
+    if(phase === 'over') return;
+    if(i === failAt){
+      const wrong = (seq[i] + 1 + Math.floor(Math.random()*6)) % 7;
+      flash(wrong, 400); tone(wrong); buzz();
+      log('CPUが ' + (i+1) + '音目で間違えた', 'w');
+      finish(true, 'CPUが ' + (i+1) + '音目で間違えました');
+      return;
+    }
+    if(i < seq.length){
+      flash(seq[i]); tone(seq[i]); i++;
+      setTimeout(step, CPU_SPD);
+      return;
+    }
+    const k = Math.floor(Math.random() * 7);
+    seq.push(k); flash(k, 320); tone(k, .42);
+    log('CPUが ' + NAMES[k] + ' を足した（' + seq.length + '音）', 'f');
+    setTimeout(beginMyTurn, 620);
+  };
+  setTimeout(step, 700);
+}
+
+/* ---- 決着 ---- */
+function finish(win, reason){
+  phase = 'over'; myTurn = false;
+  stopTimer(); keysEl.classList.add('locked');
+  const head = win === null ? '中断' : (win ? 'WIN' : 'LOSE');
+  say(head + ' — ' + reason, win ? 'you' : 'foe');
+  $('#result').textContent = head + '\n' + reason + '\n積み上がった音数: ' + seq.length;
+  log(head + '：' + reason, win ? 'w' : 'l');
+  // 答え合わせ
+  const rv = $('#reveal'); rv.innerHTML = '';
+  seq.forEach(n => {
+    const d = document.createElement('div');
+    d.className = 'rv'; d.style.background = COLORS[n]; d.textContent = NAMES[n][0];
+    rv.appendChild(d);
+  });
+  hud();
+  $('#start').disabled = false; $('#quit').disabled = true;
+}
+
+/* ============================================================
+   セットアップ
+   ============================================================ */
+function teardown(){
+  if(net){ net.close(); net = null; }
+  peer = null; myId = null; isP1 = false;
+  stopTimer();
+}
+
+$('#mode').onchange = () => {
+  const m = $('#mode').value;
+  $('#cpuOpt').style.display = m === 'cpu' ? '' : 'none';
+  $('#roomRow').style.display = m === 'local' ? 'flex' : 'none';
+  $('#urlRow').style.display  = m === 'ws' ? 'flex' : 'none';
+};
+
+$('#start').onclick = () => {
+  teardown();
+  const m = $('#mode').value;
+  cpuCap = +$('#diff').value;
+  phase = 'idle'; seq = []; idx = 0;
+  logEl.innerHTML = ''; $('#result').textContent = ''; $('#reveal').innerHTML = '';
+  $('#start').disabled = true; $('#quit').disabled = false;
+  tone(0, .05);                                   // ユーザー操作のうちにAudioContextを起こす
+
+  if(m === 'cpu'){
+    setNet('オフライン（CPU対戦）', '');
+    log('CPU対戦を開始。あなたが先手です。', 's');
+    startMatch();
+  } else if(m === 'local'){
+    setNet('ローカルリレー接続中…', '');
+    net = LocalRelay($('#room').value.trim() || 'test', handlers);
+    say('もう1つのタブで同じルーム名で開始してください。');
+  } else {
+    const u = $('#url').value.trim();
+    if(!u){ setNet('リレーURLを入力してください', 'ng'); $('#start').disabled = false; return; }
+    setNet('リレーへ接続中…', '');
+    net = WsRelay(u, handlers);
+    say('相手の接続を待っています…');
+  }
+  hud();
+};
+
+$('#quit').onclick = () => { teardown(); finish(null, '中断しました'); };
+
+buildKeys(); hud(); drawDots();
+document.addEventListener('keydown', e => {
+  const n = '1234567'.indexOf(e.key);
+  if(n >= 0) press(n);
+});
+</script>
+</body>
+</html>
