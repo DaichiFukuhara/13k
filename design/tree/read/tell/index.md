@@ -56,7 +56,7 @@ uses_seams: [r1.screen-state]
 - **uses_seams**: `r1.screen-state`
 - **提供する seam**: なし
 - **開く順序**: **2番目**
-- **parent_decision_ref**: `read@2026-09-05-decision-4` ＋ `read@2026-09-05-split-3`
+- **parent_decision_ref**: `read@2026-09-05-decision-5` ＋ `read@2026-09-05-split-4`
 
 ## 1. これは何を決めるものか
 

@@ -44,7 +44,7 @@ uses_seams: []
   容量（**全体の実測を出す**）
 - **uses_seams**: なし
 - **提供する seam**: なし
-- **parent_decision_ref**: `frame@2026-09-05-decision-3` ＋ `frame@2026-09-05-split-3`
+- **parent_decision_ref**: `frame@2026-09-05-decision-4` ＋ `frame@2026-09-05-split-4`
 
 ## 1. これは何を決めるものか
 

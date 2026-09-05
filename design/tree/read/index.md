@@ -3,7 +3,7 @@ id: read
 parent: root
 depth: 1
 children: [tell, frame]
-status: children-created   # 決定 read@2026-09-05-decision-4 / 分割 read@2026-09-05-split-3。
+status: children-created   # 決定 read@2026-09-05-decision-5 / 分割 read@2026-09-05-split-4。
                        # いずれも人間の承認 root@2026-09-05-approval-2。
                         # Codex 深さ3監査（2026-09-04・判定不能）の指摘を反映済み
 seams: [r1.screen-state]   # 子（frame -> tell）の片方向1本
@@ -20,7 +20,7 @@ uses_seams: [s1.presentation-state]   # duel から受け取る
 
 **この順に読めば現行の契約だけが揃う。**
 
-1. **有効な版**: 決定 `read@2026-09-05-decision-4` / 分割 `read@2026-09-05-split-3`
+1. **有効な版**: 決定 `read@2026-09-05-decision-5` / 分割 `read@2026-09-05-split-4`
 2. **現行の決定本文**: 1〜7（🔒 が付いた節が最新の凍結）
 3. **現行の分割**: `## 分割提案` 節（見出しの版が上の分割と一致するものだけが有効）
 4. **承認証跡**: `### 現在有効なもの` 表 → その下の該当エントリ
@@ -55,6 +55,7 @@ uses_seams: [s1.presentation-state]   # duel から受け取る
   - `1.6` 虹7色の語彙
   - `1.7` 1画面固定・X / Y / Z の扱い
   - `1.9` の1点目（初見で緊張し、一度見れば理解できる）
+  - `1.10` の提示側（撃破後の選択画面と、所持技の常時表示）
 
 - **継承する制約**: 根の不変条件12件すべて。特に
   - **8** 予告した危険範囲と実際の当たり判定は、同一の定義から作る
@@ -79,7 +80,7 @@ uses_seams: [s1.presentation-state]   # duel から受け取る
 
 - **開く順序**: **2番目**（`duel` の `s1` が親に権威化されてから）
 
-- **parent_decision_ref**: `root@2026-09-05-decision-10` ＋ `root@2026-09-05-split-9`
+- **parent_decision_ref**: `root@2026-09-05-decision-11` ＋ `root@2026-09-05-split-10`
 
 ## 1. これは何を決めるものか
 
@@ -288,7 +289,7 @@ uses_seams: [s1.presentation-state]   # duel から受け取る
 
 1. **「初見」の被験者を確保できるか未定**（根の 7-2 から引き継ぎ）。
    確保できない場合、受け入れ条件「初見」と「知覚の下限の検証」が両方とも測れない。
-   > 🔒 **凍結（`read@2026-09-05-decision-4`）。縮退条件は根が決めた。**
+   > 🔒 **凍結（`read@2026-09-05-decision-5`）。縮退条件は根が決めた。**
    >
    > 2026-09-04 Codex 監査 **P0-8**: 「`read` は9月8日までに被験者を確保できなければ
    > 決定論的検査へ置き換えるとしているが、**子は親の受け入れ条件を変更できない。」**
@@ -313,10 +314,10 @@ uses_seams: [s1.presentation-state]   # duel から受け取る
    そのうち `read` 相当がいくらかを分離していない。
    **シェルと音を含むので、削る余地は最も大きい**
 
-## 分割提案 read-split-3
+## 分割提案 read-split-4
 
-status: **approved**（`read@2026-09-05-split-3` / 人間の承認 `root@2026-09-05-approval-2`。`children-created`）
-前提: `read@2026-09-05-decision-4`
+status: **approved**（`read@2026-09-05-split-4` / 人間の承認 `root@2026-09-05-approval-2`。`children-created`）
+前提: `read@2026-09-05-decision-5`
 前検査: **深さ3全体監査で1回**（2026-09-04・Codex・判定不能）。指摘を反映済み
 
 深さ1の子は**深さ2＝解決法の詳細化と機能**。
@@ -423,7 +424,7 @@ status: **approved**（`read@2026-09-05-split-3` / 人間の承認 `root@2026-09
   uses_seams: [r1.screen-state]
   提供する seam: なし
   開く順序: 2番目
-  parent_decision_ref: read@2026-09-05-decision-4 ＋ read@2026-09-05-split-3
+  parent_decision_ref: read@2026-09-05-decision-5 ＋ read@2026-09-05-split-4
 
 - child: frame
   責任: 遊べる1本として画面を成立させ、戦闘の外側で必要な情報と操作を提示する
@@ -442,7 +443,7 @@ status: **approved**（`read@2026-09-05-split-3` / 人間の承認 `root@2026-09
   uses_seams: []
   提供する seam: r1.screen-state（tell へ）
   開く順序: 1番目
-  parent_decision_ref: read@2026-09-05-decision-4 ＋ read@2026-09-05-split-3
+  parent_decision_ref: read@2026-09-05-decision-5 ＋ read@2026-09-05-split-4
 ```
 
 ### 他の切り方との比較
@@ -491,12 +492,12 @@ status: **approved**（`read@2026-09-05-split-3` / 人間の承認 `root@2026-09
 
 | 種別 | 版参照 | status |
 | --- | --- | --- |
-| **決定** | `read@2026-09-05-decision-4` | **active** |
-| **分割** | `read@2026-09-05-split-3` | **active**（承認済み・`children-created`） |
+| **決定** | `read@2026-09-05-decision-5` | **active** |
+| **分割** | `read@2026-09-05-split-4` | **active**（承認済み・`children-created`） |
 
 ---
 
-- **`read@2026-09-05-decision-4`** / 承認者: **人間（DaichiFukuhara、`root@2026-09-05-approval-2` により）**/
+- **`read@2026-09-05-decision-5`** / 承認者: **人間（DaichiFukuhara、`root@2026-09-05-approval-2` により）**/
   日時: 2026-09-05 / 種別: `decision` / 承認者の種別: **人間** / **status: active**
   対象: 本文1〜7（課題の範囲と、その課題に対する解決法）
 
@@ -517,7 +518,7 @@ status: **approved**（`read@2026-09-05-split-3` / 人間の承認 `root@2026-09
   「検証方法を `read` 側で書いていない」と記録していたものである。
   **理屈では決められない**（Codex の指摘）ので、**実際の予告語彙で測る**形にした。
 
-- **`read@2026-09-05-split-3`** / 承認者: **人間（DaichiFukuhara、`root@2026-09-05-approval-2` により）**/
+- **`read@2026-09-05-split-4`** / 承認者: **人間（DaichiFukuhara、`root@2026-09-05-approval-2` により）**/
   日時: 2026-09-05 / 種別: `split` / 承認者の種別: **人間** / **status: active**
   対象: 分割提案 `read-split-1`（子2つ `tell` / `frame`、seam 1端点・片方向）
 

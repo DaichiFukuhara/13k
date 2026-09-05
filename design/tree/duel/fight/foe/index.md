@@ -48,7 +48,7 @@ uses_seams: [f4.foe-verdict]
 - **割り当てられた受け入れ条件**: 利用可能性（主）
 - **uses_seams**: `f4.foe-verdict`
 - **提供する seam**: `f2.foe-state`（`arena` へ）
-- **parent_decision_ref**: `fight@2026-09-05-decision-3` ＋ `fight@2026-09-05-split-3`
+- **parent_decision_ref**: `fight@2026-09-05-decision-4` ＋ `fight@2026-09-05-split-4`
 
 ## 1. これは何を決めるものか
 
