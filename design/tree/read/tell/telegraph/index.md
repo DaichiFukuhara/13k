@@ -3,7 +3,7 @@ id: read.tell.telegraph
 parent: read.tell
 depth: 3
 children: []           # 深さ3は葉
-status: decision-approved   # telegraph@2026-09-05-decision-2（人間の承認 root@2026-09-04-approval-1）
+status: decision-approved   # telegraph@2026-09-05-decision-3（人間の承認 root@2026-09-05-approval-2）
 seams: []
 uses_seams: [r1.screen-state, t2.color-result]
 ---
@@ -18,7 +18,7 @@ uses_seams: [r1.screen-state, t2.color-result]
 
 **この順に読めば現行の契約だけが揃う。**
 
-1. **有効な版**: 決定 `telegraph@2026-09-05-decision-2` / 分割なし（深さ3の葉）
+1. **有効な版**: 決定 `telegraph@2026-09-05-decision-3` / 分割なし（深さ3の葉）
 2. **現行の決定本文**: 1〜7（🔒 が付いた節が最新の凍結）
 3. **承認証跡**: `### 現在有効なもの` 表 → その下の該当エントリ
 
@@ -45,7 +45,7 @@ uses_seams: [r1.screen-state, t2.color-result]
   初見（予告が読めること）、色を取り除いても遊べる（規則の実行）
 - **uses_seams**: `r1.screen-state`, `t2.color-result`（`palette` から色と冗長化の指示）
 - **提供する seam**: `t1.color-request`（`palette` へ）
-- **parent_decision_ref**: `tell@2026-09-05-decision-3` ＋ `tell@2026-09-05-split-3`
+- **parent_decision_ref**: `tell@2026-09-05-decision-4` ＋ `tell@2026-09-05-split-4`
 
 ## 1. これは何を決めるものか
 
@@ -97,10 +97,11 @@ uses_seams: [r1.screen-state, t2.color-result]
 ### 1.4 色は `palette` から受ける（seam `t1` / `t2`）
 
 **色値を直書きしない**（`tell` の不変条件8）。
-`s1` の特性ベクトルを **`t1.color-request`** で `palette` へ渡し、
+`s1` の特性ベクトル**と「それが何を示すか」（予告の危険範囲か / 弾の射線か）**を
+**`t1.color-request`** で `palette` へ渡し、
 **`t2.color-result`** で返ってきた**色値と冗長化の指示**を使う。
 
-> 🔒 **凍結（`telegraph@2026-09-05-decision-2`）。**旧文は「関数呼び出しであって seam ではない」
+> 🔒 **凍結（`telegraph@2026-09-05-decision-3`）。**旧文は「関数呼び出しであって seam ではない」
 > と書いていたが、**親 `tell` の現行決定では `t1` / `t2` の seam である**
 > （2026-09-04 Codex 監査 **P0-2**）。
 
@@ -205,11 +206,11 @@ uses_seams: [r1.screen-state, t2.color-result]
 
 | 種別 | 版参照 | status |
 | --- | --- | --- |
-| **決定** | `telegraph@2026-09-05-decision-2` | **active** |
+| **決定** | `telegraph@2026-09-05-decision-3` | **active** |
 
 **深さ3は子を作らないため、分割の承認は無い。**
 
-- **`telegraph@2026-09-05-decision-2`** / 承認者: **人間（DaichiFukuhara、`root@2026-09-04-approval-1` により）**/
+- **`telegraph@2026-09-05-decision-3`** / 承認者: **人間（DaichiFukuhara、`root@2026-09-05-approval-2` により）**/
   日時: 2026-09-05 / 種別: `decision` / 承認者の種別: **人間** / **status: active**
 
   **決定の要点**: 受け入れ条件に「**座標を計算していない**」を入れた。
@@ -220,5 +221,5 @@ uses_seams: [r1.screen-state, t2.color-result]
   **ツリーは `arena` が展開して `s1` で渡す形**にした。
   **後者のほうが強い** — 呼び忘れが起きえない。
 
-  **2026-09-04、人間が `root@2026-09-04-approval-1` で明示的に承認した。**
+  **2026-09-04、人間が `root@2026-09-05-approval-2` で明示的に承認した。**
   `waiver-1`（AI への委任）は深さ3到達をもって終了している。

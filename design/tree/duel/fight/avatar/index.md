@@ -3,7 +3,7 @@ id: duel.fight.avatar
 parent: duel.fight
 depth: 3
 children: []           # 深さ3は葉。分割しない
-status: decision-approved   # avatar@2026-09-05-decision-2（人間の承認 root@2026-09-04-approval-1）
+status: decision-approved   # avatar@2026-09-05-decision-3（人間の承認 root@2026-09-05-approval-2）
 seams: []
 uses_seams: [f3.avatar-verdict]
 ---
@@ -18,7 +18,7 @@ uses_seams: [f3.avatar-verdict]
 
 **この順に読めば現行の契約だけが揃う。**
 
-1. **有効な版**: 決定 `avatar@2026-09-05-decision-2` / 分割なし（深さ3の葉）
+1. **有効な版**: 決定 `avatar@2026-09-05-decision-3` / 分割なし（深さ3の葉）
 2. **現行の決定本文**: 1〜7（🔒 が付いた節が最新の凍結）
 3. **承認証跡**: `### 現在有効なもの` 表 → その下の該当エントリ
 
@@ -50,7 +50,7 @@ uses_seams: [f3.avatar-verdict]
 - **割り当てられた受け入れ条件**: 宣言との一致（前提: 回答手段が宣言どおり機能すること）
 - **uses_seams**: `f3.avatar-verdict`
 - **提供する seam**: `f1.avatar-state`（`arena` へ）
-- **parent_decision_ref**: `fight@2026-09-05-decision-2` ＋ `fight@2026-09-05-split-2`
+- **parent_decision_ref**: `fight@2026-09-05-decision-3` ＋ `fight@2026-09-05-split-3`
 
 ## 1. これは何を決めるものか
 
@@ -257,11 +257,11 @@ uses_seams: [f3.avatar-verdict]
 
 | 種別 | 版参照 | status |
 | --- | --- | --- |
-| **決定** | `avatar@2026-09-05-decision-2` | **active** |
+| **決定** | `avatar@2026-09-05-decision-3` | **active** |
 
 **深さ3は子を作らないため、分割の承認は無い。**
 
-- **`avatar@2026-09-05-decision-2`** / 承認者: **人間（DaichiFukuhara、`root@2026-09-04-approval-1` により）**/
+- **`avatar@2026-09-05-decision-3`** / 承認者: **人間（DaichiFukuhara、`root@2026-09-05-approval-2` により）**/
   日時: 2026-09-05 / 種別: `decision` / 承認者の種別: **人間** / **status: active**
   対象: 本文1〜7
 
@@ -276,5 +276,5 @@ uses_seams: [f3.avatar-verdict]
   実装からは**足すより削るほうが多い**（3人交代・控え・自動交代）。
   受け入れ条件に「交代が存在しない」を grep で判定する形で入れた。
 
-  **2026-09-04、人間が `root@2026-09-04-approval-1` で明示的に承認した。**
+  **2026-09-04、人間が `root@2026-09-05-approval-2` で明示的に承認した。**
   `waiver-1`（AI への委任）は深さ3到達をもって終了している。

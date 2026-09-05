@@ -3,7 +3,7 @@ id: read.tell.actors
 parent: read.tell
 depth: 3
 children: []           # 深さ3は葉
-status: decision-approved   # actors@2026-09-05-decision-2（人間の承認 root@2026-09-04-approval-1）
+status: decision-approved   # actors@2026-09-05-decision-3（人間の承認 root@2026-09-05-approval-2）
 seams: []
 uses_seams: [r1.screen-state, t2.color-result]
 ---
@@ -18,7 +18,7 @@ uses_seams: [r1.screen-state, t2.color-result]
 
 **この順に読めば現行の契約だけが揃う。**
 
-1. **有効な版**: 決定 `actors@2026-09-05-decision-2` / 分割なし（深さ3の葉）
+1. **有効な版**: 決定 `actors@2026-09-05-decision-3` / 分割なし（深さ3の葉）
 2. **現行の決定本文**: 1〜7（🔒 が付いた節が最新の凍結）
 3. **承認証跡**: `### 現在有効なもの` 表 → その下の該当エントリ
 
@@ -45,7 +45,7 @@ uses_seams: [r1.screen-state, t2.color-result]
 - **割り当てられた受け入れ条件**: 初見（主）、色を取り除いても遊べる（規則の実行）
 - **uses_seams**: `r1.screen-state`, `t2.color-result`（`palette` から色と冗長化の指示）
 - **提供する seam**: `t1.color-request`（`palette` へ）
-- **parent_decision_ref**: `tell@2026-09-05-decision-3` ＋ `tell@2026-09-05-split-3`
+- **parent_decision_ref**: `tell@2026-09-05-decision-4` ＋ `tell@2026-09-05-split-4`
 
 ## 1. これは何を決めるものか
 
@@ -62,6 +62,11 @@ uses_seams: [r1.screen-state, t2.color-result]
 | **効果** | 被弾・撃破のイベント | 火花（当たり判定を持たない） |
 
 **すべて実行時に生成する。**画像ファイルを持たない（不変条件12）。
+
+**色は `palette` から受ける**（`tell` の不変条件8）。
+`t1.color-request` で**対象の種別**（ボスの主色 / 弾の所有者 / 防御の輪郭 / 火花）**と
+「それが何を示すか」**を渡し、`t2.color-result` で**色値と冗長化の指示**を受ける。
+**色値を直書きしない。**
 
 ### 1.2 姿から性格を推測させる（根の 1.1 の1行目）
 
@@ -204,11 +209,11 @@ uses_seams: [r1.screen-state, t2.color-result]
 
 | 種別 | 版参照 | status |
 | --- | --- | --- |
-| **決定** | `actors@2026-09-05-decision-2` | **active** |
+| **決定** | `actors@2026-09-05-decision-3` | **active** |
 
 **深さ3は子を作らないため、分割の承認は無い。**
 
-- **`actors@2026-09-05-decision-2`** / 承認者: **人間（DaichiFukuhara、`root@2026-09-04-approval-1` により）**/
+- **`actors@2026-09-05-decision-3`** / 承認者: **人間（DaichiFukuhara、`root@2026-09-05-approval-2` により）**/
   日時: 2026-09-05 / 種別: `decision` / 承認者の種別: **人間** / **status: active**
 
   **決定の要点**: 受け入れ条件に「**姿から性格が読める**」を入れた。
@@ -224,5 +229,5 @@ uses_seams: [r1.screen-state, t2.color-result]
   **7色の帯**（実装のボス胴部）は、ツリーが書いていなかったが**残す価値がある** —
   7本並んで1本だけ明るいので、**色の語彙の存在そのものが説明なしに伝わる。**
 
-  **2026-09-04、人間が `root@2026-09-04-approval-1` で明示的に承認した。**
+  **2026-09-04、人間が `root@2026-09-05-approval-2` で明示的に承認した。**
   `waiver-1`（AI への委任）は深さ3到達をもって終了している。

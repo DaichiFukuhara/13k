@@ -3,7 +3,7 @@ id: read.tell.palette
 parent: read.tell
 depth: 3
 children: []           # 深さ3は葉
-status: decision-approved   # palette@2026-09-05-decision-2（人間の承認 root@2026-09-04-approval-1）
+status: decision-approved   # palette@2026-09-05-decision-3（人間の承認 root@2026-09-05-approval-2）
 seams: []
 uses_seams: [t1.color-request]
 ---
@@ -18,7 +18,7 @@ uses_seams: [t1.color-request]
 
 **この順に読めば現行の契約だけが揃う。**
 
-1. **有効な版**: 決定 `palette@2026-09-05-decision-2` / 分割なし（深さ3の葉）
+1. **有効な版**: 決定 `palette@2026-09-05-decision-3` / 分割なし（深さ3の葉）
 2. **現行の決定本文**: 1〜7（🔒 が付いた節が最新の凍結）
 3. **承認証跡**: `### 現在有効なもの` 表 → その下の該当エントリ
 
@@ -43,7 +43,7 @@ uses_seams: [t1.color-request]
 - **割り当てられた受け入れ条件**: 色を取り除いても遊べる（主）、テーマ（主）
 - **uses_seams**: `t1.color-request`（`telegraph` と `actors` から）
 - **提供する seam**: `t2.color-result`（両者へ。**色値 ＋ 冗長化の指示**）
-- **parent_decision_ref**: `tell@2026-09-05-decision-3` ＋ `tell@2026-09-05-split-3`
+- **parent_decision_ref**: `tell@2026-09-05-decision-4` ＋ `tell@2026-09-05-split-4`
 
 ## 1. これは何を決めるものか
 
@@ -230,11 +230,11 @@ uses_seams: [t1.color-request]
 
 | 種別 | 版参照 | status |
 | --- | --- | --- |
-| **決定** | `palette@2026-09-05-decision-2` | **active** |
+| **決定** | `palette@2026-09-05-decision-3` | **active** |
 
 **深さ3は子を作らないため、分割の承認は無い。**
 
-- **`palette@2026-09-05-decision-2`** / 承認者: **人間（DaichiFukuhara、`root@2026-09-04-approval-1` により）**/
+- **`palette@2026-09-05-decision-3`** / 承認者: **人間（DaichiFukuhara、`root@2026-09-05-approval-2` により）**/
   日時: 2026-09-05 / 種別: `decision` / 承認者の種別: **人間** / **status: active**
 
   **決定の要点**: **冗長化の表**（1.4）を作り、
@@ -250,5 +250,5 @@ uses_seams: [t1.color-request]
   「テーマ（有意に増える）」を**両方**入れた。
   **逆方向を要求する2条件の帯に収めることが、虹をルールにするということである。**
 
-  **2026-09-04、人間が `root@2026-09-04-approval-1` で明示的に承認した。**
+  **2026-09-04、人間が `root@2026-09-05-approval-2` で明示的に承認した。**
   `waiver-1`（AI への委任）は深さ3到達をもって終了している。

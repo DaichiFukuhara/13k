@@ -3,7 +3,7 @@ id: read.frame.screens
 parent: read.frame
 depth: 3
 children: []           # 深さ3は葉
-status: decision-approved   # screens@2026-09-05-decision-2（人間の承認 root@2026-09-04-approval-1）
+status: decision-approved   # screens@2026-09-05-decision-3（人間の承認 root@2026-09-05-approval-2）
 seams: []
 uses_seams: []
 ---
@@ -18,7 +18,7 @@ uses_seams: []
 
 **この順に読めば現行の契約だけが揃う。**
 
-1. **有効な版**: 決定 `screens@2026-09-05-decision-2` / 分割なし（深さ3の葉）
+1. **有効な版**: 決定 `screens@2026-09-05-decision-3` / 分割なし（深さ3の葉）
 2. **現行の決定本文**: 1〜7（🔒 が付いた節が最新の凍結）
 3. **承認証跡**: `### 現在有効なもの` 表 → その下の該当エントリ
 
@@ -43,7 +43,7 @@ uses_seams: []
 - **割り当てられた受け入れ条件**: 初見（主）
 - **uses_seams**: なし
 - **提供する seam**: `r1.screen-state` の内容（`frame` が権威化して `tell` へ）
-- **parent_decision_ref**: `frame@2026-09-05-decision-2` ＋ `frame@2026-09-05-split-2`
+- **parent_decision_ref**: `frame@2026-09-05-decision-3` ＋ `frame@2026-09-05-split-3`
 
 ## 1. これは何を決めるものか
 
@@ -202,7 +202,7 @@ title ──Enter──► fight ──撃破──► bosswin ──Enter──
    確保できない場合の代替が無い
 
 3. ~~狭い画面で操作の提示が消える~~ → **解決済み。**`shell` が**どの幅でも隠さない**と凍結した
-   （`shell@2026-09-05-decision-2`）。幅が足りなければ折り返す
+   （`shell@2026-09-05-decision-3`）。幅が足りなければ折り返す
 
 4. ~~`s1` の操作割当を `screens` が写すだけ、という構造が実装に無い~~ → **所有者は確定した。**
    **文字列を生成するのは `screens` だけ**（`frame` の親に残すもの6）。
@@ -214,11 +214,11 @@ title ──Enter──► fight ──撃破──► bosswin ──Enter──
 
 | 種別 | 版参照 | status |
 | --- | --- | --- |
-| **決定** | `screens@2026-09-05-decision-2` | **active** |
+| **決定** | `screens@2026-09-05-decision-3` | **active** |
 
 **深さ3は子を作らないため、分割の承認は無い。**
 
-- **`screens@2026-09-05-decision-2`** / 承認者: **人間（DaichiFukuhara、`root@2026-09-04-approval-1` により）**/
+- **`screens@2026-09-05-decision-3`** / 承認者: **人間（DaichiFukuhara、`root@2026-09-05-approval-2` により）**/
   日時: 2026-09-05 / 種別: `decision` / 承認者の種別: **人間** / **status: active**
 
   **決定の要点**: 「説明文を読まずに操作を理解する」を、
@@ -231,5 +231,5 @@ title ──Enter──► fight ──撃破──► bosswin ──Enter──
   `s1` の操作割当として `duel` が持つ形にしたが、
   `avatar` 側はそれを実装へ委任しており、**どちらも持っていない状態**になっている。
 
-  **2026-09-04、人間が `root@2026-09-04-approval-1` で明示的に承認した。**
+  **2026-09-04、人間が `root@2026-09-05-approval-2` で明示的に承認した。**
   `waiver-1`（AI への委任）は深さ3到達をもって終了している。

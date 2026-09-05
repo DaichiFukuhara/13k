@@ -3,7 +3,7 @@ id: read.frame.sound
 parent: read.frame
 depth: 3
 children: []           # 深さ3は葉
-status: decision-approved   # sound@2026-09-05-decision-2（人間の承認 root@2026-09-04-approval-1）
+status: decision-approved   # sound@2026-09-05-decision-3（人間の承認 root@2026-09-05-approval-2）
 seams: []
 uses_seams: []
 ---
@@ -18,7 +18,7 @@ uses_seams: []
 
 **この順に読めば現行の契約だけが揃う。**
 
-1. **有効な版**: 決定 `sound@2026-09-05-decision-2` / 分割なし（深さ3の葉）
+1. **有効な版**: 決定 `sound@2026-09-05-decision-3` / 分割なし（深さ3の葉）
 2. **現行の決定本文**: 1〜7（🔒 が付いた節が最新の凍結）
 3. **承認証跡**: `### 現在有効なもの` 表 → その下の該当エントリ
 
@@ -43,7 +43,7 @@ uses_seams: []
   外部リソースに依存しない（音声ファイルを持たない）
 - **uses_seams**: なし
 - **提供する seam**: なし
-- **parent_decision_ref**: `frame@2026-09-05-decision-2` ＋ `frame@2026-09-05-split-2`
+- **parent_decision_ref**: `frame@2026-09-05-decision-3` ＋ `frame@2026-09-05-split-3`
 
 ## 1. これは何を決めるものか
 
@@ -190,11 +190,11 @@ uses_seams: []
 
 | 種別 | 版参照 | status |
 | --- | --- | --- |
-| **決定** | `sound@2026-09-05-decision-2` | **active** |
+| **決定** | `sound@2026-09-05-decision-3` | **active** |
 
 **深さ3は子を作らないため、分割の承認は無い。**
 
-- **`sound@2026-09-05-decision-2`** / 承認者: **人間（DaichiFukuhara、`root@2026-09-04-approval-1` により）**/
+- **`sound@2026-09-05-decision-3`** / 承認者: **人間（DaichiFukuhara、`root@2026-09-05-approval-2` により）**/
   日時: 2026-09-05 / 種別: `decision` / 承認者の種別: **人間** / **status: active**
 
   **決定の要点**: **音が示すものすべてに画面での対応を書いた表**（1.3）を作り、
@@ -205,5 +205,5 @@ uses_seams: []
   「良い音」は判定不能なので条件にできない。
   **音そのものの質は制作者の主観に残る。**
 
-  **2026-09-04、人間が `root@2026-09-04-approval-1` で明示的に承認した。**
+  **2026-09-04、人間が `root@2026-09-05-approval-2` で明示的に承認した。**
   `waiver-1`（AI への委任）は深さ3到達をもって終了している。

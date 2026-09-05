@@ -3,7 +3,7 @@ id: duel.fight.arena
 parent: duel.fight
 depth: 3
 children: []           # 深さ3は葉。分割しない
-status: decision-approved   # arena@2026-09-05-decision-2（人間の承認 root@2026-09-04-approval-1）
+status: decision-approved   # arena@2026-09-05-decision-3（人間の承認 root@2026-09-05-approval-2）
 seams: []
 uses_seams: [f1.avatar-state, f2.foe-state, d1.run-definition]
 ---
@@ -18,7 +18,7 @@ uses_seams: [f1.avatar-state, f2.foe-state, d1.run-definition]
 
 **この順に読めば現行の契約だけが揃う。**
 
-1. **有効な版**: 決定 `arena@2026-09-05-decision-2` / 分割なし（深さ3の葉）
+1. **有効な版**: 決定 `arena@2026-09-05-decision-3` / 分割なし（深さ3の葉）
 2. **現行の決定本文**: 1〜7（🔒 が付いた節が最新の凍結）
 3. **承認証跡**: `### 現在有効なもの` 表 → その下の該当エントリ
 
@@ -50,7 +50,7 @@ uses_seams: [f1.avatar-state, f2.foe-state, d1.run-definition]
 - **uses_seams**: `f1.avatar-state`, `f2.foe-state`, `d1.run-definition`
 - **提供する seam**: `f3.avatar-verdict` / `f4.foe-verdict`（兄弟へ）、
   **`s1.presentation-state`**（`fight` の代表として `duel` の `seam_inbox` 経由で `read` へ）
-- **parent_decision_ref**: `fight@2026-09-05-decision-2` ＋ `fight@2026-09-05-split-2`
+- **parent_decision_ref**: `fight@2026-09-05-decision-3` ＋ `fight@2026-09-05-split-3`
 
 ## 1. これは何を決めるものか
 
@@ -150,7 +150,7 @@ title ──► fight ──► bosswin ──► fight（次のボス）──�
 `d1.run-definition`（技の識別・外見・有効回答集合・結果表示）/ `arena` 自身（弾・効果・ラン・ライフサイクル）。
 **`arena` はこの4つ以外から値を作らない。**
 
-> 🔒 **凍結（`arena@2026-09-05-decision-2`）。**
+> 🔒 **凍結（`arena@2026-09-05-decision-3`）。**
 > 2026-09-04 Codex 監査 **P0-6**: 「根の `s1` は完全スナップショットを要求するが、
 > **`arena` の組み立て表は旧版のままで、座標・最大値・弾・効果・ラン統計・
 > 第2形態イベントなどを欠く。」**根の `split-8` の表と**同じフィールド集合**へそろえた。
@@ -232,7 +232,7 @@ title ──► fight ──► bosswin ──► fight（次のボス）──�
    **`gen.audit` が生成時の検査で同じ規則を使う。**
    「`arena` だけ」は**実戦での実行者**の話であって、規則の所有者の話ではない
 
-   > 🔒 **凍結（`arena@2026-09-05-decision-2`）。**旧文は「展開するのは `arena` だけ」と
+   > 🔒 **凍結（`arena@2026-09-05-decision-3`）。**旧文は「展開するのは `arena` だけ」と
    > 書いていて、**`duel` の「`audit` と `arena` が同じ展開規則を使う」と衝突していた**
    > （2026-09-04 Codex 監査 **P0-2**）。**実行者と所有者を分けて書いた。**
 3. **`avatar` と `foe` を直接つながせない**（同 9）
@@ -240,7 +240,7 @@ title ──► fight ──► bosswin ──► fight（次のボス）──�
 5. **`s1` に載せる技と形状の定義は `d1` の値そのまま。**作り直さない
 6. **`d1` を書き換えない。**受け取った定義は読み取り専用。**例外は無い。**
 
-   > 🔒 **凍結（`arena@2026-09-05-decision-2`）。**旧文は「例外は第2形態変異だけ」としていたが、
+   > 🔒 **凍結（`arena@2026-09-05-decision-3`）。**旧文は「例外は第2形態変異だけ」としていたが、
    > **第2形態は `gen` が生成時に確定・検査し、`d1` が両形態を運ぶ**形へ変わった
    > （`duel` の `d1` 定義）。**`foe` は参照する版を切り替えるだけで、誰も `d1` を書き換えない。**
    > 2026-09-04 Codex 監査 **P0-2**
@@ -289,11 +289,11 @@ title ──► fight ──► bosswin ──► fight（次のボス）──�
 
 | 種別 | 版参照 | status |
 | --- | --- | --- |
-| **決定** | `arena@2026-09-05-decision-2` | **active** |
+| **決定** | `arena@2026-09-05-decision-3` | **active** |
 
 **深さ3は子を作らないため、分割の承認は無い。**
 
-- **`arena@2026-09-05-decision-2`** / 承認者: **人間（DaichiFukuhara、`root@2026-09-04-approval-1` により）**/
+- **`arena@2026-09-05-decision-3`** / 承認者: **人間（DaichiFukuhara、`root@2026-09-05-approval-2` により）**/
   日時: 2026-09-05 / 種別: `decision` / 承認者の種別: **人間** / **status: active**
   対象: 本文1〜7
 
@@ -308,5 +308,5 @@ title ──► fight ──► bosswin ──► fight（次のボス）──�
   受け入れ条件「宣言との一致」を主担当として引き受けた。
   **`gen.audit` が生成側から、`arena` が実行側から、同じ命題を両側で挟む形になる。**
 
-  **2026-09-04、人間が `root@2026-09-04-approval-1` で明示的に承認した。**
+  **2026-09-04、人間が `root@2026-09-05-approval-2` で明示的に承認した。**
   `waiver-1`（AI への委任）は深さ3到達をもって終了している。

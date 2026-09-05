@@ -3,7 +3,7 @@ id: read.frame.hud
 parent: read.frame
 depth: 3
 children: []           # 深さ3は葉
-status: decision-approved   # hud@2026-09-05-decision-2（人間の承認 root@2026-09-04-approval-1）
+status: decision-approved   # hud@2026-09-05-decision-3（人間の承認 root@2026-09-05-approval-2）
 seams: []
 uses_seams: []
 ---
@@ -18,7 +18,7 @@ uses_seams: []
 
 **この順に読めば現行の契約だけが揃う。**
 
-1. **有効な版**: 決定 `hud@2026-09-05-decision-2` / 分割なし（深さ3の葉）
+1. **有効な版**: 決定 `hud@2026-09-05-decision-3` / 分割なし（深さ3の葉）
 2. **現行の決定本文**: 1〜7（🔒 が付いた節が最新の凍結）
 3. **承認証跡**: `### 現在有効なもの` 表 → その下の該当エントリ
 
@@ -42,7 +42,7 @@ uses_seams: []
 - **割り当てられた受け入れ条件**: 色を取り除いても遊べる（主）、初見（残り HP が見えること）
 - **uses_seams**: なし
 - **提供する seam**: なし
-- **parent_decision_ref**: `frame@2026-09-05-decision-2` ＋ `frame@2026-09-05-split-2`
+- **parent_decision_ref**: `frame@2026-09-05-decision-3` ＋ `frame@2026-09-05-split-3`
 
 ## 1. これは何を決めるものか
 
@@ -201,11 +201,11 @@ uses_seams: []
 
 | 種別 | 版参照 | status |
 | --- | --- | --- |
-| **決定** | `hud@2026-09-05-decision-2` | **active** |
+| **決定** | `hud@2026-09-05-decision-3` | **active** |
 
 **深さ3は子を作らないため、分割の承認は無い。**
 
-- **`hud@2026-09-05-decision-2`** / 承認者: **人間（DaichiFukuhara、`root@2026-09-04-approval-1` により）**/
+- **`hud@2026-09-05-decision-3`** / 承認者: **人間（DaichiFukuhara、`root@2026-09-05-approval-2` により）**/
   日時: 2026-09-05 / 種別: `decision` / 承認者の種別: **人間** / **status: active**
 
   **決定の要点**: **4本のバーを、色ではなく位置と太さで区別する**と決めた
@@ -221,5 +221,5 @@ uses_seams: []
   `frame` にその規約が無く、`hud` は色の表を直接使う。
   **グレースケール検査は `hud` にも掛かるので、揃えたほうがよい可能性がある。**
 
-  **2026-09-04、人間が `root@2026-09-04-approval-1` で明示的に承認した。**
+  **2026-09-04、人間が `root@2026-09-05-approval-2` で明示的に承認した。**
   `waiver-1`（AI への委任）は深さ3到達をもって終了している。

@@ -3,7 +3,7 @@ id: read.frame.shell
 parent: read.frame
 depth: 3
 children: []           # 深さ3は葉
-status: decision-approved   # shell@2026-09-05-decision-2（人間の承認 root@2026-09-04-approval-1）
+status: decision-approved   # shell@2026-09-05-decision-3（人間の承認 root@2026-09-05-approval-2）
 seams: []
 uses_seams: []
 ---
@@ -18,7 +18,7 @@ uses_seams: []
 
 **この順に読めば現行の契約だけが揃う。**
 
-1. **有効な版**: 決定 `shell@2026-09-05-decision-2` / 分割なし（深さ3の葉）
+1. **有効な版**: 決定 `shell@2026-09-05-decision-3` / 分割なし（深さ3の葉）
 2. **現行の決定本文**: 1〜7（🔒 が付いた節が最新の凍結）
 3. **承認証跡**: `### 現在有効なもの` 表 → その下の該当エントリ
 
@@ -44,7 +44,7 @@ uses_seams: []
   容量（**全体の実測を出す**）
 - **uses_seams**: なし
 - **提供する seam**: なし
-- **parent_decision_ref**: `frame@2026-09-05-decision-2` ＋ `frame@2026-09-05-split-2`
+- **parent_decision_ref**: `frame@2026-09-05-decision-3` ＋ `frame@2026-09-05-split-3`
 
 ## 1. これは何を決めるものか
 
@@ -65,7 +65,7 @@ uses_seams: []
 - `overflow: hidden` で**スクロールさせない**（根の 1.7）
 - **操作の段落は、どの画面幅でも隠さない。**幅が足りなければ折り返して2行にする
 
-> 🔒 **凍結（`shell@2026-09-05-decision-2`）。**実装は 700px 未満で `<p>` を隠していたが、
+> 🔒 **凍結（`shell@2026-09-05-decision-3`）。**実装は 700px 未満で `<p>` を隠していたが、
 > **審査員がノートPCの狭い窓で開くと操作が分からず、受け入れ条件「初見」が落ちる。**
 > 隠さない。**文字列は `screens` が `s1.controls` から生成する**（`frame` の親に残すもの6）ので、
 > `shell` は場所だけ用意する。
@@ -233,11 +233,11 @@ headroom  4,394 bytes
 
 | 種別 | 版参照 | status |
 | --- | --- | --- |
-| **決定** | `shell@2026-09-05-decision-2` | **active** |
+| **決定** | `shell@2026-09-05-decision-3` | **active** |
 
 **深さ3は子を作らないため、分割の承認は無い。**
 
-- **`shell@2026-09-05-decision-2`** / 承認者: **人間（DaichiFukuhara、`root@2026-09-04-approval-1` により）**/
+- **`shell@2026-09-05-decision-3`** / 承認者: **人間（DaichiFukuhara、`root@2026-09-05-approval-2` により）**/
   日時: 2026-09-05 / 種別: `decision` / 承認者の種別: **人間** / **status: active**
 
   **決定の要点**: 器とビルドは実装のものをそのまま採った。
