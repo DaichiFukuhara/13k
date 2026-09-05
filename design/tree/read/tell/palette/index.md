@@ -3,12 +3,28 @@ id: read.tell.palette
 parent: read.tell
 depth: 3
 children: []           # 深さ3は葉
-status: decision-approved   # palette@2026-09-04-decision-1（人間の承認 root@2026-09-04-approval-1）
+status: decision-approved   # palette@2026-09-05-decision-2（人間の承認 root@2026-09-04-approval-1）
 seams: []
 uses_seams: [t1.color-request]
 ---
 
 # palette（システム: 7色を特性の語彙として運用し、色以外でも同じ情報が出ていることを保証する）
+
+## 📍 現行契約への索引
+
+<!-- 2026-09-04 Codex 監査 P1-10: 「履歴が正本本文に大量に残り、
+     『現在有効なもの』表を読んでも本文中の旧仮置きが現行命令の形で残るため
+     cold start が安全でない」。現行だけを一意にたどれる入口をここへ置く。 -->
+
+**この順に読めば現行の契約だけが揃う。**
+
+1. **有効な版**: 決定 `palette@2026-09-05-decision-2` / 分割なし（深さ3の葉）
+2. **現行の決定本文**: 1〜7（🔒 が付いた節が最新の凍結）
+3. **承認証跡**: `### 現在有効なもの` 表 → その下の該当エントリ
+
+> ⚠️ **`superseded` と書かれた節・`~~取り消し線~~`・「旧文は」で始まる引用は履歴である。**
+> **現行の命令として読んではいけない。**
+
 
 <!-- 深さ3（葉）。これ以上分割しない。
 
@@ -27,7 +43,7 @@ uses_seams: [t1.color-request]
 - **割り当てられた受け入れ条件**: 色を取り除いても遊べる（主）、テーマ（主）
 - **uses_seams**: `t1.color-request`（`telegraph` と `actors` から）
 - **提供する seam**: `t2.color-result`（両者へ。**色値 ＋ 冗長化の指示**）
-- **parent_decision_ref**: `tell@2026-09-04-decision-2` ＋ `tell@2026-09-04-split-2`
+- **parent_decision_ref**: `tell@2026-09-05-decision-3` ＋ `tell@2026-09-05-split-3`
 
 ## 1. これは何を決めるものか
 
@@ -214,12 +230,12 @@ uses_seams: [t1.color-request]
 
 | 種別 | 版参照 | status |
 | --- | --- | --- |
-| **決定** | `palette@2026-09-04-decision-1` | **active** |
+| **決定** | `palette@2026-09-05-decision-2` | **active** |
 
 **深さ3は子を作らないため、分割の承認は無い。**
 
-- **`palette@2026-09-04-decision-1`** / 承認者: **人間（DaichiFukuhara、`root@2026-09-04-approval-1` により）**/
-  日時: 2026-09-04 / 種別: `decision` / 承認者の種別: **人間** / **status: active**
+- **`palette@2026-09-05-decision-2`** / 承認者: **人間（DaichiFukuhara、`root@2026-09-04-approval-1` により）**/
+  日時: 2026-09-05 / 種別: `decision` / 承認者の種別: **人間** / **status: active**
 
   **決定の要点**: **冗長化の表**（1.4）を作り、
   **「すべての色に、色以外の手段が対応している」ことを検査可能にした。**

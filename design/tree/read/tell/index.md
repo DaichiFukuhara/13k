@@ -3,7 +3,7 @@ id: read.tell
 parent: read
 depth: 2
 children: [telegraph, palette, actors]
-status: children-created   # 決定 tell@2026-09-04-decision-2 / 分割 tell@2026-09-04-split-2。
+status: children-created   # 決定 tell@2026-09-05-decision-3 / 分割 tell@2026-09-05-split-3。
                         # 人間の承認 root@2026-09-04-approval-1。
                         # Codex 深さ3監査の着手前9（palette の結合）を反映した版
 seams: [t1.color-request, t2.color-result]   # palette がハブ。telegraph <-> actors の線は無い
@@ -11,6 +11,23 @@ uses_seams: [r1.screen-state]
 ---
 
 # tell（解決法: 戦闘画面の中身。来るものが読める）
+
+## 📍 現行契約への索引
+
+<!-- 2026-09-04 Codex 監査 P1-10: 「履歴が正本本文に大量に残り、
+     『現在有効なもの』表を読んでも本文中の旧仮置きが現行命令の形で残るため
+     cold start が安全でない」。現行だけを一意にたどれる入口をここへ置く。 -->
+
+**この順に読めば現行の契約だけが揃う。**
+
+1. **有効な版**: 決定 `tell@2026-09-05-decision-3` / 分割 `tell@2026-09-05-split-3`
+2. **現行の決定本文**: 1〜7（🔒 が付いた節が最新の凍結）
+3. **現行の分割**: `## 分割提案` 節（見出しの版が上の分割と一致するものだけが有効）
+4. **承認証跡**: `### 現在有効なもの` 表 → その下の該当エントリ
+
+> ⚠️ **`superseded` と書かれた節・`~~取り消し線~~`・「旧文は」で始まる引用は履歴である。**
+> **現行の命令として読んではいけない。**
+
 
 <!-- 深さ2。決めるのは「親の決定の詳細化と、それに伴う機能」。
 
@@ -39,7 +56,7 @@ uses_seams: [r1.screen-state]
 - **uses_seams**: `r1.screen-state`
 - **提供する seam**: なし
 - **開く順序**: **2番目**
-- **parent_decision_ref**: `read@2026-09-04-decision-1` ＋ `read@2026-09-04-split-1`
+- **parent_decision_ref**: `read@2026-09-05-decision-3` ＋ `read@2026-09-05-split-2`
 
 ## 1. これは何を決めるものか
 
@@ -69,7 +86,7 @@ uses_seams: [r1.screen-state]
 **`palette` は描画しない。**色を返し、**その色に対応する「色を使わない手がかり」の指示**を
 一緒に返す（`t2`）。
 
-> 🔒 **凍結（`tell@2026-09-04-decision-2`）。旧文は「子同士の seam が1本も無い。
+> 🔒 **凍結（`tell@2026-09-05-decision-3`）。旧文は「子同士の seam が1本も無い。
 > `palette` を呼ぶのは関数であって seam ではない」だった。**
 > 2026-09-04 の Codex 監査（**着手前9**）で、
 > **`precedents.md` の「結合を別名にして指標の外へ置いた」（`split-4` の誤り）と同型**
@@ -184,10 +201,10 @@ uses_seams: [r1.screen-state]
    **1技が複数の特性を持つとき、どれを見せるかの判断**である。
    **`palette` の担当だが、順序の根拠は実装に書かれていない**
 
-## 分割提案 tell-split-2
+## 分割提案 tell-split-3
 
-status: **approved**（`tell@2026-09-04-split-2` / **人間の承認 `root@2026-09-04-approval-1`**。`children-created`）
-前提: `tell@2026-09-04-decision-2`
+status: **approved**（`tell@2026-09-05-split-3` / **人間の承認 `root@2026-09-04-approval-1`**。`children-created`）
+前提: `tell@2026-09-05-decision-3`
 前検査: **深さ3全体監査で1回**（2026-09-04・Codex・判定不能）。**着手前9 を反映して `split-2` へ**。
 `tell-split-1` は superseded（`palette` の結合を seam として数えていなかった）
 
@@ -209,7 +226,7 @@ status: **approved**（`tell@2026-09-04-split-2` / **人間の承認 `root@2026-
 
 **`telegraph` と `actors` の間に線は無い。**`palette` がハブである。
 
-> 🔒 **凍結（`tell@2026-09-04-decision-2`）。旧文は「seam は無い」だった。**
+> 🔒 **凍結（`tell@2026-09-05-decision-3`）。旧文は「seam は無い」だった。**
 >
 > 2026-09-04 の Codex 監査（**着手前9**）:
 > **「`telegraph` と `actors` は `palette` 関数を直接呼ぶ。
@@ -276,7 +293,7 @@ status: **approved**（`tell@2026-09-04-split-2` / **人間の承認 `root@2026-
     初見（予告が読めること）、色を取り除いても遊べる（規則の実行）
   uses_seams: [r1.screen-state, t2.color-result]
   提供する seam: t1.color-request（palette へ）
-  parent_decision_ref: tell@2026-09-04-decision-2 ＋ tell@2026-09-04-split-2
+  parent_decision_ref: tell@2026-09-05-decision-3 ＋ tell@2026-09-05-split-3
 
 - child: palette
   責任: 7色を特性の語彙として運用し、色以外でも同じ情報が出ていることを保証する
@@ -289,7 +306,7 @@ status: **approved**（`tell@2026-09-04-split-2` / **人間の承認 `root@2026-
   割り当てられた受け入れ条件: 色を取り除いても遊べる（主）、テーマ（主）
   uses_seams: [t1.color-request]
   提供する seam: t2.color-result（telegraph と actors へ）
-  parent_decision_ref: tell@2026-09-04-decision-2 ＋ tell@2026-09-04-split-2
+  parent_decision_ref: tell@2026-09-05-decision-3 ＋ tell@2026-09-05-split-3
 
 - child: actors
   責任: プレイヤー・ボス・弾・効果・背景を描き、姿から性格を推測させる
@@ -303,7 +320,7 @@ status: **approved**（`tell@2026-09-04-split-2` / **人間の承認 `root@2026-
   割り当てられた受け入れ条件: 初見（主）、色を取り除いても遊べる（規則の実行）
   uses_seams: [r1.screen-state, t2.color-result]
   提供する seam: t1.color-request（palette へ）
-  parent_decision_ref: tell@2026-09-04-decision-2 ＋ tell@2026-09-04-split-2
+  parent_decision_ref: tell@2026-09-05-decision-3 ＋ tell@2026-09-05-split-3
 ```
 
 ### 他の切り方との比較
@@ -341,11 +358,11 @@ status: **approved**（`tell@2026-09-04-split-2` / **人間の承認 `root@2026-
 
 | 種別 | 版参照 | status |
 | --- | --- | --- |
-| **決定** | `tell@2026-09-04-decision-2` | **active**（人間の承認 `approval-1`） |
-| **分割** | `tell@2026-09-04-split-2` | **active**（同上・`children-created`） |
+| **決定** | `tell@2026-09-05-decision-3` | **active**（人間の承認 `approval-1`） |
+| **分割** | `tell@2026-09-05-split-3` | **active**（同上・`children-created`） |
 
 - **`tell@2026-09-04-decision-1`** / 承認者: **人間（DaichiFukuhara、`root@2026-09-04-approval-1` により）**/
-  日時: 2026-09-04 / 種別: `decision` / 承認者の種別: **人間** / **status: active**
+  日時: 2026-09-05 / 種別: `decision` / 承認者の種別: **人間** / **status: active**
 
   **決定の要点**: **色を決める場所を `palette` 1箇所に閉じた。**
   不変条件11（色だけに依存させない）は、
@@ -356,6 +373,6 @@ status: **approved**（`tell@2026-09-04-split-2` / **人間の承認 `root@2026-
   （[`design/AS_BUILT.md`](../../../AS_BUILT.md) §3）。**そこを引き剥がす。**
 
 - **`tell@2026-09-04-split-1`** / 承認者: **人間（DaichiFukuhara、`root@2026-09-04-approval-1` により）**/
-  日時: 2026-09-04 / 種別: `split` / 承認者の種別: **人間** / **status: active**
+  日時: 2026-09-05 / 種別: `split` / 承認者の種別: **人間** / **status: active**
 
   **前検査を経ずに承認した。**理由は `duel` の `split-2` の承認証跡と同じ。

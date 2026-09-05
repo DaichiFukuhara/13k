@@ -3,7 +3,7 @@ id: read.frame
 parent: read
 depth: 2
 children: [hud, screens, sound, shell]
-status: children-created   # 決定 frame@2026-09-04-decision-1 / 分割 frame@2026-09-04-split-1。
+status: children-created   # 決定 frame@2026-09-05-decision-2 / 分割 frame@2026-09-05-split-2。
                         # いずれも人間の承認 root@2026-09-04-approval-1。
                         # Codex 深さ3監査（2026-09-04・判定不能）の指摘を反映済み
 seams: []               # 子同士の接続は無い（4子とも s1 と親の定数だけを読む）
@@ -11,6 +11,23 @@ uses_seams: []
 ---
 
 # frame（解決法: 画面の枠。遊べる1本として成立させる）
+
+## 📍 現行契約への索引
+
+<!-- 2026-09-04 Codex 監査 P1-10: 「履歴が正本本文に大量に残り、
+     『現在有効なもの』表を読んでも本文中の旧仮置きが現行命令の形で残るため
+     cold start が安全でない」。現行だけを一意にたどれる入口をここへ置く。 -->
+
+**この順に読めば現行の契約だけが揃う。**
+
+1. **有効な版**: 決定 `frame@2026-09-05-decision-2` / 分割 `frame@2026-09-05-split-2`
+2. **現行の決定本文**: 1〜7（🔒 が付いた節が最新の凍結）
+3. **現行の分割**: `## 分割提案` 節（見出しの版が上の分割と一致するものだけが有効）
+4. **承認証跡**: `### 現在有効なもの` 表 → その下の該当エントリ
+
+> ⚠️ **`superseded` と書かれた節・`~~取り消し線~~`・「旧文は」で始まる引用は履歴である。**
+> **現行の命令として読んではいけない。**
+
 
 <!-- 深さ2。決めるのは「親の決定の詳細化と、それに伴う機能」。
 
@@ -39,7 +56,7 @@ uses_seams: []
 - **uses_seams**: なし
 - **提供する seam**: `r1.screen-state`（`tell` へ）
 - **開く順序**: **1番目**
-- **parent_decision_ref**: `read@2026-09-04-decision-1` ＋ `read@2026-09-04-split-1`
+- **parent_decision_ref**: `read@2026-09-05-decision-3` ＋ `read@2026-09-05-split-2`
 
 ## 1. これは何を決めるものか
 
@@ -179,10 +196,10 @@ uses_seams: []
    測るには、音量0にする手段が要る。
    仮置き: ブラウザのタブミュートで測る。**製品に設定 UI は作らない**（6 で決めない）
 
-## 分割提案 frame-split-1
+## 分割提案 frame-split-2
 
-status: **approved**（`frame@2026-09-04-split-1` / 人間の承認 `root@2026-09-04-approval-1`。`children-created`）
-前提: `frame@2026-09-04-decision-1`
+status: **approved**（`frame@2026-09-05-split-2` / 人間の承認 `root@2026-09-04-approval-1`。`children-created`）
+前提: `frame@2026-09-05-decision-2`
 前検査: **深さ3全体監査で1回**（2026-09-04・Codex・判定不能）。指摘を反映済み
 
 ### 子
@@ -271,7 +288,7 @@ status: **approved**（`frame@2026-09-04-split-1` / 人間の承認 `root@2026-0
   割り当てられた受け入れ条件: 色を取り除いても遊べる（主）、初見（残り HP が見えること）
   uses_seams: []
   提供する seam: なし
-  parent_decision_ref: frame@2026-09-04-decision-1 ＋ frame@2026-09-04-split-1
+  parent_decision_ref: frame@2026-09-05-decision-2 ＋ frame@2026-09-05-split-2
 
 - child: screens
   責任: 画面の行き来を成立させ、説明文なしで操作が分かる状態を作る
@@ -284,7 +301,7 @@ status: **approved**（`frame@2026-09-04-split-1` / 人間の承認 `root@2026-0
   割り当てられた受け入れ条件: 初見（主）
   uses_seams: []
   提供する seam: r1.screen-state の内容（frame が権威化して tell へ）
-  parent_decision_ref: frame@2026-09-04-decision-1 ＋ frame@2026-09-04-split-1
+  parent_decision_ref: frame@2026-09-05-decision-2 ＋ frame@2026-09-05-split-2
 
 - child: sound
   責任: 音を実行時に生成し、情報の主経路にしない
@@ -296,7 +313,7 @@ status: **approved**（`frame@2026-09-04-split-1` / 人間の承認 `root@2026-0
     外部リソースに依存しない（音声ファイルを持たない）
   uses_seams: []
   提供する seam: なし
-  parent_decision_ref: frame@2026-09-04-decision-1 ＋ frame@2026-09-04-split-1
+  parent_decision_ref: frame@2026-09-05-decision-2 ＋ frame@2026-09-05-split-2
 
 - child: shell
   責任: 提出する1本の器を作り、ビルドが上限内であることを毎回示す
@@ -310,7 +327,7 @@ status: **approved**（`frame@2026-09-04-split-1` / 人間の承認 `root@2026-0
     容量（全体の実測を出す）
   uses_seams: []
   提供する seam: なし
-  parent_decision_ref: frame@2026-09-04-decision-1 ＋ frame@2026-09-04-split-1
+  parent_decision_ref: frame@2026-09-05-decision-2 ＋ frame@2026-09-05-split-2
 ```
 
 ### 他の切り方との比較
@@ -356,11 +373,11 @@ status: **approved**（`frame@2026-09-04-split-1` / 人間の承認 `root@2026-0
 
 | 種別 | 版参照 | status |
 | --- | --- | --- |
-| **決定** | `frame@2026-09-04-decision-1` | **active** |
-| **分割** | `frame@2026-09-04-split-1` | **active**（承認済み・`children-created`） |
+| **決定** | `frame@2026-09-05-decision-2` | **active** |
+| **分割** | `frame@2026-09-05-split-2` | **active**（承認済み・`children-created`） |
 
-- **`frame@2026-09-04-decision-1`** / 承認者: **人間（DaichiFukuhara、`root@2026-09-04-approval-1` により）**/
-  日時: 2026-09-04 / 種別: `decision` / 承認者の種別: **人間** / **status: active**
+- **`frame@2026-09-05-decision-2`** / 承認者: **人間（DaichiFukuhara、`root@2026-09-04-approval-1` により）**/
+  日時: 2026-09-05 / 種別: `decision` / 承認者の種別: **人間** / **status: active**
 
   **決定の要点**: 受け入れ条件「初見」を**3つの要求へ分解**し、担当を割り当てた
   （操作を理解する＝`screens` / 敗北まで到達する＝`hud` ＋ `tell` /
@@ -374,7 +391,7 @@ status: **approved**（`frame@2026-09-04-split-1` / 人間の承認 `root@2026-0
   （ZIP 8,918 bytes・上限の 67.0%）。根はこれを `deferred` にしているが、
   **`shell` の実体は動いている。**
 
-- **`frame@2026-09-04-split-1`** / 承認者: **人間（DaichiFukuhara、`root@2026-09-04-approval-1` により）**/
-  日時: 2026-09-04 / 種別: `split` / 承認者の種別: **人間** / **status: active**
+- **`frame@2026-09-05-split-2`** / 承認者: **人間（DaichiFukuhara、`root@2026-09-04-approval-1` により）**/
+  日時: 2026-09-05 / 種別: `split` / 承認者の種別: **人間** / **status: active**
 
   **前検査を経ずに承認した。**理由は `duel` の `split-2` の承認証跡と同じ。

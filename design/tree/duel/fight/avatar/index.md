@@ -3,12 +3,28 @@ id: duel.fight.avatar
 parent: duel.fight
 depth: 3
 children: []           # 深さ3は葉。分割しない
-status: decision-approved   # avatar@2026-09-04-decision-1（人間の承認 root@2026-09-04-approval-1）
+status: decision-approved   # avatar@2026-09-05-decision-2（人間の承認 root@2026-09-04-approval-1）
 seams: []
 uses_seams: [f3.avatar-verdict]
 ---
 
 # avatar（システム: プレイヤー1人を、宣言された回答手段が実際に機能する形で動かす）
+
+## 📍 現行契約への索引
+
+<!-- 2026-09-04 Codex 監査 P1-10: 「履歴が正本本文に大量に残り、
+     『現在有効なもの』表を読んでも本文中の旧仮置きが現行命令の形で残るため
+     cold start が安全でない」。現行だけを一意にたどれる入口をここへ置く。 -->
+
+**この順に読めば現行の契約だけが揃う。**
+
+1. **有効な版**: 決定 `avatar@2026-09-05-decision-2` / 分割なし（深さ3の葉）
+2. **現行の決定本文**: 1〜7（🔒 が付いた節が最新の凍結）
+3. **承認証跡**: `### 現在有効なもの` 表 → その下の該当エントリ
+
+> ⚠️ **`superseded` と書かれた節・`~~取り消し線~~`・「旧文は」で始まる引用は履歴である。**
+> **現行の命令として読んではいけない。**
+
 
 <!-- 深さ3（葉）。これ以上分割しない。
 
@@ -34,7 +50,7 @@ uses_seams: [f3.avatar-verdict]
 - **割り当てられた受け入れ条件**: 宣言との一致（前提: 回答手段が宣言どおり機能すること）
 - **uses_seams**: `f3.avatar-verdict`
 - **提供する seam**: `f1.avatar-state`（`arena` へ）
-- **parent_decision_ref**: `fight@2026-09-04-decision-1` ＋ `fight@2026-09-04-split-1`
+- **parent_decision_ref**: `fight@2026-09-05-decision-2` ＋ `fight@2026-09-05-split-2`
 
 ## 1. これは何を決めるものか
 
@@ -194,7 +210,8 @@ uses_seams: [f3.avatar-verdict]
 - 入力バッファのフレーム数（実装は 7 / 5）
 - コヨーテタイムの長さ（実装は 6F）
 - 被弾後無敵の長さ（実装は 42F）
-- キー割り当て
+- キー割り当ての**値**（**ただし所有者は `avatar`。`s1.controls` で `read` へ運ぶ**。
+  `read.frame.screens` が操作説明を生成する唯一の入力になる）
 - 加速度・摩擦（実装は等速）
 
 **今回は決めない**
@@ -240,12 +257,12 @@ uses_seams: [f3.avatar-verdict]
 
 | 種別 | 版参照 | status |
 | --- | --- | --- |
-| **決定** | `avatar@2026-09-04-decision-1` | **active** |
+| **決定** | `avatar@2026-09-05-decision-2` | **active** |
 
 **深さ3は子を作らないため、分割の承認は無い。**
 
-- **`avatar@2026-09-04-decision-1`** / 承認者: **人間（DaichiFukuhara、`root@2026-09-04-approval-1` により）**/
-  日時: 2026-09-04 / 種別: `decision` / 承認者の種別: **人間** / **status: active**
+- **`avatar@2026-09-05-decision-2`** / 承認者: **人間（DaichiFukuhara、`root@2026-09-04-approval-1` により）**/
+  日時: 2026-09-05 / 種別: `decision` / 承認者の種別: **人間** / **status: active**
   対象: 本文1〜7
 
   **決定の要点**: 実装の実測を並べた結果、**プレイヤー能力契約の値が誤っていることが分かった。**

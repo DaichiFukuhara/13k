@@ -3,12 +3,28 @@ id: read.tell.telegraph
 parent: read.tell
 depth: 3
 children: []           # 深さ3は葉
-status: decision-approved   # telegraph@2026-09-04-decision-1（人間の承認 root@2026-09-04-approval-1）
+status: decision-approved   # telegraph@2026-09-05-decision-2（人間の承認 root@2026-09-04-approval-1）
 seams: []
 uses_seams: [r1.screen-state, t2.color-result]
 ---
 
 # telegraph（システム: 危険範囲と発生時刻を、`s1` の値だけから描く）
+
+## 📍 現行契約への索引
+
+<!-- 2026-09-04 Codex 監査 P1-10: 「履歴が正本本文に大量に残り、
+     『現在有効なもの』表を読んでも本文中の旧仮置きが現行命令の形で残るため
+     cold start が安全でない」。現行だけを一意にたどれる入口をここへ置く。 -->
+
+**この順に読めば現行の契約だけが揃う。**
+
+1. **有効な版**: 決定 `telegraph@2026-09-05-decision-2` / 分割なし（深さ3の葉）
+2. **現行の決定本文**: 1〜7（🔒 が付いた節が最新の凍結）
+3. **承認証跡**: `### 現在有効なもの` 表 → その下の該当エントリ
+
+> ⚠️ **`superseded` と書かれた節・`~~取り消し線~~`・「旧文は」で始まる引用は履歴である。**
+> **現行の命令として読んではいけない。**
+
 
 <!-- 深さ3（葉）。これ以上分割しない。
 
@@ -29,7 +45,7 @@ uses_seams: [r1.screen-state, t2.color-result]
   初見（予告が読めること）、色を取り除いても遊べる（規則の実行）
 - **uses_seams**: `r1.screen-state`, `t2.color-result`（`palette` から色と冗長化の指示）
 - **提供する seam**: `t1.color-request`（`palette` へ）
-- **parent_decision_ref**: `tell@2026-09-04-decision-2` ＋ `tell@2026-09-04-split-2`
+- **parent_decision_ref**: `tell@2026-09-05-decision-3` ＋ `tell@2026-09-05-split-3`
 
 ## 1. これは何を決めるものか
 
@@ -78,10 +94,15 @@ uses_seams: [r1.screen-state, t2.color-result]
 **根の 1.7 の「床付近か高さありか」が、そのまま矩形の高さとして見える。**
 **色を消しても、ジャンプで越えられるかが読める。**
 
-### 1.4 色は `palette` から受ける
+### 1.4 色は `palette` から受ける（seam `t1` / `t2`）
 
 **色値を直書きしない**（`tell` の不変条件8）。
-`s1` の特性ベクトルを `palette` に渡し、返ってきた色で塗る。
+`s1` の特性ベクトルを **`t1.color-request`** で `palette` へ渡し、
+**`t2.color-result`** で返ってきた**色値と冗長化の指示**を使う。
+
+> 🔒 **凍結（`telegraph@2026-09-05-decision-2`）。**旧文は「関数呼び出しであって seam ではない」
+> と書いていたが、**親 `tell` の現行決定では `t1` / `t2` の seam である**
+> （2026-09-04 Codex 監査 **P0-2**）。
 
 ## 2. なぜ要るのか
 
@@ -101,7 +122,8 @@ uses_seams: [r1.screen-state, t2.color-result]
 ## 3. 誰が使い、誰が影響を受けるか
 
 - **審査員・投票者**。初見で最初に見るのがこれ
-- **`palette`**: 色を得るために呼ぶ（関数呼び出しであって seam ではない）
+- **`palette`**: `t1.color-request` で色を要求し、`t2.color-result` で
+  **色値と冗長化の指示**を受ける。**seam である**（`tell` の `split-2`）
 - **`duel.fight.arena`**（親経由）: `s1` の危険範囲を作る側。
   **`arena` の展開が変わると `telegraph` の見た目が全部変わる**
 - **`duel.gen`**（間接）: 知覚の下限（18F）が成立しないと `telegraph` が
@@ -183,12 +205,12 @@ uses_seams: [r1.screen-state, t2.color-result]
 
 | 種別 | 版参照 | status |
 | --- | --- | --- |
-| **決定** | `telegraph@2026-09-04-decision-1` | **active** |
+| **決定** | `telegraph@2026-09-05-decision-2` | **active** |
 
 **深さ3は子を作らないため、分割の承認は無い。**
 
-- **`telegraph@2026-09-04-decision-1`** / 承認者: **人間（DaichiFukuhara、`root@2026-09-04-approval-1` により）**/
-  日時: 2026-09-04 / 種別: `decision` / 承認者の種別: **人間** / **status: active**
+- **`telegraph@2026-09-05-decision-2`** / 承認者: **人間（DaichiFukuhara、`root@2026-09-04-approval-1` により）**/
+  日時: 2026-09-05 / 種別: `decision` / 承認者の種別: **人間** / **status: active**
 
   **決定の要点**: 受け入れ条件に「**座標を計算していない**」を入れた。
   「予告と判定が一致する」だけだと**たまたま一致している状態を許す**ので、

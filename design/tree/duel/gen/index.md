@@ -3,7 +3,7 @@ id: duel.gen
 parent: duel
 depth: 2
 children: [move, audit, roster]
-status: children-created   # 決定 gen@2026-09-04-decision-1 / 分割 gen@2026-09-04-split-1。
+status: children-created   # 決定 gen@2026-09-05-decision-2 / 分割 gen@2026-09-05-split-2。
                         # いずれも人間の承認 root@2026-09-04-approval-1。
                         # Codex 深さ3監査（2026-09-04・判定不能）の指摘を反映済み
 seams: [g1.move-request, g2.move-result, g3.audit-request, g4.audit-verdict]
@@ -11,6 +11,23 @@ uses_seams: []          # gen は兄弟から何も受け取らない
 ---
 
 # gen（解決法: シードから、公平性の検査を通ったランを決定論的に作る）
+
+## 📍 現行契約への索引
+
+<!-- 2026-09-04 Codex 監査 P1-10: 「履歴が正本本文に大量に残り、
+     『現在有効なもの』表を読んでも本文中の旧仮置きが現行命令の形で残るため
+     cold start が安全でない」。現行だけを一意にたどれる入口をここへ置く。 -->
+
+**この順に読めば現行の契約だけが揃う。**
+
+1. **有効な版**: 決定 `gen@2026-09-05-decision-2` / 分割 `gen@2026-09-05-split-2`
+2. **現行の決定本文**: 1〜7（🔒 が付いた節が最新の凍結）
+3. **現行の分割**: `## 分割提案` 節（見出しの版が上の分割と一致するものだけが有効）
+4. **承認証跡**: `### 現在有効なもの` 表 → その下の該当エントリ
+
+> ⚠️ **`superseded` と書かれた節・`~~取り消し線~~`・「旧文は」で始まる引用は履歴である。**
+> **現行の命令として読んではいけない。**
+
 
 <!-- 深さ2。このチャットで決めるのは「親の決定の詳細化と、それに伴う機能」。
 
@@ -53,7 +70,7 @@ uses_seams: []          # gen は兄弟から何も受け取らない
 
 - **開く順序**: **1番目**
 
-- **parent_decision_ref**: `duel@2026-09-04-decision-2` ＋ `duel@2026-09-04-split-2`
+- **parent_decision_ref**: `duel@2026-09-05-decision-4` ＋ `duel@2026-09-05-split-3`
 
 ## 1. これは何を決めるものか
 
@@ -206,10 +223,10 @@ uses_seams: []          # gen は兄弟から何も受け取らない
    （`root@2026-09-04-decision-8`）。**技の帯域**（`move` が持つ）と
    **ボスの合計上限**（`roster` が持つ）の両方が有効になる
 
-## 分割提案 gen-split-1
+## 分割提案 gen-split-2
 
-status: **approved**（`gen@2026-09-04-split-1` / 人間の承認 `root@2026-09-04-approval-1`。`children-created`）
-前提: `gen@2026-09-04-decision-1`
+status: **approved**（`gen@2026-09-05-split-2` / 人間の承認 `root@2026-09-04-approval-1`。`children-created`）
+前提: `gen@2026-09-05-decision-2`
 前検査: **深さ3全体監査で1回**（2026-09-04・Codex・判定不能）。指摘を反映済み
 
 深さ2の子は**深さ3＝システム（葉）**。本文1の機能一覧をそのまま子にする。
@@ -312,7 +329,7 @@ status: **approved**（`gen@2026-09-04-split-1` / 人間の承認 `root@2026-09-
     形状と外見の網羅（形状の抽選）
   uses_seams: [g1.move-request]
   提供する seam: g2.move-result（roster へ）
-  parent_decision_ref: gen@2026-09-04-decision-1 ＋ gen@2026-09-04-split-1
+  parent_decision_ref: gen@2026-09-05-decision-2 ＋ gen@2026-09-05-split-2
 
 - child: audit
   責任: 生成された技とセットが公平であるかを、副作用なしに判定する
@@ -326,7 +343,7 @@ status: **approved**（`gen@2026-09-04-split-1` / 人間の承認 `root@2026-09-
   割り当てられた受け入れ条件: 公平性A（主）、公平性B（主）
   uses_seams: [g3.audit-request]
   提供する seam: g4.audit-verdict（roster へ）
-  parent_decision_ref: gen@2026-09-04-decision-1 ＋ gen@2026-09-04-split-1
+  parent_decision_ref: gen@2026-09-05-decision-2 ＋ gen@2026-09-05-split-2
 
 - child: roster
   責任: 生成の手順を回し、ラン全体の確定した定義を組み立てる
@@ -342,7 +359,7 @@ status: **approved**（`gen@2026-09-04-split-1` / 人間の承認 `root@2026-09-
   uses_seams: [g2.move-result, g4.audit-verdict]
   提供する seam: g1.move-request / g3.audit-request（兄弟へ）、
     d1.run-definition（gen の代表として duel の seam_inbox 経由で fight へ）
-  parent_decision_ref: gen@2026-09-04-decision-1 ＋ gen@2026-09-04-split-1
+  parent_decision_ref: gen@2026-09-05-decision-2 ＋ gen@2026-09-05-split-2
 ```
 
 ### 他の切り方との比較
@@ -389,13 +406,13 @@ status: **approved**（`gen@2026-09-04-split-1` / 人間の承認 `root@2026-09-
 
 | 種別 | 版参照 | status |
 | --- | --- | --- |
-| **決定** | `gen@2026-09-04-decision-1` | **active** |
-| **分割** | `gen@2026-09-04-split-1` | **active**（承認済み・`children-created`） |
+| **決定** | `gen@2026-09-05-decision-2` | **active** |
+| **分割** | `gen@2026-09-05-split-2` | **active**（承認済み・`children-created`） |
 
 ---
 
-- **`gen@2026-09-04-decision-1`** / 承認者: **人間（DaichiFukuhara、`root@2026-09-04-approval-1` により）**/
-  日時: 2026-09-04 / 種別: `decision` / 承認者の種別: **人間** / **status: active**
+- **`gen@2026-09-05-decision-2`** / 承認者: **人間（DaichiFukuhara、`root@2026-09-04-approval-1` により）**/
+  日時: 2026-09-05 / 種別: `decision` / 承認者の種別: **人間** / **status: active**
   対象: 本文1〜7（親の決定の詳細化と、それに伴う機能）
 
   **決定の要点**: 親の解決法5層を**3つの機能**へ分解し、
@@ -407,8 +424,8 @@ status: **approved**（`gen@2026-09-04-split-1` / 人間の承認 `root@2026-09-
   **`prismatic-duel/` として既に動いていて 30,000体のテストを通っているもの**を
   ツリーの語彙へ書き起こした。創作は「安全席の検査」と「ラン一括生成」の2点だけである。
 
-- **`gen@2026-09-04-split-1`** / 承認者: **人間（DaichiFukuhara、`root@2026-09-04-approval-1` により）**/
-  日時: 2026-09-04 / 種別: `split` / 承認者の種別: **人間** / **status: active**
+- **`gen@2026-09-05-split-2`** / 承認者: **人間（DaichiFukuhara、`root@2026-09-04-approval-1` により）**/
+  日時: 2026-09-05 / 種別: `split` / 承認者の種別: **人間** / **status: active**
   対象: 分割提案 `gen-split-1`（子3つ `move` / `audit` / `roster`、seam 4端点）
 
   **前検査を経ずに承認した。**理由は親（`duel`）の `split-2` の承認証跡と同じ —
