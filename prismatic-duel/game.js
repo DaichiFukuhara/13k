@@ -9,7 +9,7 @@ PRISMATIC DUEL — ソースレビュー用ガイド
 ただし提出時はbuild.mjsがTerserで再圧縮するため、このレビュー用コメントはZIPへ
 入らない。まず次の順番で読むと全体を追いやすい。
 
-  1. generateBoss()       シードからボス1体を組み立てる
+  1. generateBoss()       シードからボス1体を組み立てる（危険度の合計上限つき）
   2. validateBoss()       生成結果が公平性の条件を満たすか検査する
   3. startBoss()          生成データへ戦闘中の状態を追加する
   4. playerStep()         プレイヤーの1フレーム
@@ -24,6 +24,7 @@ PRISMATIC DUEL — ソースレビュー用ガイド
   - 同じシードでリトライすれば、技の形と数値は完全に同じになる。
   - 攻撃開始後は乱数で発生時刻や範囲を変えない。
   - 強い特性には長い予備動作や硬直を付け、必ず反撃時間を作る。
+  - 操作キャラは1人。残機も交代もなく、逃げ場はスタミナ1本だけ。
   - 表示した危険範囲と実際の当たり判定はmoveRect()を共有する。
 
 1フレームの処理順:
@@ -72,25 +73,23 @@ const S=0,D=1,R=2,W=3,A=4,C=5,T=6,N=7,F=8;
 const DMG_COST=[0,1,3,6,9],RANGE_COST=[0,0,1,3,5],WIND_COST=[0,4,2,0,-2],REC_COST=[0,0,-1,-3,-5];
 
 /*
-プレイヤーキャラ定義
+プレイヤー定義（1人）
 --------------------
-  hp     個別最大HP
-  cost   通常攻撃のスタミナ消費
-  dmg    ボスHPへ与えるダメージ
-  post   ボス体勢へ与えるダメージ
-  hit    攻撃開始から判定発生までのフレーム
-  end    攻撃全体が終了するフレーム
-  reach  近接判定の長さ。shot=1のUnicornは使用しない
-  shot   1なら弾、0なら近接矩形を生成
-  roll   ローリング中の横速度
+設計ツリー design/tree/duel の decision-5 で凍結:
+  操作キャラは1人。残機・控え・交代を持たない（根の 1.5 / 親に残すもの8）。
+  最大HP 14 は、旧3人構成の生HP合計25の56%。交代の猶予が消えるぶん単純比では足りない。
+  難易度はボス側の危険度合計上限（limits の cap）で釣り合わせる。
 
-3人とも基本回避は共通だが、攻撃の安全性・火力・ロール距離が異なる。
+  hp    最大HP
+  cost  通常攻撃のスタミナ消費
+  dmg   ボスHPへ与えるダメージ
+  post  ボス体勢へ与えるダメージ
+  hit   攻撃開始から判定発生までのフレーム
+  end   攻撃全体が終了するフレーム
+  reach 近接判定の長さ
+  roll  ローリング中の横速度
 */
-const CHAR=[
-  {name:"UNICORN",col:"#f3f0ff",hp:8,cost:14,dmg:3,post:1,hit:8,end:20,reach:0,shot:1,roll:4.8},
-  {name:"RED",col:"#ed596f",hp:10,cost:24,dmg:7,post:4,hit:14,end:34,reach:54,shot:0,roll:4.6},
-  {name:"BLUE",col:"#5ea8e8",hp:7,cost:10,dmg:2,post:2,hit:7,end:17,reach:38,shot:0,roll:5.8}
-];
+const HERO={col:"#f3f0ff",hp:14,cost:16,dmg:4,post:2,hit:10,end:24,reach:46,roll:5.0};
 
 /*
 seeded(seed) -> 0以上1未満を返す関数
@@ -131,6 +130,17 @@ function limits(tier,signature){
   // tier 0/1/2は1～3体目。最後の固有技だけ、通常技より上の帯域を許可する。
   return signature?[6+tier,8+tier*2]:[3+tier,6+tier];
 }
+/*
+budgetCap(tier) -> ボス1体が持てる危険度の合計上限
+
+設計ツリー design/tree/duel の decision-5 で凍結した2層目。
+帯域(limits)は技1つを抑えるだけで、「全部が上限に張り付いた個体」を防げない。
+5技×(6+tier)=30/35/40 の8割を上限に置くと、強い技と弱い技が必ず混ざる。
+
+操作キャラを1人へ落として最大HPを14にしたぶんの難易度は、この上限で釣り合わせる。
+プレイヤー側を強くして調整しない（根の 1.8）。
+*/
+function budgetCap(tier){return 24+tier*6}
 
 /*
 harden(m) -> 同じ配列を安全側へ変更
@@ -277,6 +287,23 @@ function generateBoss(seed,tier){
       harden(m);
     }
   });
+  // 合計上限を超えていたら、危険度の高い技から硬直→予備動作→威力の順で削る。
+  // 個々の技は既に帯域内なので、ここで下限を割る場合は下限側で止める。
+  for(let guard=0;guard<60&&moves.reduce((a,m)=>a+threat(m),0)>budgetCap(tier);guard++){
+    // 帯域の下限を上回っている技のうち、最も危険度が高いものから削る。
+    // 全技が下限に張り付いていたら、それ以上は削れないので抜ける。
+    let pick=-1;
+    for(let i=0;i<moves.length;i++){
+      if(threat(moves[i])<=limits(tier,i===moves.length-1)[0])continue;
+      if(pick<0||threat(moves[i])>threat(moves[pick]))pick=i;
+    }
+    if(pick<0)break;
+    const m=moves[pick],before=m.join();
+    if(m[C]<4)m[C]++;else if(m[W]<4)m[W]++;else if(m[T])m[T]--;
+    else if(m[N]>1)m[N]--;else if(m[D]>1)m[D]--;else if(m[R]>1)m[R]--;
+    harden(m);
+    if(m.join()===before)break; // harden が押し戻したら同じ補正を繰り返さない
+  }
   const defense=tier?1+(r()*3|0):0;
   const traits=[];
   // 外見色はランダム装飾ではなく、実際に生成された特徴候補から選ぶ。
@@ -306,6 +333,7 @@ function validateBoss(b){
     - 遠距離プレイヤーへ届く技が最低1技
     - 50f以上の反撃硬直が最低2技
     - 24f級の高速技は最大1技
+    - 危険度の合計がbudgetCap(tier)以下
 
   test.mjsは10,000 seed × 3 tierを生成し、エラー配列が空か検査する。
   */
@@ -316,6 +344,7 @@ function validateBoss(b){
   if(!b.moves.some(m=>m[R]===4||m[S]===3))errors.push("no gap pressure");
   if(b.moves.filter(m=>m[C]>=3).length<2)errors.push("too few openings");
   if(b.moves.filter(m=>m[W]===1).length>1)errors.push("too many fast moves");
+  if(b.moves.reduce((a,m)=>a+threat(m),0)>budgetCap(tier))errors.push("budget cap");
   for(const m of b.moves){
     const [lo,hi]=limits(tier,m===b.moves[b.moves.length-1]);
     if(threat(m)<lo-(m[C]>=3?2:0)||threat(m)>hi)errors.push("budget");
@@ -334,7 +363,7 @@ function validateBoss(b){
   mode   title / fight / pause / dead / bosswin / result の画面状態
   seed   1ランを再現する32bit整数
   run    3戦をまたいで保持するボス番号・時間・集計値
-  p      プレイヤー座標、現在キャラ、3人分HP/スタミナ、行動タイマー
+  p      プレイヤー座標、HP、スタミナ、行動タイマー
   b      生成データ + ボス現在HP、座標、状態、技山札、標的位置
   shots プレイヤー弾と敵弾をownerで共有する配列
   parts 当たり判定を持たない短命な火花
@@ -346,7 +375,19 @@ function validateBoss(b){
 let cv,cx,mode="title",seed=1,run,p,b,keys={},tap={},shots=[],parts=[],stars=[];
 let acc=0,last=0,freeze=0,shake=0,msg="",msgTime=0,audio;
 
+/*
+CONTROLS -> 操作割当の唯一の正本
+
+設計ツリー design/tree/read/frame の decision-3 で凍結:
+  操作説明の文字列を生成するのは screens だけ。index.html は置き場所だけを用意し、
+  中身を持たない。二重管理にしない。
+  どの画面幅でも隠さない（shell の decision-3）。狭ければ折り返す。
+*/
+const CONTROLS=[["MOVE","A/D or arrows"],["JUMP","W/Space"],["ATTACK","J/Z"],["PARRY","K/X"],["ROLL","L/C"]];
+
 function boot(){
+  const k=document.getElementById("k");
+  if(k)k.innerHTML=CONTROLS.map(([a,b])=>`<b>${a}</b> ${b}`).join("　");
   /*
   ブラウザ専用初期化。
   - URLの?seed=を36進数として読む。なければ新規seedを作る
@@ -359,7 +400,7 @@ function boot(){
   seed=q?parseInt(q,36)>>>0:(Math.random()*0xffffffff)>>>0;
   const sr=seeded(71);for(let i=0;i<70;i++)stars.push([sr()*CW,sr()*220,sr()*1.8+.3]);
   addEventListener("keydown",e=>{
-    if(["ArrowLeft","ArrowRight","ArrowDown","Space","KeyA","KeyD","KeyW","KeyS","KeyJ","KeyK","KeyL","KeyZ","KeyX","KeyC","Enter","KeyR","KeyN","Escape"].includes(e.code))e.preventDefault();
+    if(["ArrowLeft","ArrowRight","Space","KeyA","KeyD","KeyW","KeyJ","KeyK","KeyL","KeyZ","KeyX","KeyC","Enter","KeyR","KeyN","Escape"].includes(e.code))e.preventDefault();
     // tapは一回だけ使う入力、keysは押し続ける移動入力として分ける。
     if(!e.repeat)tap[e.code]=1;keys[e.code]=1;wakeAudio();
   });
@@ -385,7 +426,7 @@ function seedText(){return(seed>>>0).toString(36).toUpperCase().padStart(6,"0")}
 
 function newRun(s=seed){
   // ランを完全初期化。Rで同じランを再開するときだけ同じseedを渡す。
-  seed=s>>>0;run={boss:0,time:0,hits:0,parries:0,swaps:0};startBoss();
+  seed=s>>>0;run={boss:0,time:0,hits:0,parries:0};startBoss();
 }
 function startBoss(){
   /*
@@ -405,15 +446,13 @@ function startBoss(){
     barrier          0ならBARRIER有効。正数なら破壊中の残り時間
     mutated          3体目のHP50%変異を一度だけ行うフラグ
 
-  pの配列 hp/st/delay/down はキャラ順 [Unicorn, Red, Blue]。
-  座標・速度は現在キャラだけが持ち、交代時にそのまま次キャラへ引き継ぐ。
   */
   const cfg=generateBoss(runSeed(run.boss),run.boss);
   b={...cfg,hp:cfg.maxHp,posture:cfg.maxPosture,x:500,y:FLOOR-72,face:-1,phase:"wait",timer:70,
     deck:[],move:0,attack:0,pulse:0,target:140,aimY:FLOOR-18,targets:[],lastGuard:-1,attacks:0,broken:0,barrier:0,mutated:0};
-  p={x:125,y:FLOOR-30,vx:0,vy:0,face:1,ground:1,coyote:6,cur:0,
-    hp:CHAR.map(c=>c.hp),st:[100,100,100],delay:[0,0,0],down:[0,0,0],
-    action:"",timer:0,inv:0,swapCd:0,lastHit:"",jumpBuf:0,actBuf:0,parryBuf:0,rollBuf:0,swapBuf:0};
+  p={x:125,y:FLOOR-30,vx:0,vy:0,face:1,ground:1,coyote:6,
+    hp:HERO.hp,st:100,delay:0,
+    action:"",timer:0,inv:0,lastHit:"",jumpBuf:0,actBuf:0,parryBuf:0,rollBuf:0};
   shots=[];parts=[];mode="fight";say("READ THE COLORS. LEARN THE RHYTHM.",120);
 }
 function say(t,n=70){msg=t;msgTime=n}
@@ -423,14 +462,9 @@ function spark(x,y,col,n=8){
 function boxPlayer(){return{x:p.x+3,y:p.y+3,w:12,h:25}}
 function boxBoss(){return{x:b.x+5,y:b.y+4,w:37,h:68}}
 function hit(a,z){return a.x<z.x+z.w&&a.x+a.w>z.x&&a.y<z.y+z.h&&a.y+a.h>z.y}
-function aliveNext(){
-  // 現在位置の次から循環し、生存している交代先を探す。全滅なら-1。
-  for(let k=1;k<4;k++){const n=(p.cur+k)%3;if(!p.down[n])return n}
-  return-1;
-}
 function spend(n){
   // 消費後30fは回復しない。成功/失敗を返し、スタミナ不足で行動開始させない。
-  if(p.st[p.cur]<n)return 0;p.st[p.cur]-=n;p.delay[p.cur]=30;return 1;
+  if(p.st<n)return 0;p.st-=n;p.delay=30;return 1;
 }
 function begin(a){p.action=a;p.timer=0;p.vx=0}
 // ロール24f中の4～14fだけ無敵。開始直後と終端には当たり判定が残る。
@@ -454,51 +488,41 @@ function playerStep(){
 
   入力バッファにより、硬直終了の数フレーム前に押したボタンも次行動になる。
   */
-  if(p.inv)p.inv--;if(p.swapCd)p.swapCd--;
-  for(let i=0;i<3;i++){
-    // 奥に下がったキャラは能動キャラより速く回復し、交代に資源上の意味を持たせる。
-    if(p.delay[i])p.delay[i]--;
-    else p.st[i]=Math.min(100,p.st[i]+(i===p.cur?.3:.5));
-  }
-  p.jumpBuf=Math.max(0,p.jumpBuf-1);p.actBuf=Math.max(0,p.actBuf-1);p.parryBuf=Math.max(0,p.parryBuf-1);
-  p.rollBuf=Math.max(0,p.rollBuf-1);p.swapBuf=Math.max(0,p.swapBuf-1);
+  if(p.inv)p.inv--;
+  // 消費後30fは回復が止まる。これが唯一の資源制約（根の 1.5）。
+  if(p.delay)p.delay--;else p.st=Math.min(100,p.st+.3);
+  p.jumpBuf=Math.max(0,p.jumpBuf-1);p.actBuf=Math.max(0,p.actBuf-1);
+  p.parryBuf=Math.max(0,p.parryBuf-1);p.rollBuf=Math.max(0,p.rollBuf-1);
   if(pressed("Space","KeyW"))p.jumpBuf=7;
   if(pressed("KeyJ","KeyZ"))p.actBuf=5;
   if(pressed("KeyK","KeyX"))p.parryBuf=5;
   if(pressed("KeyL","KeyC"))p.rollBuf=5;
-  if(pressed("ArrowDown","KeyS"))p.swapBuf=5;
 
   if(p.action){
     // 行動中は原則キャンセル不可。パリィ成功だけがp.actionを直接解除する。
     p.timer++;
     if(p.action==="attack"){
-      const c=CHAR[p.cur];
-      if(p.timer===c.hit)playerStrike(c);
-      if(p.timer>=c.end)p.action="";
+      if(p.timer===HERO.hit)playerStrike();
+      if(p.timer>=HERO.end)p.action="";
     }else if(p.action==="roll"){
-      p.vx=p.face*CHAR[p.cur].roll;
+      p.vx=p.face*HERO.roll;
       if(p.timer>=24)p.action="";
     }else if(p.action==="parry"){
       if(p.timer>=22)p.action="";
-    }else if(p.action==="swap"){
-      if(p.timer===9){const n=aliveNext();if(n>=0){p.cur=n;run.swaps++;sound(360,.06,"sine");}}
-      if(p.timer>=18)p.action="";
     }else if(p.action==="hit"&&p.timer>=12)p.action="";
   }
 
   if(!p.action){
-    // 同じフレームに複数入力された場合の優先順位。交代は無敵がないため最優先でも
-    // 防御の代用にはならない。ロールは接地中、またはBlueの空中時だけ開始できる。
+    // 同じフレームに複数入力された場合の優先順位。ロールは接地中だけ開始できる。
     let d=(held("ArrowRight","KeyD")?1:0)-(held("ArrowLeft","KeyA")?1:0);
     p.vx=d*2.45;if(d)p.face=d;
-    if(p.swapBuf&&p.swapCd<=0&&aliveNext()>=0){p.swapBuf=0;p.swapCd=60;begin("swap")}
-    else if(p.rollBuf&&(p.ground||p.cur===2)&&spend(24)){p.rollBuf=0;begin("roll");if(!p.ground)p.vy=0;sound(110,.05,"sine",.02)}
+    if(p.rollBuf&&p.ground&&spend(24)){p.rollBuf=0;begin("roll");sound(110,.05,"sine",.02)}
     else if(p.parryBuf&&spend(18)){p.parryBuf=0;begin("parry");sound(280,.04,"triangle",.02)}
-    else if(p.actBuf&&spend(CHAR[p.cur].cost)){p.actBuf=0;begin("attack")}
+    else if(p.actBuf&&spend(HERO.cost)){p.actBuf=0;begin("attack")}
   }
   if(p.ground)p.coyote=6;else p.coyote=Math.max(0,p.coyote-1);
   // coyoteは床を離れた後6f、jumpBufは押してから7f残る。この二つが重なれば跳ぶ。
-  if(p.jumpBuf&&p.coyote&&p.action!=="roll"&&p.action!=="hit"&&p.action!=="swap"){
+  if(p.jumpBuf&&p.coyote&&p.action!=="roll"&&p.action!=="hit"){
     p.jumpBuf=0;p.coyote=0;p.ground=0;p.vy=-7.25;sound(170,.05,"sine",.018);
   }
   if(!held("Space","KeyW")&&p.vy<-2.2)p.vy*=.58;
@@ -508,16 +532,11 @@ function playerStep(){
   if(p.y>=FLOOR-30){p.y=FLOOR-30;p.vy=0;p.ground=1}else p.ground=0;
   if(hit(boxPlayer(),boxBoss())&&p.action!=="roll")p.x=b.x>p.x?b.x-13:b.x+38;
 }
-function playerStrike(c){
-  /*
-  攻撃モーションのc.hitフレームから一度だけ呼ばれる。
-  Unicornはshotsへowner=0の弾を追加し、Red/Blueは向きに応じた矩形を即判定する。
-  弾と近接の最終ダメージ計算はどちらもbossDamage()へ集約する。
-  */
-  sound(p.cur===1?90:220,.08,p.cur===2?"sawtooth":"square",.025);
-  if(c.shot){shots.push({x:p.x+9,y:p.y+12,vx:p.face*5.4,vy:0,owner:0,dmg:c.dmg,post:c.post,col:c.col,life:150});return}
-  const q={x:p.face>0?p.x+15:p.x-c.reach,y:p.y+2,w:c.reach,h:29};
-  if(hit(q,boxBoss()))bossDamage(c.dmg,c.post,"melee");
+function playerStrike(){
+  // 攻撃モーションのHERO.hitフレームから一度だけ呼ばれる近接判定。
+  sound(150,.08,"square",.025);
+  const q={x:p.face>0?p.x+15:p.x-HERO.reach,y:p.y+2,w:HERO.reach,h:29};
+  if(hit(q,boxBoss()))bossDamage(HERO.dmg,HERO.post,"melee");
 }
 function bossDamage(dmg,post,kind){
   /*
@@ -559,17 +578,13 @@ function hurtPlayer(dmg,id){
   プレイヤー被弾の唯一の入口。
 
   idは「攻撃番号:多段番号」。activeが5～12f継続しても、同じ段から受ける
-  ダメージは一回だけ。被弾後42fの無敵を付け、HP0ならそのキャラをdownにする。
-  残りキャラがいれば60f無敵で自動交代し、いなければdead画面へ移る。
+  ダメージは一回だけ。被弾後42fの無敵を付ける。HP0で即敗北 —
+  逃げ場は残機ではなくスタミナ1本だけ（根の 1.5）。
   */
   if(mode!=="fight"||p.inv||isRollInv()||p.lastHit===id)return;
-  p.lastHit=id;p.hp[p.cur]=Math.max(0,p.hp[p.cur]-dmg);p.inv=42;run.hits++;shake=5;freeze=4;
-  spark(p.x+9,p.y+12,CHAR[p.cur].col,12);sound(75,.16,"sawtooth",.045);
-  if(!p.hp[p.cur]){
-    const fallen=CHAR[p.cur].name;p.down[p.cur]=1;const n=aliveNext();
-    if(n<0){mode="dead";say("THE PRISM GOES DARK",999);return}
-    p.cur=n;p.inv=60;p.swapCd=60;say(fallen+" FALLS",80);
-  }
+  p.lastHit=id;p.hp=Math.max(0,p.hp-dmg);p.inv=42;run.hits++;shake=5;freeze=4;
+  spark(p.x+9,p.y+12,HERO.col,12);sound(75,.16,"sawtooth",.045);
+  if(!p.hp){mode="dead";say("THE PRISM GOES DARK",999);return}
   begin("hit");p.vy=-2.4;p.vx=b.x>p.x?-2:2;
 }
 function parryBoss(id){
@@ -818,18 +833,15 @@ function drawTelegraph(){
   }else if(m[S]!==4){const span=ACTIVE[m[A]-1]+10,pulse=Math.min(m[N]-1,(b.timer/span)|0),local=b.timer%span;if(local<ACTIVE[m[A]-1]){const q=moveRect(m,pulse);cx.globalAlpha=.45;cx.fillStyle=col;cx.fillRect(q.x,q.y,q.w,q.h)}}
   cx.globalAlpha=1;
 }
-function drawPerson(x,y,scale,col,kind,active=0){
+function drawPerson(x,y,scale,col,active=0){
   cx.save();cx.translate(x,y);cx.scale(scale,scale);cx.lineCap="round";cx.strokeStyle=col;cx.fillStyle=col;cx.lineWidth=3;
   const lean=active&&p.action==="roll"?8:0;
   cx.beginPath();cx.arc(0,-22+lean,5,0,6.3);cx.fill();cx.beginPath();cx.moveTo(0,-17+lean);cx.lineTo(0,0);cx.lineTo(-6,12);cx.moveTo(0,0);cx.lineTo(7,12);cx.moveTo(0,-12+lean);cx.lineTo(-8,-2);cx.moveTo(0,-11+lean);cx.lineTo(9,-4);cx.stroke();
-  if(kind===0){cx.beginPath();cx.moveTo(2,-27+lean);cx.lineTo(9,-35+lean);cx.strokeStyle=PAL[6];cx.stroke()}
-  if(kind===1){cx.beginPath();cx.moveTo(8,-5);cx.lineTo(25,-20);cx.strokeStyle=PAL[0];cx.lineWidth=5;cx.stroke()}
-  if(kind===2){cx.beginPath();cx.moveTo(8,-5);cx.lineTo(19,-9);cx.strokeStyle=PAL[4];cx.stroke()}
+  cx.beginPath();cx.moveTo(8,-5);cx.lineTo(24,-17);cx.strokeStyle=PAL[6];cx.lineWidth=4;cx.stroke();
   cx.restore();
 }
-function drawParty(){
-  for(let i=0;i<3;i++)if(i!==p.cur&&!p.down[i]){cx.globalAlpha=.35;drawPerson(p.x+9+(i-p.cur)*24,FLOOR-10,.58,CHAR[i].col,i);cx.globalAlpha=1}
-  if(!p.down[p.cur]){cx.save();if(isRollInv())cx.globalAlpha=.55;drawPerson(p.x+9,p.y+18,1,CHAR[p.cur].col,p.cur,1);cx.restore()}
+function drawHero(){
+  cx.save();if(isRollInv())cx.globalAlpha=.55;drawPerson(p.x+9,p.y+18,1,HERO.col,1);cx.restore();
   if(p.action==="parry"){cx.strokeStyle="#fff";cx.globalAlpha=isParry()?1:.25;cx.beginPath();cx.arc(p.x+9+p.face*9,p.y+13,12,-1.4,1.4);cx.stroke();cx.globalAlpha=1}
 }
 function drawBoss(){
@@ -845,10 +857,14 @@ function hud(){
   text(`PRISM ${run.boss+1}/3  ${b.name}`,20,20,11,PAL[b.hue]);text(`SEED ${seedText()}`,620,20,9,"#777b99","right");
   bar(20,28,390,8,b.hp,b.maxHp,PAL[b.hue]);bar(20,39,390,4,b.posture,b.maxPosture,"#f2e6a2");
   if(b.defense)text(DEF_NAME[b.defense]+(b.defense===2&&b.barrier?" BROKEN":""),420,43,9,PAL[3]);
-  for(let i=0;i<3;i++){
-    const x=20+i*122,on=i===p.cur;cx.globalAlpha=p.down[i]?.28:1;text(CHAR[i].name,x,334,9,on?CHAR[i].col:"#777b99");
-    bar(x,339,108,5,p.hp[i],CHAR[i].hp,CHAR[i].col);bar(x,347,108,3,p.st[i],100,"#e7d96d");cx.globalAlpha=1;
-  }
+  /*
+  バーは色ではなく位置と太さで区別する（上=敵/下=自分、太い=命/細い=崩れ・資源）。
+  グレースケールでも4本を見分けられる（根の不変条件11）。
+  スタミナには「ロール24」「パリィ18」の必要量に目盛りを置く。残量がそれを
+  下回っているかが一目で分かる（design/tree/read/frame/hud の decision-3）。
+  */
+  bar(20,339,150,5,p.hp,HERO.hp,HERO.col);bar(20,347,150,3,p.st,100,"#e7d96d");
+  cx.fillStyle="#8a8298";for(const n of[18,24])cx.fillRect(21+148*(n/100),346,1,5);
   if(msgTime)text(msg,CW/2,68,12,"#fff","center");
 }
 function overlay(title,sub,action){
@@ -865,7 +881,7 @@ function draw(){
   background();cx.save();if(shake){cx.translate((Math.random()-.5)*shake,(Math.random()-.5)*shake);shake*=.82;if(shake<.3)shake=0}
   if(mode!=="title"){
     drawTelegraph();for(const s of shots){cx.fillStyle=s.col;cx.globalAlpha=.9;cx.fillRect(s.x-5,s.y-3,10,6)}cx.globalAlpha=1;
-    drawParty();drawBoss();for(const q of parts){cx.globalAlpha=q.life/30;cx.fillStyle=q.col;cx.fillRect(q.x,q.y,2,2)}cx.globalAlpha=1;hud();
+    drawHero();drawBoss();for(const q of parts){cx.globalAlpha=q.life/30;cx.fillStyle=q.col;cx.fillRect(q.x,q.y,2,2)}cx.globalAlpha=1;hud();
   }
   cx.restore();
   if(mode==="title"){
@@ -874,7 +890,7 @@ function draw(){
     text("GENERATED FOES. LEARNABLE ATTACKS.",CW/2,211,10,"#777b99","center");text("SEED  "+seedText(),CW/2,244,12,"#c4c6dc","center");text("ENTER  BEGIN    N  NEW SEED",CW/2,280,11,"#ead85b","center");
   }else if(mode==="dead")overlay("YOU FELL",b.name+" remembers every move.","ENTER / R  RETRY SAME FOE     N  NEW SEED");
   else if(mode==="bosswin")overlay("PRISM SHATTERED",`${b.name} · ${Math.round((b.maxHp-b.hp)||b.maxHp)} LIGHT`,run.boss===2?"ENTER  RESULTS":"ENTER  DESCEND");
-  else if(mode==="result")overlay("RAINBOW RESTORED",`TIME ${Math.floor(run.time/3600)}:${String(Math.floor(run.time/60)%60).padStart(2,"0")}  ·  HITS ${run.hits}  ·  PARRIES ${run.parries}  ·  SWAPS ${run.swaps}`,`SEED ${seedText()}     R  REPLAY     ENTER  NEW RUN`);
+  else if(mode==="result")overlay("RAINBOW RESTORED",`TIME ${Math.floor(run.time/3600)}:${String(Math.floor(run.time/60)%60).padStart(2,"0")}  ·  HITS ${run.hits}  ·  PARRIES ${run.parries}`,`SEED ${seedText()}     R  REPLAY     ENTER  NEW RUN`);
   else if(mode==="pause")overlay("PAUSED","The duel waits.","ENTER / ESC  RESUME");
 }
 function loop(now){
