@@ -85,15 +85,49 @@ const DMG_COST=[0,1,3,6,9],RANGE_COST=[0,0,1,3,5],WIND_COST=[0,4,2,0,-2],REC_COS
   1体で1分を超えて初見の集中が切れる。
 
   hp    最大HP
-  cost  通常攻撃のスタミナ消費（100/14 = 連続7回で枯れる）
-  dmg   ボスHPへ与えるダメージ
-  post  ボス体勢へ与えるダメージ
-  hit   攻撃開始から判定発生までのフレーム
-  end   攻撃全体が終了するフレーム
-  reach 近接判定の長さ
+  post  1段あたりのボス体勢ダメージ（多段ほど体勢を削れる）
   roll  ローリング中の横速度
+
+  攻撃の性能は所持技(p.hold)が持つ。HEROは攻撃固有値を持たない。
 */
-const HERO={col:"#f3f0ff",hp:14,cost:14,dmg:7,post:3,hit:9,end:22,reach:46,roll:5.0};
+/*
+奪取（根の 1.10）
+=================
+倒したボスの技を1つ選んで持ち帰り、プレイヤーの攻撃を置き換える。
+所持は常に1つで、増えない。攻撃力は正規化するので強くならない——
+変わるのは間合いと速さだけ（根の不変条件13）。
+
+steal(m) -> プレイヤー版の技
+
+  引き継ぐ: 形状 S / 射程 R / 予備動作 W / 持続 A / 硬直 C / 多段 N
+  固定する: 威力 D は段3へ正規化（DMG_COST[3]=6）
+  捨てる  : 追尾 T（プレイヤーは標的を持たない）、宣言 F（避ける側の値）
+
+  消費はボスと同じthreat()で測る。射程・速さ・多段は加点で高くなり、
+  長い硬直は減点で安くなる。「強い技ほど撃てない」が式1本で成立する。
+
+  HPダメージは合計7を段数で割り、余りを前の段から配る（[7]/[4,3]/[3,2,2]）。
+  総ダメージが変わらないので、多段の利点は体勢削りだけになる。
+*/
+const HOLD_D=3;
+function steal(m){
+  const t=[m[S],HOLD_D,m[R],m[W],m[A],m[C],0,m[N],0];
+  t.cost=Math.max(12,Math.min(40,10+threat(t)*2));
+  // HPダメージは合計7を段数で割り、余りを前の段から配る（[7]/[4,3]/[3,2,2]）
+  t.seg=[];for(let i=0;i<m[N];i++)t.seg.push((7/m[N]|0)+(i<7%m[N]?1:0));
+  /*
+  予備動作は「段だけ」引き継ぎ、実フレームは半分にする。
+  ボスの予備動作はプレイヤーに読ませるための時間だが、プレイヤーは自分で
+  撃つので読ませる必要がない。80Fのまま撃つと1.3秒かかって攻撃にならない。
+  段の順序（速い技ほど速い）は保たれるので、危険度＝消費の関係は崩れない。
+  */
+  t.wind=WIND[m[W]-1]>>1;
+  return t;
+}
+// 素手。奪取の出発点。発生9F・消費14は変換表の外の固定値（設計 1.2.1）
+function bareHand(){const t=steal([1,3,1,3,1,2,0,1,0]);t.cost=14;t.wind=9;t.bare=1;return t}
+
+const HERO={col:"#f3f0ff",hp:14,post:1,roll:5.0};
 
 /*
 seeded(seed) -> 0以上1未満を返す関数
@@ -376,7 +410,7 @@ function validateBoss(b){
 
 ---------------------------------------------------------------------------- */
 
-let cv,cx,mode="title",seed=1,run,p,b,keys={},tap={},shots=[],parts=[],stars=[];
+let cv,cx,mode="title",seed=1,run,p,b,take=null,keys={},tap={},shots=[],parts=[],stars=[];
 let acc=0,last=0,freeze=0,shake=0,msg="",msgTime=0,audio;
 
 /*
@@ -430,7 +464,7 @@ function seedText(){return(seed>>>0).toString(36).toUpperCase().padStart(6,"0")}
 
 function newRun(s=seed){
   // ランを完全初期化。Rで同じランを再開するときだけ同じseedを渡す。
-  seed=s>>>0;run={boss:0,time:0,hits:0,parries:0};startBoss();
+  seed=s>>>0;run={boss:0,time:0,hits:0,parries:0};p=null;startBoss();
 }
 function startBoss(){
   /*
@@ -456,7 +490,8 @@ function startBoss(){
     deck:[],move:0,attack:0,pulse:0,target:140,aimY:FLOOR-18,targets:[],lastGuard:-1,attacks:0,broken:0,barrier:0,mutated:0};
   p={x:125,y:FLOOR-30,vx:0,vy:0,face:1,ground:1,coyote:6,
     hp:HERO.hp,st:100,delay:0,
-    action:"",timer:0,inv:0,lastHit:"",jumpBuf:0,actBuf:0,parryBuf:0,rollBuf:0};
+    action:"",timer:0,inv:0,lastHit:"",jumpBuf:0,actBuf:0,parryBuf:0,rollBuf:0,
+    hold:p&&p.hold?p.hold:bareHand(),attack:0,pulse:-1,hitId:"",aim:0,targets:[0]};
   shots=[];parts=[];mode="fight";say("READ THE COLORS. LEARN THE RHYTHM.",120);
 }
 function say(t,n=70){msg=t;msgTime=n}
@@ -506,8 +541,9 @@ function playerStep(){
     // 行動中は原則キャンセル不可。パリィ成功だけがp.actionを直接解除する。
     p.timer++;
     if(p.action==="attack"){
-      if(p.timer===HERO.hit)playerStrike();
-      if(p.timer>=HERO.end)p.action="";
+      // 所持技の予備動作(W)で発生し、硬直(C)で終わる。ボスと同じ変換表を使う。
+      heroStrike();
+      if(p.timer>=p.hold.wind+(ACTIVE[p.hold[A]-1]+10)*p.hold[N]+REC[p.hold[C]-1])p.action="";
     }else if(p.action==="roll"){
       p.vx=p.face*HERO.roll;
       if(p.timer>=24)p.action="";
@@ -522,7 +558,7 @@ function playerStep(){
     p.vx=d*2.45;if(d)p.face=d;
     if(p.rollBuf&&p.ground&&spend(24)){p.rollBuf=0;begin("roll");sound(110,.05,"sine",.02)}
     else if(p.parryBuf&&spend(18)){p.parryBuf=0;begin("parry");sound(280,.04,"triangle",.02)}
-    else if(p.actBuf&&spend(HERO.cost)){p.actBuf=0;begin("attack")}
+    else if(p.actBuf&&spend(p.hold.cost)){p.actBuf=0;begin("attack");p.aim=p.x+p.face*REACH[p.hold[R]-1];p.hitId=""}
   }
   if(p.ground)p.coyote=6;else p.coyote=Math.max(0,p.coyote-1);
   // coyoteは床を離れた後6f、jumpBufは押してから7f残る。この二つが重なれば跳ぶ。
@@ -536,11 +572,25 @@ function playerStep(){
   if(p.y>=FLOOR-30){p.y=FLOOR-30;p.vy=0;p.ground=1}else p.ground=0;
   if(hit(boxPlayer(),boxBoss())&&p.action!=="roll")p.x=b.x>p.x?b.x-13:b.x+38;
 }
-function playerStrike(){
-  // 攻撃モーションのHERO.hitフレームから一度だけ呼ばれる近接判定。
-  sound(150,.08,"square",.025);
-  const q={x:p.face>0?p.x+15:p.x-HERO.reach,y:p.y+2,w:HERO.reach,h:29};
-  if(hit(q,boxBoss()))bossDamage(HERO.dmg,HERO.post,"melee");
+function heroStrike(){
+  /*
+  所持技の1フレーム。ボスのactiveBossMove()と同じ時間割で動く。
+  予備動作が終わってから、段ごとに判定を出す。展開はmoveRect()を共有するので、
+  「見えているものと当たるもの」がプレイヤー側でも一致する（不変条件8）。
+  */
+  const m=p.hold,w=m.wind,span=ACTIVE[m[A]-1]+10,t=p.timer-w;
+  if(t<0){if(p.timer===w-1&&m[S]===5)p.targets=[p.aim];return}
+  if(p.timer===w)sound(150,.08,"square",.025);
+  const pulse=Math.min(m[N]-1,(t/span)|0),local=t%span;
+  if(m[S]===4){ // 弾は段の開始で一発だけ生成する
+    if(local===0&&p.pulse!==pulse){p.pulse=pulse;
+      shots.push({x:p.x+9,y:p.y+12,vx:p.face*5.4,vy:0,owner:0,dmg:m.seg[pulse],post:HERO.post,col:HOLD_COL(m),life:150});}
+    return;
+  }
+  if(local>=ACTIVE[m[A]-1])return;
+  if(m[S]===3)p.x=clamp(p.x+p.face*(3.2+m[R]*.72),20,CW-38); // 突進は自分が前へ出る
+  const id=p.attack+":"+pulse;
+  if(p.hitId!==id&&hit(moveRect(m,pulse,p),boxBoss())){p.hitId=id;bossDamage(m.seg[pulse],HERO.post,"melee")}
 }
 function bossDamage(dmg,post,kind){
   /*
@@ -565,7 +615,14 @@ function bossDamage(dmg,post,kind){
   if(b.phase==="recover"||b.phase==="stagger")dmg*=1.25;
   b.hp=Math.max(0,b.hp-dmg);b.posture=Math.max(0,b.posture-post);
   spark(b.x+20,b.y+28,PAL[b.hue],7);freeze=kind==="melee"?3:1;shake=kind==="melee"?3:1;
-  if(b.hp<=0){mode="bosswin";sound(70,.5,"sawtooth",.05);return}
+  if(b.hp<=0){
+    /*
+    撃破。奪取の候補をここで組み立てる（設計 arena の 1.4.1）。
+    倒したボスの全技＋今の所持技。選ぶのはduel側で、readは描くだけ。
+    */
+    mode="bosswin";take={list:b.moves.map(steal).concat([p.hold]),i:0};
+    sound(70,.5,"sawtooth",.05);return;
+  }
   if(b.tier===2&&!b.mutated&&b.hp<=b.maxHp/2){
     // 最終形態は既知の固有技を強化するだけで、別の回避規則には変えない。
     b.mutated=1;const m=b.moves[b.moves.length-1];m[D]=Math.min(4,m[D]+1);m[W]=Math.min(4,m[W]+1);m[C]=Math.min(4,m[C]+1);harden(m);
@@ -692,7 +749,12 @@ function bossStep(){
   }
   b.x=clamp(b.x,45,CW-65);
 }
-function moveRect(m,pulse=0){
+function moveRect(m,pulse=0,src=b){
+  /*
+  srcは展開の原点。ボス(b)でもプレイヤー(p)でも同じ規則を通す。
+  設計 design/tree/duel の 13.1「プレイヤー原点での展開」——
+  原点と向きを差し替えるだけで、別の展開器を持たない。
+  */
   /*
   Moveから現在段のAABB矩形{x,y,w,h}を作る。
 
@@ -706,12 +768,13 @@ function moveRect(m,pulse=0){
   drawTelegraph()とbossContact()が同じ戻り値を使う。表示用の範囲を別に持つと
   「見た目より判定が広い」事故が起きるため、ここを唯一の形状定義にする。
   */
-  const reach=REACH[m[R]-1],dir=b.face;
-  if(m[S]===0)return{x:dir<0?b.x-reach:b.x+40,y:FLOOR-24,w:reach,h:24};
-  if(m[S]===1)return{x:dir<0?b.x-reach:b.x+38,y:b.y+26,w:reach,h:18};
-  if(m[S]===2)return{x:b.x-reach*.55,y:FLOOR-57,w:reach+44,h:57};
-  if(m[S]===3)return boxBoss();
-  if(m[S]===5){const w=28+m[R]*9;return{x:b.targets[pulse]-w/2,y:18,w,h:FLOOR-18}}
+  const reach=REACH[m[R]-1],dir=src.face,hero=src!==b,ox=src.x,oy=src.y;
+  const fw=hero?12:40,bw=hero?12:38;
+  if(m[S]===0)return{x:dir<0?ox-reach:ox+fw,y:FLOOR-24,w:reach,h:24};
+  if(m[S]===1)return{x:dir<0?ox-reach:ox+bw,y:oy+(hero?4:26),w:reach,h:18};
+  if(m[S]===2)return{x:ox-reach*.55,y:FLOOR-57,w:reach+44,h:57};
+  if(m[S]===3)return hero?boxPlayer():boxBoss();
+  if(m[S]===5){const w=28+m[R]*9,t=src.targets[pulse];return{x:t-w/2,y:18,w,h:FLOOR-18}}
   return{x:0,y:0,w:0,h:0};
 }
 function activeBossMove(){
@@ -789,7 +852,13 @@ function step(){
     if(pressed("Enter","KeyR"))startBoss();
     if(pressed("KeyN")){seed=(Math.random()*0xffffffff)>>>0;mode="title"}
   }else if(mode==="bosswin"){
-    if(pressed("Enter")){run.boss++;if(run.boss>=3)mode="result";else startBoss()}
+    // カーソルはduel側が持つ。readは位置を描くだけ（片方向性の保持）。
+    if(pressed("ArrowLeft","KeyA"))take.i=(take.i+take.list.length-1)%take.list.length;
+    if(pressed("ArrowRight","KeyD"))take.i=(take.i+1)%take.list.length;
+    if(pressed("Enter")){
+      p.hold=take.list[take.i];take=null;sound(520,.1,"square",.04);
+      run.boss++;if(run.boss>=3)mode="result";else startBoss();
+    }
   }else if(mode==="result"){
     if(pressed("KeyR"))newRun(seed);
     if(pressed("Enter","KeyN")){seed=(Math.random()*0xffffffff)>>>0;mode="title"}
@@ -814,6 +883,23 @@ function background(){
   for(const s of stars){cx.globalAlpha=.25+s[2]*.2;cx.fillStyle="#b8c9ff";cx.fillRect(s[0],s[1],s[2],s[2])}cx.globalAlpha=1;
   cx.fillStyle="#1f1830";for(let x=0;x<CW;x+=58)cx.fillRect(x,230+(x%3)*8,34,77);
   cx.fillStyle="#2b2038";cx.fillRect(0,FLOOR,CW,CH-FLOOR);cx.fillStyle="#594569";cx.fillRect(0,FLOOR,CW,2);
+}
+/*
+HOLD_COL(m) -> 奪取技の色
+
+設計 design/tree/duel の 13.2。変換後の値で決め直すので、
+「追尾を捨てたのに藍のまま」のような嘘が出ない。
+出るのは黄(高速)/青(長射程)/紫(多段)/橙(長持続)の4色だけ。
+赤は威力を正規化するため、藍は追尾を捨てるため、緑は攻撃技でないため出ない。
+*/
+function HOLD_COL(m){
+  // 判定は変換後の実フレームで行う。段のままだと予備動作の半減が反映されない。
+  if(m.bare)return "#c9c6d8";          // 素手は出発点なので無色
+  if(m[N]>1)return PAL[6];             // 紫 多段
+  if(m[A]===3)return PAL[1];           // 橙 長持続
+  if(m[R]===4)return PAL[4];           // 青 長射程
+  if(m.wind<=18)return PAL[2];         // 黄 高速（実フレーム 18F 以下）
+  return "#c9c6d8";
 }
 function attackColor(m){
   if(m[D]>=4)return PAL[0];if(m[T]>=1)return PAL[5];if(m[W]===1)return PAL[2];if(m[R]===4)return PAL[4];if(m[N]>1)return PAL[6];return PAL[b.hue];
@@ -868,8 +954,40 @@ function hud(){
   下回っているかが一目で分かる（design/tree/read/frame/hud の decision-3）。
   */
   bar(20,339,150,5,p.hp,HERO.hp,HERO.col);bar(20,347,150,3,p.st,100,"#e7d96d");
-  cx.fillStyle="#8a8298";for(const n of[18,24])cx.fillRect(21+148*(n/100),346,1,5);
+  cx.fillStyle="#8a8298";for(const n of[18,24,p.hold.cost])cx.fillRect(21+148*(n/100),346,1,5);
+  // 所持技を常時出す。スタミナの目盛りと並べて読めるようにする（設計 hud）。
+  const m=p.hold;cx.fillStyle=HOLD_COL(m);cx.fillRect(180,340,4,4);
+  text(SHAPE_NAME[m[S]]+"  "+m.cost+"ST",190,344,9,"#c4c6dc");
   if(msgTime)text(msg,CW/2,68,12,"#fff","center");
+}
+function drawTake(){
+  /*
+  撃破画面が奪取の選択画面を兼ねる（設計 screens の 1.2.1）。
+  根の 1.1 の7が既にここで技構成を出しているので、画面を増やさない。
+
+  威力は表示しない。正規化されて全部同じなので、並べると「どれも同じ」に見えて
+  選ぶ意味が消える。出すのは間合いと速さと代償だけ——それが実際に変わるもの。
+  */
+  cx.fillStyle="#080914e8";cx.fillRect(24,60,CW-48,240);
+  text("PRISM SHATTERED",CW/2,96,22,"#f0efff","center");
+  text("TAKE ONE MOVE   ←/→ CHOOSE   ENTER CONFIRM",CW/2,120,10,"#a3a6c2","center");
+  const n=take.list.length,w=Math.min(96,(CW-80)/n);
+  take.list.forEach((m,i)=>{
+    const x=CW/2+(i-(n-1)/2)*w,on=i===take.i,own=m===p.hold;
+    cx.globalAlpha=on?1:.4;
+    cx.strokeStyle=on?"#fff":"#4a4760";cx.lineWidth=on?2:1;
+    cx.strokeRect(x-w/2+3,146,w-6,116);
+    cx.fillStyle=HOLD_COL(m);cx.fillRect(x-w/2+3,146,w-6,4);
+    text(SHAPE_NAME[m[S]],x,168,10,"#f0efff","center");
+    text(REACH[m[R]-1]+"px",x,186,9,"#c4c6dc","center");
+    text(WIND[m[W]-1]+"F WIND",x,200,8,"#9a9cb4","center");
+    text(REC[m[C]-1]+"F REC",x,212,8,"#9a9cb4","center");
+    if(m[N]>1)text(m[N]+" HITS",x,224,8,"#9a9cb4","center");
+    text(m.cost+" ST",x,240,10,m.cost>26?"#ed596f":"#e7d96d","center");
+    if(own)text("HELD",x,256,8,"#5dcc8a","center");
+    cx.globalAlpha=1;
+  });
+  text(b.name+" · "+(run.boss===2?"LAST PRISM":"PRISM "+(run.boss+2)+"/3 NEXT"),CW/2,285,9,"#777b99","center");
 }
 function overlay(title,sub,action){
   cx.fillStyle="#080914d9";cx.fillRect(85,78,470,206);text(title,CW/2,126,28,"#f0efff","center");text(sub,CW/2,160,11,"#a3a6c2","center");text(action,CW/2,246,12,"#ead85b","center");
@@ -893,7 +1011,7 @@ function draw(){
     for(let i=0;i<7;i++){cx.fillStyle=PAL[i];cx.fillRect(224+i*28,177,22,3+i%2*3)}
     text("GENERATED FOES. LEARNABLE ATTACKS.",CW/2,211,10,"#777b99","center");text("SEED  "+seedText(),CW/2,244,12,"#c4c6dc","center");text("ENTER  BEGIN    N  NEW SEED",CW/2,280,11,"#ead85b","center");
   }else if(mode==="dead")overlay("YOU FELL",b.name+" remembers every move.","ENTER / R  RETRY SAME FOE     N  NEW SEED");
-  else if(mode==="bosswin")overlay("PRISM SHATTERED",`${b.name} · ${Math.round((b.maxHp-b.hp)||b.maxHp)} LIGHT`,run.boss===2?"ENTER  RESULTS":"ENTER  DESCEND");
+  else if(mode==="bosswin")drawTake();
   else if(mode==="result")overlay("RAINBOW RESTORED",`TIME ${Math.floor(run.time/3600)}:${String(Math.floor(run.time/60)%60).padStart(2,"0")}  ·  HITS ${run.hits}  ·  PARRIES ${run.parries}`,`SEED ${seedText()}     R  REPLAY     ENTER  NEW RUN`);
   else if(mode==="pause")overlay("PAUSED","The duel waits.","ENTER / ESC  RESUME");
 }
