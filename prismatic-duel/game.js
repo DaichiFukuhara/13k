@@ -78,10 +78,14 @@ const DMG_COST=[0,1,3,6,9],RANGE_COST=[0,0,1,3,5],WIND_COST=[0,4,2,0,-2],REC_COS
 設計ツリー design/tree/duel の decision-5 で凍結:
   操作キャラは1人。残機・控え・交代を持たない（根の 1.5 / 親に残すもの8）。
   最大HP 14 は、旧3人構成の生HP合計25の56%。交代の猶予が消えるぶん単純比では足りない。
-  難易度はボス側の危険度合計上限（limits の cap）で釣り合わせる。
+  難易度はボス側の危険度合計上限（budgetCap）で釣り合わせる。
+
+  dmg 7 / cost 14 はスタミナ制約込みの撃破時間から決めた。回復0.3/F・消費後30F停止で、
+  ボスHP 120/160/210 に対し 16/21/28 回・約 14/20/29 秒。dmg 4 だと 33/45/61 秒かかり、
+  1体で1分を超えて初見の集中が切れる。
 
   hp    最大HP
-  cost  通常攻撃のスタミナ消費
+  cost  通常攻撃のスタミナ消費（100/14 = 連続7回で枯れる）
   dmg   ボスHPへ与えるダメージ
   post  ボス体勢へ与えるダメージ
   hit   攻撃開始から判定発生までのフレーム
@@ -89,7 +93,7 @@ const DMG_COST=[0,1,3,6,9],RANGE_COST=[0,0,1,3,5],WIND_COST=[0,4,2,0,-2],REC_COS
   reach 近接判定の長さ
   roll  ローリング中の横速度
 */
-const HERO={col:"#f3f0ff",hp:14,cost:16,dmg:4,post:2,hit:10,end:24,reach:46,roll:5.0};
+const HERO={col:"#f3f0ff",hp:14,cost:14,dmg:7,post:3,hit:9,end:22,reach:46,roll:5.0};
 
 /*
 seeded(seed) -> 0以上1未満を返す関数
