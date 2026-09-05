@@ -262,7 +262,8 @@ function makeMove(r,shape,tier,signature){
   if(signature&&tier===2&&r()>.82)repeat=3;
   if(signature&&r()>.7)active=3;
   let flags=MOVEABLE;
-  if(shape===0||shape===1||shape===3)flags|=PARRY;
+  // SHOTは弾をパリィで反射できる。宣言と実装を一本にする（設計 duel の 4.1）
+  if(shape===0||shape===1||shape===3||shape===4)flags|=PARRY;
   if(shape===0||shape===3)flags|=JUMPABLE;
   return balance([shape,damage,range,wind,active,recovery,track,repeat,flags],tier,signature);
 }
@@ -558,7 +559,12 @@ function playerStep(){
     p.vx=d*2.45;if(d)p.face=d;
     if(p.rollBuf&&p.ground&&spend(24)){p.rollBuf=0;begin("roll");sound(110,.05,"sine",.02)}
     else if(p.parryBuf&&spend(18)){p.parryBuf=0;begin("parry");sound(280,.04,"triangle",.02)}
-    else if(p.actBuf&&spend(p.hold.cost)){p.actBuf=0;begin("attack");p.aim=p.x+p.face*REACH[p.hold[R]-1];p.hitId=""}
+    else if(p.actBuf&&spend(p.hold.cost)){
+      p.actBuf=0;begin("attack");p.attack++;p.pulse=-1;p.hitId="";
+      // RAINは全段ぶんの落下Xをここで確定する（攻撃開始後は動かない・不変条件7）
+      const m=p.hold,base=p.x+p.face*REACH[m[R]-1];p.targets=[];
+      for(let i=0;i<m[N];i++)p.targets.push(clamp(base+(i?((i%2?1:-1)*(55+18*i)):0),30,CW-30));
+    }
   }
   if(p.ground)p.coyote=6;else p.coyote=Math.max(0,p.coyote-1);
   // coyoteは床を離れた後6f、jumpBufは押してから7f残る。この二つが重なれば跳ぶ。
@@ -579,11 +585,11 @@ function heroStrike(){
   「見えているものと当たるもの」がプレイヤー側でも一致する（不変条件8）。
   */
   const m=p.hold,w=m.wind,span=ACTIVE[m[A]-1]+10,t=p.timer-w;
-  if(t<0){if(p.timer===w-1&&m[S]===5)p.targets=[p.aim];return}
+  if(t<0)return;
   if(p.timer===w)sound(150,.08,"square",.025);
   const pulse=Math.min(m[N]-1,(t/span)|0),local=t%span;
-  if(m[S]===4){ // 弾は段の開始で一発だけ生成する
-    if(local===0&&p.pulse!==pulse){p.pulse=pulse;
+  if(m[S]===4){ // 弾は段が変わった最初のフレームで一発だけ生成する
+    if(p.pulse!==pulse){p.pulse=pulse;
       shots.push({x:p.x+9,y:p.y+12,vx:p.face*5.4,vy:0,owner:0,dmg:m.seg[pulse],post:HERO.post,col:HOLD_COL(m),life:150});}
     return;
   }
@@ -893,12 +899,15 @@ HOLD_COL(m) -> 奪取技の色
 赤は威力を正規化するため、藍は追尾を捨てるため、緑は攻撃技でないため出ない。
 */
 function HOLD_COL(m){
-  // 判定は変換後の実フレームで行う。段のままだと予備動作の半減が反映されない。
+  /*
+  優先順は設計 design/tree/read/tell/palette の 1.2.1 と同じ 黄→青→紫→橙。
+  判定は変換後の実フレームで行う（段のままだと予備動作の半減が反映されない）。
+  */
   if(m.bare)return "#c9c6d8";          // 素手は出発点なので無色
+  if(m.wind<=18)return PAL[2];         // 黄 高速（実フレーム18F以下）
+  if(m[R]===4)return PAL[4];           // 青 長射程
   if(m[N]>1)return PAL[6];             // 紫 多段
   if(m[A]===3)return PAL[1];           // 橙 長持続
-  if(m[R]===4)return PAL[4];           // 青 長射程
-  if(m.wind<=18)return PAL[2];         // 黄 高速（実フレーム 18F 以下）
   return "#c9c6d8";
 }
 function attackColor(m){
@@ -980,7 +989,7 @@ function drawTake(){
     cx.fillStyle=HOLD_COL(m);cx.fillRect(x-w/2+3,146,w-6,4);
     text(SHAPE_NAME[m[S]],x,168,10,"#f0efff","center");
     text(REACH[m[R]-1]+"px",x,186,9,"#c4c6dc","center");
-    text(WIND[m[W]-1]+"F WIND",x,200,8,"#9a9cb4","center");
+    text(m.wind+"F WIND",x,200,8,"#9a9cb4","center");
     text(REC[m[C]-1]+"F REC",x,212,8,"#9a9cb4","center");
     if(m[N]>1)text(m[N]+" HITS",x,224,8,"#9a9cb4","center");
     text(m.cost+" ST",x,240,10,m.cost>26?"#ed596f":"#e7d96d","center");

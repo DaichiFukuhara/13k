@@ -358,10 +358,10 @@ status: **approved**（`tell@2026-09-05-split-4` / **人間の承認 `root@2026-
 
 | 種別 | 版参照 | status |
 | --- | --- | --- |
-| **決定** | `tell@2026-09-05-decision-4` | **active**（人間の承認 `approval-1`） |
+| **決定** | `tell@2026-09-05-decision-4` | **active**（人間の承認 `root@2026-09-06-approval-3`） |
 | **分割** | `tell@2026-09-05-split-4` | **active**（同上・`children-created`） |
 
-- **`tell@2026-09-04-decision-1`** / 承認者: **人間（DaichiFukuhara、`root@2026-09-06-approval-3` により）**/
+- **`tell@2026-09-05-decision-4`** / 承認者: **人間（DaichiFukuhara、`root@2026-09-06-approval-3` により）**/
   日時: 2026-09-05 / 種別: `decision` / 承認者の種別: **人間** / **status: active**
 
   **決定の要点**: **色を決める場所を `palette` 1箇所に閉じた。**
@@ -372,7 +372,7 @@ status: **approved**（`tell@2026-09-05-split-4` / **人間の承認 `root@2026-
   実装では `attackColor()` が描画関数の中に埋まっている
   （[`design/AS_BUILT.md`](../../../AS_BUILT.md) §3）。**そこを引き剥がす。**
 
-- **`tell@2026-09-04-split-1`** / 承認者: **人間（DaichiFukuhara、`root@2026-09-06-approval-3` により）**/
+- **`tell@2026-09-05-split-4`** / 承認者: **人間（DaichiFukuhara、`root@2026-09-06-approval-3` により）**/
   日時: 2026-09-05 / 種別: `split` / 承認者の種別: **人間** / **status: active**
 
   **前検査を経ずに承認した。**理由は `duel` の `split-2` の承認証跡と同じ。
