@@ -3,7 +3,7 @@ id: read.frame.hud
 parent: read.frame
 depth: 3
 children: []           # 深さ3は葉
-status: decision-approved   # hud@2026-09-05-decision-4（人間の承認 root@2026-09-05-approval-2）
+status: decision-approved   # hud@2026-09-05-decision-4（人間の承認 root@2026-09-06-approval-3）
 seams: []
 uses_seams: []
 ---
@@ -211,7 +211,7 @@ uses_seams: []
 
 **深さ3は子を作らないため、分割の承認は無い。**
 
-- **`hud@2026-09-05-decision-4`** / 承認者: **人間（DaichiFukuhara、`root@2026-09-05-approval-2` により）**/
+- **`hud@2026-09-05-decision-4`** / 承認者: **人間（DaichiFukuhara、`root@2026-09-06-approval-3` により）**/
   日時: 2026-09-05 / 種別: `decision` / 承認者の種別: **人間** / **status: active**
 
   **決定の要点**: **4本のバーを、色ではなく位置と太さで区別する**と決めた
@@ -227,5 +227,5 @@ uses_seams: []
   `frame` にその規約が無く、`hud` は色の表を直接使う。
   **グレースケール検査は `hud` にも掛かるので、揃えたほうがよい可能性がある。**
 
-  **2026-09-04、人間が `root@2026-09-05-approval-2` で明示的に承認した。**
+  **2026-09-04、人間が `root@2026-09-06-approval-3` で明示的に承認した。**
   `waiver-1`（AI への委任）は深さ3到達をもって終了している。

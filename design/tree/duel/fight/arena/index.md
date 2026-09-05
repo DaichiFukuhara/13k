@@ -3,7 +3,7 @@ id: duel.fight.arena
 parent: duel.fight
 depth: 3
 children: []           # 深さ3は葉。分割しない
-status: decision-approved   # arena@2026-09-05-decision-5（人間の承認 root@2026-09-05-approval-2）
+status: decision-approved   # arena@2026-09-05-decision-5（人間の承認 root@2026-09-06-approval-3）
 seams: []
 uses_seams: [f1.avatar-state, f2.foe-state, d1.run-definition]
 ---
@@ -50,7 +50,7 @@ uses_seams: [f1.avatar-state, f2.foe-state, d1.run-definition]
 - **uses_seams**: `f1.avatar-state`, `f2.foe-state`, `d1.run-definition`
 - **提供する seam**: `f3.avatar-verdict` / `f4.foe-verdict`（兄弟へ）、
   **`s1.presentation-state`**（`fight` の代表として `duel` の `seam_inbox` 経由で `read` へ）
-- **parent_decision_ref**: `fight@2026-09-05-decision-4` ＋ `fight@2026-09-05-split-4`
+- **parent_decision_ref**: `fight@2026-09-06-decision-5` ＋ `fight@2026-09-06-split-5`
 
 ## 1. これは何を決めるものか
 
@@ -322,7 +322,7 @@ title ──► fight ──► bosswin ──► fight（次のボス）──�
 
 **深さ3は子を作らないため、分割の承認は無い。**
 
-- **`arena@2026-09-05-decision-5`** / 承認者: **人間（DaichiFukuhara、`root@2026-09-05-approval-2` により）**/
+- **`arena@2026-09-05-decision-5`** / 承認者: **人間（DaichiFukuhara、`root@2026-09-06-approval-3` により）**/
   日時: 2026-09-05 / 種別: `decision` / 承認者の種別: **人間** / **status: active**
   対象: 本文1〜7
 
@@ -337,5 +337,5 @@ title ──► fight ──► bosswin ──► fight（次のボス）──�
   受け入れ条件「宣言との一致」を主担当として引き受けた。
   **`gen.audit` が生成側から、`arena` が実行側から、同じ命題を両側で挟む形になる。**
 
-  **2026-09-04、人間が `root@2026-09-05-approval-2` で明示的に承認した。**
+  **2026-09-04、人間が `root@2026-09-06-approval-3` で明示的に承認した。**
   `waiver-1`（AI への委任）は深さ3到達をもって終了している。

@@ -3,7 +3,7 @@ id: read.frame.screens
 parent: read.frame
 depth: 3
 children: []           # 深さ3は葉
-status: decision-approved   # screens@2026-09-05-decision-5（人間の承認 root@2026-09-05-approval-2）
+status: decision-approved   # screens@2026-09-05-decision-5（人間の承認 root@2026-09-06-approval-3）
 seams: []
 uses_seams: []
 ---
@@ -258,7 +258,7 @@ title ──Enter──► fight ──撃破──► bosswin ──Enter──
 
 **深さ3は子を作らないため、分割の承認は無い。**
 
-- **`screens@2026-09-05-decision-5`** / 承認者: **人間（DaichiFukuhara、`root@2026-09-05-approval-2` により）**/
+- **`screens@2026-09-05-decision-5`** / 承認者: **人間（DaichiFukuhara、`root@2026-09-06-approval-3` により）**/
   日時: 2026-09-05 / 種別: `decision` / 承認者の種別: **人間** / **status: active**
 
   **決定の要点**: 「説明文を読まずに操作を理解する」を、
@@ -271,5 +271,5 @@ title ──Enter──► fight ──撃破──► bosswin ──Enter──
   `s1` の操作割当として `duel` が持つ形にしたが、
   `avatar` 側はそれを実装へ委任しており、**どちらも持っていない状態**になっている。
 
-  **2026-09-04、人間が `root@2026-09-05-approval-2` で明示的に承認した。**
+  **2026-09-04、人間が `root@2026-09-06-approval-3` で明示的に承認した。**
   `waiver-1`（AI への委任）は深さ3到達をもって終了している。

@@ -4,7 +4,7 @@ parent: duel
 depth: 2
 children: [move, audit, roster]
 status: children-created   # 決定 gen@2026-09-05-decision-3 / 分割 gen@2026-09-05-split-3。
-                        # いずれも人間の承認 root@2026-09-05-approval-2。
+                        # いずれも人間の承認 root@2026-09-06-approval-3。
                         # Codex 深さ3監査（2026-09-04・判定不能）の指摘を反映済み
 seams: [g1.move-request, g2.move-result, g3.audit-request, g4.audit-verdict]
 uses_seams: []          # gen は兄弟から何も受け取らない
@@ -70,7 +70,7 @@ uses_seams: []          # gen は兄弟から何も受け取らない
 
 - **開く順序**: **1番目**
 
-- **parent_decision_ref**: `duel@2026-09-05-decision-8` ＋ `duel@2026-09-05-split-5`
+- **parent_decision_ref**: `duel@2026-09-06-decision-9` ＋ `duel@2026-09-06-split-6`
 
 ## 1. これは何を決めるものか
 
@@ -226,7 +226,7 @@ uses_seams: []          # gen は兄弟から何も受け取らない
 
 ## 分割提案 gen-split-3
 
-status: **approved**（`gen@2026-09-05-split-3` / 人間の承認 `root@2026-09-05-approval-2`。`children-created`）
+status: **approved**（`gen@2026-09-05-split-3` / 人間の承認 `root@2026-09-06-approval-3`。`children-created`）
 前提: `gen@2026-09-05-decision-3`
 前検査: **深さ3全体監査で1回**（2026-09-04・Codex・判定不能）。指摘を反映済み
 
@@ -412,7 +412,7 @@ status: **approved**（`gen@2026-09-05-split-3` / 人間の承認 `root@2026-09-
 
 ---
 
-- **`gen@2026-09-05-decision-3`** / 承認者: **人間（DaichiFukuhara、`root@2026-09-05-approval-2` により）**/
+- **`gen@2026-09-05-decision-3`** / 承認者: **人間（DaichiFukuhara、`root@2026-09-06-approval-3` により）**/
   日時: 2026-09-05 / 種別: `decision` / 承認者の種別: **人間** / **status: active**
   対象: 本文1〜7（親の決定の詳細化と、それに伴う機能）
 
@@ -425,7 +425,7 @@ status: **approved**（`gen@2026-09-05-split-3` / 人間の承認 `root@2026-09-
   **`prismatic-duel/` として既に動いていて 30,000体のテストを通っているもの**を
   ツリーの語彙へ書き起こした。創作は「安全席の検査」と「ラン一括生成」の2点だけである。
 
-- **`gen@2026-09-05-split-3`** / 承認者: **人間（DaichiFukuhara、`root@2026-09-05-approval-2` により）**/
+- **`gen@2026-09-05-split-3`** / 承認者: **人間（DaichiFukuhara、`root@2026-09-06-approval-3` により）**/
   日時: 2026-09-05 / 種別: `split` / 承認者の種別: **人間** / **status: active**
   対象: 分割提案 `gen-split-1`（子3つ `move` / `audit` / `roster`、seam 4端点）
 

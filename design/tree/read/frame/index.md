@@ -4,7 +4,7 @@ parent: read
 depth: 2
 children: [hud, screens, sound, shell]
 status: children-created   # 決定 frame@2026-09-05-decision-4 / 分割 frame@2026-09-05-split-4。
-                        # いずれも人間の承認 root@2026-09-05-approval-2。
+                        # いずれも人間の承認 root@2026-09-06-approval-3。
                         # Codex 深さ3監査（2026-09-04・判定不能）の指摘を反映済み
 seams: []               # 子同士の接続は無い（4子とも s1 と親の定数だけを読む）
 uses_seams: []
@@ -198,7 +198,7 @@ uses_seams: []
 
 ## 分割提案 frame-split-4
 
-status: **approved**（`frame@2026-09-05-split-4` / 人間の承認 `root@2026-09-05-approval-2`。`children-created`）
+status: **approved**（`frame@2026-09-05-split-4` / 人間の承認 `root@2026-09-06-approval-3`。`children-created`）
 前提: `frame@2026-09-05-decision-4`
 前検査: **深さ3全体監査で1回**（2026-09-04・Codex・判定不能）。指摘を反映済み
 
@@ -376,7 +376,7 @@ status: **approved**（`frame@2026-09-05-split-4` / 人間の承認 `root@2026-0
 | **決定** | `frame@2026-09-05-decision-4` | **active** |
 | **分割** | `frame@2026-09-05-split-4` | **active**（承認済み・`children-created`） |
 
-- **`frame@2026-09-05-decision-4`** / 承認者: **人間（DaichiFukuhara、`root@2026-09-05-approval-2` により）**/
+- **`frame@2026-09-05-decision-4`** / 承認者: **人間（DaichiFukuhara、`root@2026-09-06-approval-3` により）**/
   日時: 2026-09-05 / 種別: `decision` / 承認者の種別: **人間** / **status: active**
 
   **決定の要点**: 受け入れ条件「初見」を**3つの要求へ分解**し、担当を割り当てた
@@ -391,7 +391,7 @@ status: **approved**（`frame@2026-09-05-split-4` / 人間の承認 `root@2026-0
   （ZIP 8,918 bytes・上限の 67.0%）。根はこれを `deferred` にしているが、
   **`shell` の実体は動いている。**
 
-- **`frame@2026-09-05-split-4`** / 承認者: **人間（DaichiFukuhara、`root@2026-09-05-approval-2` により）**/
+- **`frame@2026-09-05-split-4`** / 承認者: **人間（DaichiFukuhara、`root@2026-09-06-approval-3` により）**/
   日時: 2026-09-05 / 種別: `split` / 承認者の種別: **人間** / **status: active**
 
   **前検査を経ずに承認した。**理由は `duel` の `split-2` の承認証跡と同じ。

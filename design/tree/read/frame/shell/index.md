@@ -3,7 +3,7 @@ id: read.frame.shell
 parent: read.frame
 depth: 3
 children: []           # 深さ3は葉
-status: decision-approved   # shell@2026-09-05-decision-3（人間の承認 root@2026-09-05-approval-2）
+status: decision-approved   # shell@2026-09-05-decision-3（人間の承認 root@2026-09-06-approval-3）
 seams: []
 uses_seams: []
 ---
@@ -237,7 +237,7 @@ headroom  4,394 bytes
 
 **深さ3は子を作らないため、分割の承認は無い。**
 
-- **`shell@2026-09-05-decision-3`** / 承認者: **人間（DaichiFukuhara、`root@2026-09-05-approval-2` により）**/
+- **`shell@2026-09-05-decision-3`** / 承認者: **人間（DaichiFukuhara、`root@2026-09-06-approval-3` により）**/
   日時: 2026-09-05 / 種別: `decision` / 承認者の種別: **人間** / **status: active**
 
   **決定の要点**: 器とビルドは実装のものをそのまま採った。

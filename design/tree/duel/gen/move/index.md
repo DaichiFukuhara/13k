@@ -3,7 +3,7 @@ id: duel.gen.move
 parent: duel.gen
 depth: 3
 children: []           # 深さ3は葉。分割しない
-status: decision-approved   # move@2026-09-05-decision-3（人間の承認 root@2026-09-05-approval-2）
+status: decision-approved   # move@2026-09-05-decision-3（人間の承認 root@2026-09-06-approval-3）
 seams: []
 uses_seams: [g1.move-request]
 ---
@@ -253,7 +253,7 @@ uses_seams: [g1.move-request]
 
 **深さ3は子を作らないため、分割の承認は無い**（`harness/README.md`「承認の原則」）。
 
-- **`move@2026-09-05-decision-3`** / 承認者: **人間（DaichiFukuhara、`root@2026-09-05-approval-2` により）**/
+- **`move@2026-09-05-decision-3`** / 承認者: **人間（DaichiFukuhara、`root@2026-09-06-approval-3` により）**/
   日時: 2026-09-05 / 種別: `decision` / 承認者の種別: **人間** / **status: active**
   対象: 本文1〜7（実装するシステムの境界・振る舞い・受け入れ条件）
 

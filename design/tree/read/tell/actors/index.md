@@ -3,7 +3,7 @@ id: read.tell.actors
 parent: read.tell
 depth: 3
 children: []           # 深さ3は葉
-status: decision-approved   # actors@2026-09-05-decision-3（人間の承認 root@2026-09-05-approval-2）
+status: decision-approved   # actors@2026-09-05-decision-3（人間の承認 root@2026-09-06-approval-3）
 seams: []
 uses_seams: [r1.screen-state, t2.color-result]
 ---
@@ -213,7 +213,7 @@ uses_seams: [r1.screen-state, t2.color-result]
 
 **深さ3は子を作らないため、分割の承認は無い。**
 
-- **`actors@2026-09-05-decision-3`** / 承認者: **人間（DaichiFukuhara、`root@2026-09-05-approval-2` により）**/
+- **`actors@2026-09-05-decision-3`** / 承認者: **人間（DaichiFukuhara、`root@2026-09-06-approval-3` により）**/
   日時: 2026-09-05 / 種別: `decision` / 承認者の種別: **人間** / **status: active**
 
   **決定の要点**: 受け入れ条件に「**姿から性格が読める**」を入れた。
@@ -229,5 +229,5 @@ uses_seams: [r1.screen-state, t2.color-result]
   **7色の帯**（実装のボス胴部）は、ツリーが書いていなかったが**残す価値がある** —
   7本並んで1本だけ明るいので、**色の語彙の存在そのものが説明なしに伝わる。**
 
-  **2026-09-04、人間が `root@2026-09-05-approval-2` で明示的に承認した。**
+  **2026-09-04、人間が `root@2026-09-06-approval-3` で明示的に承認した。**
   `waiver-1`（AI への委任）は深さ3到達をもって終了している。

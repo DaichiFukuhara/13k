@@ -3,7 +3,7 @@ id: duel.gen.roster
 parent: duel.gen
 depth: 3
 children: []           # 深さ3は葉。分割しない
-status: decision-approved   # roster@2026-09-05-decision-3（人間の承認 root@2026-09-05-approval-2）
+status: decision-approved   # roster@2026-09-05-decision-3（人間の承認 root@2026-09-06-approval-3）
 seams: []
 uses_seams: [g2.move-result, g4.audit-verdict]
 ---
@@ -339,7 +339,7 @@ uses_seams: [g2.move-result, g4.audit-verdict]
 
 **深さ3は子を作らないため、分割の承認は無い。**
 
-- **`roster@2026-09-05-decision-3`** / 承認者: **人間（DaichiFukuhara、`root@2026-09-05-approval-2` により）**/
+- **`roster@2026-09-05-decision-3`** / 承認者: **人間（DaichiFukuhara、`root@2026-09-06-approval-3` により）**/
   日時: 2026-09-05 / 種別: `decision` / 承認者の種別: **人間** / **status: active**
   対象: 本文1〜7
 
@@ -350,5 +350,5 @@ uses_seams: [g2.move-result, g4.audit-verdict]
   [`design/AS_BUILT.md`](../../../../AS_BUILT.md) §5 の実測である。
   **創作は「ラン全体を一度に作る」ことと「後処理のたびに再検査する」ことの2点だけ。**
 
-  **2026-09-04、人間が `root@2026-09-05-approval-2` で明示的に承認した。**
+  **2026-09-04、人間が `root@2026-09-06-approval-3` で明示的に承認した。**
   `waiver-1`（AI への委任）は深さ3到達をもって終了している。

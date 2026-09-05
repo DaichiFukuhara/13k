@@ -3,7 +3,7 @@ id: read.frame.sound
 parent: read.frame
 depth: 3
 children: []           # 深さ3は葉
-status: decision-approved   # sound@2026-09-05-decision-3（人間の承認 root@2026-09-05-approval-2）
+status: decision-approved   # sound@2026-09-05-decision-3（人間の承認 root@2026-09-06-approval-3）
 seams: []
 uses_seams: []
 ---
@@ -194,7 +194,7 @@ uses_seams: []
 
 **深さ3は子を作らないため、分割の承認は無い。**
 
-- **`sound@2026-09-05-decision-3`** / 承認者: **人間（DaichiFukuhara、`root@2026-09-05-approval-2` により）**/
+- **`sound@2026-09-05-decision-3`** / 承認者: **人間（DaichiFukuhara、`root@2026-09-06-approval-3` により）**/
   日時: 2026-09-05 / 種別: `decision` / 承認者の種別: **人間** / **status: active**
 
   **決定の要点**: **音が示すものすべてに画面での対応を書いた表**（1.3）を作り、
@@ -205,5 +205,5 @@ uses_seams: []
   「良い音」は判定不能なので条件にできない。
   **音そのものの質は制作者の主観に残る。**
 
-  **2026-09-04、人間が `root@2026-09-05-approval-2` で明示的に承認した。**
+  **2026-09-04、人間が `root@2026-09-06-approval-3` で明示的に承認した。**
   `waiver-1`（AI への委任）は深さ3到達をもって終了している。

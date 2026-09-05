@@ -4,7 +4,7 @@ parent: root
 depth: 1
 children: [tell, frame]
 status: children-created   # 決定 read@2026-09-05-decision-5 / 分割 read@2026-09-05-split-4。
-                       # いずれも人間の承認 root@2026-09-05-approval-2。
+                       # いずれも人間の承認 root@2026-09-06-approval-3。
                         # Codex 深さ3監査（2026-09-04・判定不能）の指摘を反映済み
 seams: [r1.screen-state]   # 子（frame -> tell）の片方向1本
 uses_seams: [s1.presentation-state]   # duel から受け取る
@@ -80,7 +80,7 @@ uses_seams: [s1.presentation-state]   # duel から受け取る
 
 - **開く順序**: **2番目**（`duel` の `s1` が親に権威化されてから）
 
-- **parent_decision_ref**: `root@2026-09-05-decision-11` ＋ `root@2026-09-05-split-10`
+- **parent_decision_ref**: `root@2026-09-06-decision-12` ＋ `root@2026-09-06-split-11`
 
 ## 1. これは何を決めるものか
 
@@ -316,7 +316,7 @@ uses_seams: [s1.presentation-state]   # duel から受け取る
 
 ## 分割提案 read-split-4
 
-status: **approved**（`read@2026-09-05-split-4` / 人間の承認 `root@2026-09-05-approval-2`。`children-created`）
+status: **approved**（`read@2026-09-05-split-4` / 人間の承認 `root@2026-09-06-approval-3`。`children-created`）
 前提: `read@2026-09-05-decision-5`
 前検査: **深さ3全体監査で1回**（2026-09-04・Codex・判定不能）。指摘を反映済み
 
@@ -497,7 +497,7 @@ status: **approved**（`read@2026-09-05-split-4` / 人間の承認 `root@2026-09
 
 ---
 
-- **`read@2026-09-05-decision-5`** / 承認者: **人間（DaichiFukuhara、`root@2026-09-05-approval-2` により）**/
+- **`read@2026-09-05-decision-5`** / 承認者: **人間（DaichiFukuhara、`root@2026-09-06-approval-3` により）**/
   日時: 2026-09-05 / 種別: `decision` / 承認者の種別: **人間** / **status: active**
   対象: 本文1〜7（課題の範囲と、その課題に対する解決法）
 
@@ -518,7 +518,7 @@ status: **approved**（`read@2026-09-05-split-4` / 人間の承認 `root@2026-09
   「検証方法を `read` 側で書いていない」と記録していたものである。
   **理屈では決められない**（Codex の指摘）ので、**実際の予告語彙で測る**形にした。
 
-- **`read@2026-09-05-split-4`** / 承認者: **人間（DaichiFukuhara、`root@2026-09-05-approval-2` により）**/
+- **`read@2026-09-05-split-4`** / 承認者: **人間（DaichiFukuhara、`root@2026-09-06-approval-3` により）**/
   日時: 2026-09-05 / 種別: `split` / 承認者の種別: **人間** / **status: active**
   対象: 分割提案 `read-split-1`（子2つ `tell` / `frame`、seam 1端点・片方向）
 

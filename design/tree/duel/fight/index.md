@@ -3,8 +3,8 @@ id: duel.fight
 parent: duel
 depth: 2
 children: [avatar, foe, arena]
-status: children-created   # 決定 fight@2026-09-05-decision-4 / 分割 fight@2026-09-05-split-4。
-                        # いずれも人間の承認 root@2026-09-05-approval-2。
+status: children-created   # 決定 fight@2026-09-06-decision-5 / 分割 fight@2026-09-06-split-5。
+                        # いずれも人間の承認 root@2026-09-06-approval-3。
                         # Codex 深さ3監査（2026-09-04・判定不能）の指摘を反映済み
 seams: [f1.avatar-state, f2.foe-state, f3.avatar-verdict, f4.foe-verdict]
 uses_seams: [d1.run-definition]   # gen から受け取る
@@ -20,7 +20,7 @@ uses_seams: [d1.run-definition]   # gen から受け取る
 
 **この順に読めば現行の契約だけが揃う。**
 
-1. **有効な版**: 決定 `fight@2026-09-05-decision-4` / 分割 `fight@2026-09-05-split-4`
+1. **有効な版**: 決定 `fight@2026-09-06-decision-5` / 分割 `fight@2026-09-06-split-5`
 2. **現行の決定本文**: 1〜7（🔒 が付いた節が最新の凍結）
 3. **現行の分割**: `## 分割提案` 節（見出しの版が上の分割と一致するものだけが有効）
 4. **承認証跡**: `### 現在有効なもの` 表 → その下の該当エントリ
@@ -70,7 +70,7 @@ uses_seams: [d1.run-definition]   # gen から受け取る
 
 - **開く順序**: **2番目**
 
-- **parent_decision_ref**: `duel@2026-09-05-decision-8` ＋ `duel@2026-09-05-split-5`
+- **parent_decision_ref**: `duel@2026-09-06-decision-9` ＋ `duel@2026-09-06-split-6`
 
 ## 1. これは何を決めるものか
 
@@ -227,10 +227,10 @@ uses_seams: [d1.run-definition]   # gen から受け取る
    実装の `nextMove()` は距離だけを見ており、テーブル参照は無い。
    容量と速度のコストが未見積もり
 
-## 分割提案 fight-split-4
+## 分割提案 fight-split-5
 
-status: **approved**（`fight@2026-09-05-split-4` / 人間の承認 `root@2026-09-05-approval-2`。`children-created`）
-前提: `fight@2026-09-05-decision-4`
+status: **approved**（`fight@2026-09-06-split-5` / 人間の承認 `root@2026-09-06-approval-3`。`children-created`）
+前提: `fight@2026-09-06-decision-5`
 前検査: **深さ3全体監査で1回**（2026-09-04・Codex・判定不能）。指摘を反映済み
 
 ### 子
@@ -246,7 +246,18 @@ status: **approved**（`fight@2026-09-05-split-4` / 人間の承認 `root@2026-0
 
 | id | 多重度 | from → to | 内容 |
 | --- | --- | --- | --- |
-| `f1.avatar-state` | 1:1 | `avatar` → `arena` | **中心座標**（X, Y）/ 当たり判定矩形 / 向き / 接地・滞空 / 無敵中か / **パリィ受付中か** / 現在の行動 / HP / **最大 HP** / スタミナ / **最大スタミナ** / **所持技**（`s1` へ載せる） / **攻撃中なら展開した判定矩形** |
+| `f1.avatar-state` | 1:1 | `avatar` → `arena` | **中心座標**（X, Y）/ 当たり判定矩形 / 向き / 接地・滞空 / 無敵中か / **パリィ受付中か** / 現在の行動 / HP / **最大 HP** / スタミナ / **最大スタミナ** / **所持技**（`s1` へ載せる） / **攻撃中か**とそのパラメータ / **メニュー入力**（左 / 右 / 決定。撃破画面でだけ意味を持つ） |
+
+> 🔒 **凍結（`fight@2026-09-06-decision-5`）。入力を読むのは `avatar` だけ。**
+> 2026-09-06 の4回目の監査: 「**奪取画面の左右・決定入力を `avatar` → `arena` へ運ぶ
+> フィールドがない。`arena` が直接キーを読むと入力所有権が二重になる。」**
+>
+> **`avatar` が全ての入力を読み、`f1` で `arena` へ渡す。**
+> `arena` はキーボードを知らない。**カーソルを動かすのは `arena`、入力を読むのは `avatar`。**
+>
+> ⚠️ **旧文は `f1` に「展開した判定矩形」を入れていたが誤り**（同監査の条件4）。
+> **`avatar` は矩形を作らない**（`fight` の不変条件8）。攻撃中かどうかとパラメータを渡し、
+> **展開は `arena` が行う。**
 | `f2.foe-state` | 1:1 | `foe` → `arena` | **中心座標**（X, Y）/ ボス矩形 / 向き / 現在技の添字と段 / 状態（`wait`/`wind`/`active`/`recover`/`guard`/`stagger`/`shift`）/ 経過フレームと全長 / **SHOT の固定照準**（X, Y）/ **RAIN の段ごとの落下 X** / HP / 体勢 / **第2形態へ移行済みか** |
 
 > **ボスの最大 HP・最大体勢・異名・防御能力の種別は `d1` から取る**（`arena` が直接読む）。
@@ -334,7 +345,7 @@ status: **approved**（`fight@2026-09-05-split-4` / 人間の承認 `root@2026-0
   割り当てられた受け入れ条件: 宣言との一致（前提: 回答手段が宣言どおり機能すること）
   uses_seams: [f3.avatar-verdict]
   提供する seam: f1.avatar-state（arena へ）
-  parent_decision_ref: fight@2026-09-05-decision-4 ＋ fight@2026-09-05-split-4
+  parent_decision_ref: fight@2026-09-06-decision-5 ＋ fight@2026-09-06-split-5
 
 - child: foe
   責任: 確定したボス定義どおりに1体を動かし、黄の技を選べる時だけ選ぶ
@@ -348,7 +359,7 @@ status: **approved**（`fight@2026-09-05-split-4` / 人間の承認 `root@2026-0
   割り当てられた受け入れ条件: 利用可能性（主）
   uses_seams: [f4.foe-verdict]
   提供する seam: f2.foe-state（arena へ）
-  parent_decision_ref: fight@2026-09-05-decision-4 ＋ fight@2026-09-05-split-4
+  parent_decision_ref: fight@2026-09-06-decision-5 ＋ fight@2026-09-06-split-5
 
 - child: arena
   責任: 両者を突き合わせ、1戦の決着とランの進行を決める
@@ -366,7 +377,7 @@ status: **approved**（`fight@2026-09-05-split-4` / 人間の承認 `root@2026-0
   uses_seams: [f1.avatar-state, f2.foe-state, d1.run-definition]
   提供する seam: f3.avatar-verdict / f4.foe-verdict（兄弟へ）、
     s1.presentation-state（fight の代表として duel の seam_inbox 経由で read へ）
-  parent_decision_ref: fight@2026-09-05-decision-4 ＋ fight@2026-09-05-split-4
+  parent_decision_ref: fight@2026-09-06-decision-5 ＋ fight@2026-09-06-split-5
 ```
 
 ### 他の切り方との比較
@@ -415,12 +426,12 @@ status: **approved**（`fight@2026-09-05-split-4` / 人間の承認 `root@2026-0
 
 | 種別 | 版参照 | status |
 | --- | --- | --- |
-| **決定** | `fight@2026-09-05-decision-4` | **active** |
-| **分割** | `fight@2026-09-05-split-4` | **active**（承認済み・`children-created`） |
+| **決定** | `fight@2026-09-06-decision-5` | **active** |
+| **分割** | `fight@2026-09-06-split-5` | **active**（承認済み・`children-created`） |
 
 ---
 
-- **`fight@2026-09-05-decision-4`** / 承認者: **人間（DaichiFukuhara、`root@2026-09-05-approval-2` により）**/
+- **`fight@2026-09-06-decision-5`** / 承認者: **人間（DaichiFukuhara、`root@2026-09-06-approval-3` により）**/
   日時: 2026-09-05 / 種別: `decision` / 承認者の種別: **人間** / **status: active**
   対象: 本文1〜7（親の決定の詳細化と、それに伴う機能）
 
@@ -436,7 +447,7 @@ status: **approved**（`fight@2026-09-05-split-4` / 人間の承認 `root@2026-0
   本文の多くは [`design/AS_BUILT.md`](../../../AS_BUILT.md) の実測に基づく。
   ただし**「選択時の条件」だけは実装に無い**（実装は距離だけを見る）。
 
-- **`fight@2026-09-05-split-4`** / 承認者: **人間（DaichiFukuhara、`root@2026-09-05-approval-2` により）**/
+- **`fight@2026-09-06-split-5`** / 承認者: **人間（DaichiFukuhara、`root@2026-09-06-approval-3` により）**/
   日時: 2026-09-05 / 種別: `split` / 承認者の種別: **人間** / **status: active**
   対象: 分割提案 `fight-split-1`（子3つ `avatar` / `foe` / `arena`、seam 4端点）
 
