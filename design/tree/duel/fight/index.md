@@ -70,7 +70,7 @@ uses_seams: [d1.run-definition]   # gen から受け取る
 
 - **開く順序**: **2番目**
 
-- **parent_decision_ref**: `duel@2026-09-05-decision-7` ＋ `duel@2026-09-05-split-5`
+- **parent_decision_ref**: `duel@2026-09-05-decision-8` ＋ `duel@2026-09-05-split-5`
 
 ## 1. これは何を決めるものか
 

@@ -2218,7 +2218,8 @@ status: **approved**（`root@2026-09-05-split-10` / 人間の承認 `approval-1`
   | **ラン** | ボス番号（0〜2）/ 総体数 / **タイム**（フレーム）/ **被弾数** / **パリィ数** | `hud` / `screens` |
   | **結果表示** | シード（32bit）/ 技構成（全技の9パラメータ） | `screens` |
   | **所持技**（1.10） | プレイヤーが今持っている技の 形状ID / 射程 / 予備動作 / 硬直 / 多段 / 特性ベクトル / スタミナ消費 / **主張色** | `hud` / `actors` |
-  | **奪取の候補**（1.10） | 撃破直後だけ。**倒したボスの全技**（同じ項目）＋ 今の所持技。`screens` が選択画面に出す | `screens` |
+  | **奪取の候補**（1.10） | 撃破直後だけ。**倒したボスの全技**（同じ項目）＋ 今の所持技 | `screens` |
+  | **奪取のカーソル**（1.10） | 今どれを指しているか（添字）。**選ぶのは `duel` 側**。`read` は位置を描くだけ | `screens` |
   | **操作割当** | **回答手段4つ ＋ 攻撃と実キーの対応。**`read` はこれを写して提示する（`shell` も `screens` もこれ以外から作らない） | `screens` |
 
   **渡し方**: 毎フレーム全部。差分にしない。
@@ -2625,7 +2626,7 @@ design/harness/README.md に従って design/tree/duel を進めてください�
   | ノード | 決定 | 分割 |
   | --- | --- | --- |
   | `root` | `root@2026-09-05-decision-11` | `root@2026-09-05-split-10` |
-  | `duel` | `duel@2026-09-05-decision-7` | `duel@2026-09-05-split-5` |
+  | `duel` | `duel@2026-09-05-decision-8` | `duel@2026-09-05-split-5` |
   | `gen` / `fight` | 各 `decision-3` | 各 `split-3` |
   | `read` / `tell` / `frame` | `read decision-4` / `tell decision-4` / `frame decision-3` | 各 `split-3`〜`4` |
   | 深さ3の葉13枚 | 各 `decision-3`（`foe` のみ `decision-4`） | 無し（葉） |
