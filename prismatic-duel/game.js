@@ -458,6 +458,18 @@ function sound(f=220,d=.06,type="square",vol=.035){
   g.gain.setValueAtTime(vol,t);g.gain.exponentialRampToValueAtTime(.0001,t+d);
   o.connect(g).connect(audio.destination);o.start(t);o.stop(t+d);
 }
+/*
+音は形状と技の性格で変える（設計 sound の 1.2）。
+波形が形状、高さが速さ——速い技ほど高い。多段は段ごとに上がるのでリズムになる。
+
+音は情報の主経路にしない（read の不変条件10）。予備動作は画面の予告が
+既に示しているので、音はそれを速く届けるだけで、切っても読める。
+*/
+const WAVE=["square","square","triangle","triangle","sawtooth","triangle"];
+function moveTone(m,windF,pulse=0){
+  // 速い技ほど高い。段が上がるごとに完全4度ぶん上げる。
+  return (300-windF*2.2)*Math.pow(1.33,pulse);
+}
 function pressed(...a){return a.some(k=>tap[k])}
 function held(...a){return a.some(k=>keys[k])}
 function runSeed(i){return(seed^Math.imul(i+1,0x85ebca6b))>>>0}
@@ -465,7 +477,7 @@ function seedText(){return(seed>>>0).toString(36).toUpperCase().padStart(6,"0")}
 
 function newRun(s=seed){
   // ランを完全初期化。Rで同じランを再開するときだけ同じseedを渡す。
-  seed=s>>>0;run={boss:0,time:0,hits:0,parries:0};p=null;startBoss();
+  seed=s>>>0;run={boss:0,time:0,hits:0,parries:0,log:[]};p=null;startBoss();
 }
 function startBoss(){
   /*
@@ -493,7 +505,8 @@ function startBoss(){
     hp:HERO.hp,st:100,delay:0,
     action:"",timer:0,inv:0,lastHit:"",jumpBuf:0,actBuf:0,parryBuf:0,rollBuf:0,
     hold:p&&p.hold?p.hold:bareHand(),attack:0,pulse:-1,hitId:"",aim:0,targets:[0]};
-  shots=[];parts=[];mode="fight";say("READ THE COLORS. LEARN THE RHYTHM.",120);
+  shots=[];parts=[];mode="fight";
+  if(!run.boss)say("READ THE COLORS. LEARN THE RHYTHM.",120);
 }
 function say(t,n=70){msg=t;msgTime=n}
 function spark(x,y,col,n=8){
@@ -586,17 +599,21 @@ function heroStrike(){
   */
   const m=p.hold,w=m.wind,span=ACTIVE[m[A]-1]+10,t=p.timer-w;
   if(t<0)return;
-  if(p.timer===w)sound(150,.08,"square",.025);
+  if(p.timer===w)sound(moveTone(m,m.wind),.07,WAVE[m[S]],.025);
   const pulse=Math.min(m[N]-1,(t/span)|0),local=t%span;
   if(m[S]===4){ // 弾は段が変わった最初のフレームで一発だけ生成する
     if(p.pulse!==pulse){p.pulse=pulse;
-      shots.push({x:p.x+9,y:p.y+12,vx:p.face*5.4,vy:0,owner:0,dmg:m.seg[pulse],post:HERO.post,col:HOLD_COL(m),life:150});}
+      shots.push({x:p.x+9,y:p.y+12,vx:p.face*5.4,vy:0,owner:0,dmg:m.seg[pulse],post:HERO.post,col:HOLD_COL(m),life:150});
+      sound(moveTone(m,m.wind,pulse),.06,"sawtooth",.022);}
     return;
   }
   if(local>=ACTIVE[m[A]-1])return;
   if(m[S]===3)p.x=clamp(p.x+p.face*(3.2+m[R]*.72),20,CW-38); // 突進は自分が前へ出る
   const id=p.attack+":"+pulse;
-  if(p.hitId!==id&&hit(moveRect(m,pulse,p),boxBoss())){p.hitId=id;bossDamage(m.seg[pulse],HERO.post,"melee")}
+  if(p.hitId!==id&&hit(moveRect(m,pulse,p),boxBoss())){
+    p.hitId=id;bossDamage(m.seg[pulse],HERO.post,"melee");
+    if(pulse)sound(moveTone(m,m.wind,pulse),.05,WAVE[m[S]],.02);
+  }
 }
 function bossDamage(dmg,post,kind){
   /*
@@ -704,6 +721,8 @@ function startMove(){
   b.face=p.x<b.x?-1:1;b.target=p.x+8;b.aimY=p.y+14;b.targets=[];
   for(let i=0;i<m[N];i++)b.targets.push(clamp(b.target+(i?((i%2?1:-1)*(55+18*i)):0),30,CW-30));
   say(SHAPE_NAME[m[S]]+"  "+m[D]+"·"+m[R],Math.min(55,b.timer));
+  // 予備動作の開始を音でも出す。画面の予告と同じ情報なので、切っても読める。
+  sound(moveTone(m,WIND[m[W]-1])*.6,.09,WAVE[m[S]],.03);
 }
 function bossStep(){
   /*
@@ -809,7 +828,7 @@ function spawnBossShot(m,pulse){
   const speed=3.1+(5-m[W])*.45;
   const distance=Math.max(60,Math.abs((b.x+20)-(p.x+9)));
   shots.push({x:b.x+20+b.face*22,y:b.y+29,vx:b.face*speed,vy:(b.aimY-b.y-29)/distance*speed,owner:1,dmg:m[D],post:0,col:PAL[b.hue],life:220,track:m[T]*.018,id:b.attack+":"+pulse,parry:1});
-  sound(130,.09,"sawtooth",.028);
+  sound(moveTone(m,WIND[m[W]-1],pulse)*.6,.08,"sawtooth",.028);
 }
 function shotsStep(){
   /*
@@ -862,6 +881,8 @@ function step(){
     if(pressed("ArrowLeft","KeyA"))take.i=(take.i+take.list.length-1)%take.list.length;
     if(pressed("ArrowRight","KeyD"))take.i=(take.i+1)%take.list.length;
     if(pressed("Enter")){
+      // ランの記録: 倒した相手と、そこで選んだ技。Result で並べる。
+      run.log.push([b.name,b.hue,take.list[take.i]]);
       p.hold=take.list[take.i];take=null;sound(520,.1,"square",.04);
       run.boss++;if(run.boss>=3)mode="result";else startBoss();
     }
@@ -933,10 +954,30 @@ function drawTelegraph(){
   cx.globalAlpha=1;
 }
 function drawPerson(x,y,scale,col,active=0){
-  cx.save();cx.translate(x,y);cx.scale(scale,scale);cx.lineCap="round";cx.strokeStyle=col;cx.fillStyle=col;cx.lineWidth=3;
-  const lean=active&&p.action==="roll"?8:0;
-  cx.beginPath();cx.arc(0,-22+lean,5,0,6.3);cx.fill();cx.beginPath();cx.moveTo(0,-17+lean);cx.lineTo(0,0);cx.lineTo(-6,12);cx.moveTo(0,0);cx.lineTo(7,12);cx.moveTo(0,-12+lean);cx.lineTo(-8,-2);cx.moveTo(0,-11+lean);cx.lineTo(9,-4);cx.stroke();
-  cx.beginPath();cx.moveTo(8,-5);cx.lineTo(24,-17);cx.strokeStyle=PAL[6];cx.lineWidth=4;cx.stroke();
+  /*
+  攻撃モーションは所持技の性格を姿に出す（根の 1.10）。
+  射程が長いほど武器が伸び、予備動作の進行で腕が引かれて振り抜かれる。
+  250pxのSHOTと48pxのTHRUSTが同じ見た目では、持ち替えが体験にならない。
+  */
+  const m=p.hold,atk=active&&p.action==="attack";
+  let sw=0,arm=0,len=14;
+  if(atk){
+    const w=m.wind,t=p.timer;
+    // 予備動作は引く（負）、発生以降は振り抜く（正）。硬直でゆっくり戻る。
+    sw=t<w?-t/w:Math.min(1,(t-w)/6);
+    arm=sw;
+    len=14+REACH[m[R]-1]*.14*(sw>0?sw:.3);   // 射程が長いほど伸びる
+  }
+  cx.save();cx.translate(x,y);cx.scale(scale*(p.face<0&&active?-1:1),scale);
+  cx.lineCap="round";cx.strokeStyle=col;cx.fillStyle=col;cx.lineWidth=3;
+  const lean=active&&p.action==="roll"?8:0,tilt=arm*4;
+  cx.beginPath();cx.arc(tilt,-22+lean,5,0,6.3);cx.fill();
+  cx.beginPath();cx.moveTo(tilt,-17+lean);cx.lineTo(0,0);cx.lineTo(-6,12);cx.moveTo(0,0);cx.lineTo(7,12);
+  cx.moveTo(0,-12+lean);cx.lineTo(-8+arm*3,-2);cx.moveTo(0,-11+lean);cx.lineTo(9,-4-arm*6);cx.stroke();
+  // 武器。色は所持技の色（持ち替えが見える）
+  const a=-.6+arm*1.2;
+  cx.beginPath();cx.moveTo(8,-5-arm*6);cx.lineTo(8+Math.cos(a)*len,-5-arm*6+Math.sin(a)*len);
+  cx.strokeStyle=HOLD_COL(m);cx.lineWidth=atk&&sw>0?5:4;cx.stroke();
   cx.restore();
 }
 function drawHero(){
@@ -1010,7 +1051,7 @@ function draw(){
   見た目が揺れてもゲーム内部の座標と判定は安定したまま。
   */
   background();cx.save();if(shake){cx.translate((Math.random()-.5)*shake,(Math.random()-.5)*shake);shake*=.82;if(shake<.3)shake=0}
-  if(mode!=="title"){
+  if(mode!=="title"&&mode!=="result"){
     drawTelegraph();for(const s of shots){cx.fillStyle=s.col;cx.globalAlpha=.9;cx.fillRect(s.x-5,s.y-3,10,6)}cx.globalAlpha=1;
     drawHero();drawBoss();for(const q of parts){cx.globalAlpha=q.life/30;cx.fillStyle=q.col;cx.fillRect(q.x,q.y,2,2)}cx.globalAlpha=1;hud();
   }
@@ -1021,8 +1062,33 @@ function draw(){
     text("GENERATED FOES. LEARNABLE ATTACKS.",CW/2,211,10,"#777b99","center");text("SEED  "+seedText(),CW/2,244,12,"#c4c6dc","center");text("ENTER  BEGIN    N  NEW SEED",CW/2,280,11,"#ead85b","center");
   }else if(mode==="dead")overlay("YOU FELL",b.name+" remembers every move.","ENTER / R  RETRY SAME FOE     N  NEW SEED");
   else if(mode==="bosswin")drawTake();
-  else if(mode==="result")overlay("RAINBOW RESTORED",`TIME ${Math.floor(run.time/3600)}:${String(Math.floor(run.time/60)%60).padStart(2,"0")}  ·  HITS ${run.hits}  ·  PARRIES ${run.parries}`,`SEED ${seedText()}     R  REPLAY     ENTER  NEW RUN`);
+  else if(mode==="result")drawResult();
   else if(mode==="pause")overlay("PAUSED","The duel waits.","ENTER / ESC  RESUME");
+}
+function drawResult(){
+  /*
+  Result はランの記録である（設計 screens の 1.4）。
+  数字だけ出しても「何をやったランか」が残らない。倒した3体の異名と主色、
+  そこで持ち替えた技を並べると、シードと合わせて共有できる形になる。
+  */
+  background();
+  text("RAINBOW RESTORED",CW/2,64,26,"#f0efff","center");
+  const t=Math.floor(run.time/60);
+  text(`TIME ${Math.floor(t/60)}:${String(t%60).padStart(2,"0")}   HITS ${run.hits}   PARRIES ${run.parries}`,
+       CW/2,90,11,"#a3a6c2","center");
+  run.log.forEach(([nm,hue,m],i)=>{
+    const y=124+i*52;
+    cx.fillStyle=PAL[hue];cx.fillRect(96,y-10,3,34);
+    text(nm,110,y+2,13,PAL[hue]);
+    text("TOOK",110,y+18,8,"#777b99");
+    cx.fillStyle=HOLD_COL(m);cx.fillRect(146,y+12,4,4);
+    text(`${SHAPE_NAME[m[S]]}  ${REACH[m[R]-1]}px  ${m.wind}F  ${m.cost}ST`,156,y+18,9,"#c4c6dc");
+  });
+  const h=p.hold;
+  text("HOLDING",CW/2,290,8,"#777b99","center");
+  cx.fillStyle=HOLD_COL(h);cx.fillRect(CW/2-52,296,4,4);
+  text(`${SHAPE_NAME[h[S]]}  ${REACH[h[R]-1]}px  ${h.wind}F  ${h.cost}ST`,CW/2-42,302,10,"#f0efff");
+  text(`SEED ${seedText()}     R  REPLAY     ENTER  NEW RUN`,CW/2,336,11,"#ead85b","center");
 }
 function loop(now){
   /*
