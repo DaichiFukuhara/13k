@@ -10,6 +10,7 @@ AIDE の思考フローを用いて設計を行っている。
 | | |
 | --- | --- |
 | **設計の正本** | [`design/tree/`](design/tree/index.md)（AIDE 設計ツリー）。全体を掴むなら [`design/SUMMARY.md`](design/SUMMARY.md) |
+| **仕様書** | [`design/spec/`](design/spec/README.md)（判断を抜いた設計書。生成・戦闘・提示・画面・器の5冊） |
 | **実装の土台** | [`prismatic-duel/`](prismatic-duel/)（2026-09-04 決定・コードと build 環境のみ） |
 | **締切** | 2026-09-13 20:00 JST / ZIP 13,312 bytes 以下 |
 
