@@ -422,7 +422,7 @@ CONTROLS -> 操作割当の唯一の正本
   中身を持たない。二重管理にしない。
   どの画面幅でも隠さない（shell の decision-3）。狭ければ折り返す。
 */
-const CONTROLS=[["MOVE","A/D or arrows"],["JUMP","W/Space"],["ATTACK","J/Z"],["PARRY","K/X"],["ROLL","L/C"]];
+const CONTROLS=[["MOVE","A/D or arrows"],["JUMP","W/Up/Space"],["ATTACK","J/Z"],["PARRY","K/X"],["ROLL","L/C"]];
 
 function boot(){
   const k=document.getElementById("k");
@@ -439,7 +439,7 @@ function boot(){
   seed=q?parseInt(q,36)>>>0:(Math.random()*0xffffffff)>>>0;
   const sr=seeded(71);for(let i=0;i<70;i++)stars.push([sr()*CW,sr()*220,sr()*1.8+.3]);
   addEventListener("keydown",e=>{
-    if(["ArrowLeft","ArrowRight","Space","KeyA","KeyD","KeyW","KeyJ","KeyK","KeyL","KeyZ","KeyX","KeyC","Enter","KeyR","KeyN","Escape"].includes(e.code))e.preventDefault();
+    if(["ArrowLeft","ArrowRight","ArrowUp","Space","KeyA","KeyD","KeyW","KeyJ","KeyK","KeyL","KeyZ","KeyX","KeyC","Enter","KeyR","KeyN","Escape"].includes(e.code))e.preventDefault();
     // tapは一回だけ使う入力、keysは押し続ける移動入力として分ける。
     if(!e.repeat)tap[e.code]=1;keys[e.code]=1;wakeAudio();
   });
@@ -546,7 +546,7 @@ function playerStep(){
   if(p.delay)p.delay--;else p.st=Math.min(100,p.st+.3);
   p.jumpBuf=Math.max(0,p.jumpBuf-1);p.actBuf=Math.max(0,p.actBuf-1);
   p.parryBuf=Math.max(0,p.parryBuf-1);p.rollBuf=Math.max(0,p.rollBuf-1);
-  if(pressed("Space","KeyW"))p.jumpBuf=7;
+  if(pressed("Space","KeyW","ArrowUp"))p.jumpBuf=7;
   if(pressed("KeyJ","KeyZ"))p.actBuf=5;
   if(pressed("KeyK","KeyX"))p.parryBuf=5;
   if(pressed("KeyL","KeyC"))p.rollBuf=5;
@@ -584,7 +584,7 @@ function playerStep(){
   if(p.jumpBuf&&p.coyote&&p.action!=="roll"&&p.action!=="hit"){
     p.jumpBuf=0;p.coyote=0;p.ground=0;p.vy=-7.25;sound(170,.05,"sine",.018);
   }
-  if(!held("Space","KeyW")&&p.vy<-2.2)p.vy*=.58;
+  if(!held("Space","KeyW","ArrowUp")&&p.vy<-2.2)p.vy*=.58;
   if(p.action!=="roll")p.vy=Math.min(9,p.vy+.42);
   p.x+=p.vx;p.y+=p.vy;
   p.x=clamp(p.x,20,CW-38);

@@ -81,7 +81,7 @@ title ──Enter──► fight ──撃破──► bosswin ──Enter──
 | 手段 | 内容 |
 | --- | --- |
 | **タイトル画面の1行** | 「ENTER BEGIN　N NEW SEED」— **今押せるキーだけ**を出す |
-| **HTML の下に常時表示** | 「MOVE A/D　JUMP W/Space　ATTACK J/Z　PARRY K/X　ROLL L/C」 |
+| **HTML の下に常時表示** | 「MOVE A/D or arrows　JUMP W/Up/Space　ATTACK J/Z　PARRY K/X　ROLL L/C」 |
 | **`s1` の操作割当を使う** | キー割り当ては `duel` が持つ。**`screens` は写すだけ** |
 
 > 🧭 **「今押せるキーだけを出す」のが要点である。**

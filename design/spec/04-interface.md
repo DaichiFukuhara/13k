@@ -80,7 +80,7 @@
 | 操作 | キー |
 | --- | --- |
 | `MOVE` | `A/D or arrows` |
-| `JUMP` | `W/Space` |
+| `JUMP` | `W/Up/Space` |
 | `ATTACK` | `J/Z` |
 | `PARRY` | `K/X` |
 | `ROLL` | `L/C` |
