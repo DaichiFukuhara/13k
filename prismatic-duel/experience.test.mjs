@@ -112,7 +112,7 @@ check("all six trial shapes use real windup, cost, damage/projectiles and repeat
       g.tick(wind-1);assert.equal(g.read("b.hp"),hp,"damage must wait for actual windup");
       assert.equal(g.read("shots.length"),0,"shots must wait for actual windup");
       let damaged=false,projectiles=0;const seen=new Set();
-      const duration=g.read("p.hold.wind+(ACTIVE[p.hold[A]-1]+10)*p.hold[N]+REC[p.hold[C]-1]+80");
+      const duration=g.read("p.hold.wind+(p.hold.active+10)*p.hold[N]+p.hold.rest+80");
       for(let i=0;i<duration;i++){
         g.tick();if(g.read("b.hp")<hp)damaged=true;
         for(const shot of g.read("shots"))if(shot.owner===0&&!seen.has(shot)){seen.add(shot);projectiles++;}
@@ -148,11 +148,11 @@ check("attack recovery cannot strike again or continue a charge",()=>{
     if(shape)g.key("KeyD");g.key("KeyJ");
     g.read('p.x=100;p.face=1;b.x=550;p.st=100;');
     g.key("KeyJ");
-    g.until('p.timer===p.hold.wind+(ACTIVE[p.hold[A]-1]+10)*p.hold[N]-10');
+    g.until('p.timer===p.hold.wind+(p.hold.active+10)*p.hold[N]-10');
     assert.equal(g.read('p.action'),"attack","fixture must be in recovery");
-    g.read('shots=[];freeze=0;b.x=p.hold[S]===5?p.targets[p.hold[N]-1]-20:p.x+16;');
+    g.read('shots=[];freeze=0;b.x=p.hold[S]===5?p.targets[p.hold[N]-1]-20:p.x+28;');
     const x=g.read('p.x'),hp=g.read('b.hp');
-    g.tick(g.read('REC[p.hold[C]-1]'));
+    g.tick(g.read('p.hold.rest'));
     assert.equal(g.read('b.hp'),hp,`shape ${shape} must not hit during recovery`);
     assert.equal(g.read('shots.length'),0,"recovery must not generate another shot");
     assert.equal(g.read('p.x'),x,"recovery must not advance CHARGE");

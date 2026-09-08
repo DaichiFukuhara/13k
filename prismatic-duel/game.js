@@ -85,7 +85,7 @@ const DMG_COST=[0,1,3,6,9],RANGE_COST=[0,0,1,3,5],WIND_COST=[0,4,2,0,-2],REC_COS
   1体で1分を超えて初見の集中が切れる。
 
   hp    最大HP
-  post  1段あたりのボス体勢ダメージ（多段ほど体勢を削れる）
+  体勢削りは所持技のpostを段数で配分する。一攻撃の上限は形状で決まる。
   roll  ローリング中の横速度
 
   攻撃の性能は所持技(p.hold)が持つ。HEROは攻撃固有値を持たない。
@@ -95,7 +95,7 @@ const DMG_COST=[0,1,3,6,9],RANGE_COST=[0,0,1,3,5],WIND_COST=[0,4,2,0,-2],REC_COS
 =================
 倒したボスの技を1つ選んで持ち帰り、プレイヤーの攻撃を置き換える。
 所持は常に1つで、増えない。攻撃力は正規化するので強くならない——
-変わるのは間合いと速さだけ（根の不変条件13）。
+形状ごとに間合い・発生・移動・体勢削りを変え、HP威力は正規化する。
 
 steal(m) -> プレイヤー版の技
 
@@ -107,27 +107,32 @@ steal(m) -> プレイヤー版の技
   長い硬直は減点で安くなる。「強い技ほど撃てない」が式1本で成立する。
 
   HPダメージは合計7を段数で割り、余りを前の段から配る（[7]/[4,3]/[3,2,2]）。
-  総ダメージが変わらないので、多段の利点は体勢削りだけになる。
+  体勢も一攻撃の上限を段数で分配し、多段数倍の追加効果を防ぐ。
 */
 const HOLD_D=3;
+// Shape envelopes preserve the enemy's timing tier without losing the role.
+const ROLE_WIND=[18,8,34,20,22,32],ROLE_STEP=[3,2,4,3,3,3],ROLE_REST=[22,14,42,30,28,28];
+const ROLE_POST=[2,1,8,1,1,2],ROLE_COST=[2,0,6,4,4,4];
+const ROLE_GOOD=["MAKE SPACE","SHORT OPENING","BREAK POSTURE","CLOSE THE GAP","FIRE FROM AFAR","AIM AHEAD"];
+const ROLE_RISK=["PUSHES AWAY","NARROW HIT","SLOW COMMIT","ENDS UP CLOSE","FEET LOCKED","LANDS LATE"];
+function activeEnd(m){return m.wind+(m.active+10)*m[N]-10}
+function attackEnd(m){return activeEnd(m)+m.rest}
 function steal(m){
   const t=[m[S],HOLD_D,m[R],m[W],m[A],m[C],0,m[N],0];
-  t.cost=Math.max(12,Math.min(40,10+threat(t)*2));
+  t.cost=clamp(10+threat(t)*2+ROLE_COST[m[S]],12,40);
   // HPダメージは合計7を段数で割り、余りを前の段から配る（[7]/[4,3]/[3,2,2]）
   t.seg=[];for(let i=0;i<m[N];i++)t.seg.push((7/m[N]|0)+(i<7%m[N]?1:0));
-  /*
-  予備動作は「段だけ」引き継ぎ、実フレームは半分にする。
-  ボスの予備動作はプレイヤーに読ませるための時間だが、プレイヤーは自分で
-  撃つので読ませる必要がない。80Fのまま撃つと1.3秒かかって攻撃にならない。
-  段の順序（速い技ほど速い）は保たれるので、危険度＝消費の関係は崩れない。
-  */
-  t.wind=WIND[m[W]-1]>>1;
+  // 根decision-14: 形状の役割を保つ発生範囲へ変換し、元のW/C段の順序を残す。
+  t.wind=ROLE_WIND[m[S]]+(m[W]-1)*ROLE_STEP[m[S]];
+  t.rest=ROLE_REST[m[S]]+(m[C]-1)*4;
+  t.post=ROLE_POST[m[S]];
+  t.active=m[S]===3?12+m[R]*3+2*(m[A]-1):ACTIVE[m[A]-1];
   return t;
 }
-// 素手。奪取の出発点。発生9F・消費14は変換表の外の固定値（設計 1.2.1）
+// 初期の角突き。互換用の関数名bareHandは維持。発生9F・消費14。
 function bareHand(){const t=steal([1,3,1,3,1,2,0,1,0]);t.cost=14;t.wind=9;t.bare=1;return t}
 
-const HERO={col:"#f3f0ff",hp:14,post:1,roll:5.0};
+const HERO={col:"#f3f0ff",hp:14,roll:5.0};
 
 /*
 seeded(seed) -> 0以上1未満を返す関数
@@ -413,7 +418,7 @@ function validateBoss(b){
 
 let cv,cx,mode="title",seed=1,run,p,b,take=null,keys={},tap={},shots=[],parts=[],stars=[];
 let acc=0,last=0,freeze=0,shake=0,msg="",msgTime=0,audio;
-let feedback={text:"",kind:"",ttl:0},lastLesson="",pauseFrom="fight",saved;
+let feedback={text:"",kind:"",ttl:0},lastLesson="",pauseFrom="fight",saved,attune=null;
 
 /*
 CONTROLS -> 操作割当の唯一の正本
@@ -486,7 +491,15 @@ function respond(kind,text){
   if(kind==="tired"&&feedback.ttl&&(feedback.kind==="hurt"||feedback.kind==="parry"))return;
   feedback={text,kind,ttl:kind==="hurt"?150:65};
 }
-function cleanArena(){shots=[];parts=[];freeze=shake=msgTime=0;msg="";feedback={text:"",kind:"",ttl:0};clearInput()}
+function cleanArena(){shots=[];parts=[];attune=null;freeze=shake=msgTime=0;msg="";feedback={text:"",kind:"",ttl:0};clearInput()}
+function freed(){return !run?0:Math.min(3,run.boss+(take?1:0))}
+function rainAim(m,i){return clamp(p.x+p.face*(REACH[m[R]-1]+(i?(i%2?1:-1)*(55+18*i):0)),30,CW-30)}
+function headPose(m,a,t){
+  if(a==="attack")return t<m.wind?[[-6,3],[-4,0],[0,-7],[-3,5],[0,-2],[0,-9]][m[S]]:
+    t<activeEnd(m)?[[4,2],[4,0],[0,5],[3,3],[0,0],[0,-6]][m[S]]:[0,4];
+  return [0,a==="roll"?9:a==="parry"?-2:0];
+}
+function horn(u=p){const q=headPose(u.hold,u.action,u.timer);return{x:u.x+9+u.face*(22+q[0]),y:u.y-7+q[1]}}
 function startTrial(){
   saved=[p,b];
   p={...p,x:180,y:FLOOR-30,vx:0,vy:0,hp:HERO.hp,st:100,delay:0,face:1,ground:1,
@@ -497,9 +510,10 @@ function startTrial(){
 function endTrial(){[p,b]=saved;saved=null;cleanArena();mode="bosswin"}
 function confirmTake(){
   if(mode==="trial")endTrial();
-  const m=take.list[take.i];run.log.push([take.foe.name,take.foe.hue,m]);
+  const m=take.list[take.i],from=b.x+22;run.log.push([take.foe.name,take.foe.hue,m]);
   p.hold=m;take=null;cleanArena();sound(520,.1,"square",.04);
   run.boss++;if(run.boss>=3)mode="result";else startBoss();
+  attune={x:from,y:FLOOR-45,ttl:45,col:HOLD_COL(m)};
 }
 
 function newRun(s=seed){
@@ -539,7 +553,8 @@ function say(t,n=70){msg=t;msgTime=n}
 function spark(x,y,col,n=8){
   for(let i=0;i<n;i++){const a=Math.random()*6.28,s=Math.random()*2.5+.5;parts.push({x,y,vx:Math.cos(a)*s,vy:Math.sin(a)*s-1,life:16+Math.random()*15,col})}
 }
-function boxPlayer(){return{x:p.x+3,y:p.y+3,w:12,h:25}}
+// Vulnerable torso; horn, mane and tail are decorative outside this rectangle.
+function boxPlayer(){return{x:p.x-3,y:p.y+9,w:26,h:17}}
 function boxBoss(){return{x:b.x+5,y:b.y+4,w:37,h:68}}
 function hit(a,z){return a.x<z.x+z.w&&a.x+a.w>z.x&&a.y<z.y+z.h&&a.y+a.h>z.y}
 function spend(n){
@@ -582,9 +597,9 @@ function playerStep(){
     // 行動中は原則キャンセル不可。パリィ成功だけがp.actionを直接解除する。
     p.timer++;
     if(p.action==="attack"){
-      // 所持技の予備動作(W)で発生し、硬直(C)で終わる。ボスと同じ変換表を使う。
+      // プレイヤー版の発生・実持続・硬直を同じ性能データから読む。
       heroStrike();
-      if(p.timer>=p.hold.wind+(ACTIVE[p.hold[A]-1]+10)*p.hold[N]+REC[p.hold[C]-1])p.action="";
+      if(p.timer>=attackEnd(p.hold)){p.action="";p.vx=0}
     }else if(p.action==="roll"){
       p.vx=p.face*HERO.roll;
       if(p.timer>=24)p.action="";
@@ -602,13 +617,14 @@ function playerStep(){
     else if(p.actBuf&&spend(p.hold.cost)){
       p.actBuf=0;begin("attack");p.attack++;p.pulse=-1;p.hitId="";
       // RAINは全段ぶんの落下Xをここで確定する（攻撃開始後は動かない・不変条件7）
-      const m=p.hold,base=p.x+p.face*REACH[m[R]-1];p.targets=[];
-      for(let i=0;i<m[N];i++)p.targets.push(clamp(base+(i?((i%2?1:-1)*(55+18*i)):0),30,CW-30));
+      const m=p.hold;p.targets=[];
+      for(let i=0;i<m[N];i++)p.targets.push(rainAim(m,i));
     }
   }
   if(p.ground)p.coyote=6;else p.coyote=Math.max(0,p.coyote-1);
   // coyoteは床を離れた後6f、jumpBufは押してから7f残る。この二つが重なれば跳ぶ。
-  if(p.jumpBuf&&p.coyote&&p.action!=="roll"&&p.action!=="hit"){
+  const planted=p.action==="attack"&&p.hold[S]===4&&p.timer<activeEnd(p.hold);
+  if(p.jumpBuf&&p.coyote&&p.action!=="roll"&&p.action!=="hit"&&!planted){
     p.jumpBuf=0;p.coyote=0;p.ground=0;p.vy=-7.25;sound(170,.05,"sine",.018);
   }
   if(!held("Space","KeyW","ArrowUp")&&p.vy<-2.2)p.vy*=.58;
@@ -616,7 +632,7 @@ function playerStep(){
   p.x+=p.vx;p.y+=p.vy;
   p.x=clamp(p.x,20,CW-38);
   if(p.y>=FLOOR-30){p.y=FLOOR-30;p.vy=0;p.ground=1}else p.ground=0;
-  if(hit(boxPlayer(),boxBoss())&&p.action!=="roll")p.x=b.x>p.x?b.x-13:b.x+38;
+  if(hit(boxPlayer(),boxBoss())&&p.action!=="roll")p.x=clamp(b.x+23>p.x+9?b.x-24:b.x+46,20,CW-38);
 }
 function heroStrike(){
   /*
@@ -624,25 +640,25 @@ function heroStrike(){
   予備動作が終わってから、段ごとに判定を出す。展開はmoveRect()を共有するので、
   「見えているものと当たるもの」がプレイヤー側でも一致する（不変条件8）。
   */
-  const m=p.hold,w=m.wind,span=ACTIVE[m[A]-1]+10,t=p.timer-w;
+  const m=p.hold,w=m.wind,span=m.active+10,t=p.timer-w;
   if(t<0||t>=span*m[N]-10)return;
   if(p.timer===w)sound(moveTone(m,m.wind),.07,WAVE[m[S]],.025);
   const pulse=Math.min(m[N]-1,(t/span)|0),local=t%span;
   if(m[S]===4){ // 弾は段が変わった最初のフレームで一発だけ生成する
     if(p.pulse!==pulse){p.pulse=pulse;
-      shots.push({x:p.x+9,y:p.y+12,vx:p.face*5.4,vy:0,owner:0,dmg:m.seg[pulse],post:HERO.post,col:HOLD_COL(m),life:150});
+      shots.push({...horn(),vx:p.face*5.4,vy:0,owner:0,dmg:m.seg[pulse],post:m.post/m[N],col:HOLD_COL(m),life:150});
       sound(moveTone(m,m.wind,pulse),.06,"sawtooth",.022);}
     return;
   }
-  if(local>=ACTIVE[m[A]-1])return;
+  if(local>=m.active)return;
   if(m[S]===3)p.x=clamp(p.x+p.face*(3.2+m[R]*.72),20,CW-38); // 突進は自分が前へ出る
   const id=p.attack+":"+pulse;
   if(p.hitId!==id&&hit(moveRect(m,pulse,p),boxBoss())){
-    p.hitId=id;bossDamage(m.seg[pulse],HERO.post,"melee");
+    p.hitId=id;bossDamage(m.seg[pulse],m.post/m[N],"melee",m[S]===0?p.face*24/m[N]:0);
     if(pulse)sound(moveTone(m,m.wind,pulse),.05,WAVE[m[S]],.02);
   }
 }
-function bossDamage(dmg,post,kind){
+function bossDamage(dmg,post,kind,push=0){
   /*
   ボスが攻撃を受けたときの唯一の入口。
 
@@ -665,9 +681,10 @@ function bossDamage(dmg,post,kind){
   if(kind==="melee"&&b.defense===2)b.barrier=180;
   if(b.phase==="recover"||b.phase==="stagger")dmg*=1.25;
   b.hp=Math.max(0,b.hp-dmg);b.posture=Math.max(0,b.posture-post);
+  b.x=clamp(b.x+push,45,CW-65);
   respond(counter?"counter":"hit",counter?"COUNTER!":"HIT");
   spark(b.x+20,b.y+28,PAL[b.hue],7);freeze=kind==="melee"?3:1;shake=kind==="melee"?3:1;
-  if(mode==="trial"){if(!b.hp)b.hp=b.maxHp;if(!b.posture)b.posture=b.maxPosture;return}
+  if(mode==="trial"){b.reset=150;return}
   if(b.hp<=0){
     /*
     撃破。奪取の候補をここで組み立てる（設計 arena の 1.4.1）。
@@ -826,9 +843,9 @@ function moveRect(m,pulse=0,src=b){
   「見た目より判定が広い」事故が起きるため、ここを唯一の形状定義にする。
   */
   const reach=REACH[m[R]-1],dir=src.face,hero=src!==b,ox=src.x,oy=src.y;
-  const fw=hero?12:40,bw=hero?12:38;
-  if(m[S]===0)return{x:dir<0?ox-reach:ox+fw,y:FLOOR-24,w:reach,h:24};
-  if(m[S]===1)return{x:dir<0?ox-reach:ox+bw,y:oy+(hero?4:26),w:reach,h:18};
+  const front=hero?horn(src).x:dir<0?ox:ox+40;
+  if(m[S]===0)return{x:dir<0?front-reach:front,y:FLOOR-24,w:reach,h:24};
+  if(m[S]===1)return{x:dir<0?front-reach:front,y:hero?horn(src).y-6:oy+26,w:reach,h:hero?12:18};
   if(m[S]===2)return{x:ox-reach*.55,y:FLOOR-57,w:reach+44,h:57};
   if(m[S]===3)return hero?boxPlayer():boxBoss();
   if(m[S]===5){const w=28+m[R]*9,t=src.targets[pulse];return{x:t-w/2,y:18,w,h:FLOOR-18}}
@@ -908,6 +925,7 @@ function step(){
   }
   if((mode==="fight"||mode==="trial")&&pressed("Escape")){pauseGame();return}
   if(feedback.ttl)feedback.ttl--;
+  if(attune&&!--attune.ttl)attune=null;
   shake*=.82;if(shake<.3)shake=0;
   if(mode==="title"){
     if(pressed("KeyN")){seed=(Math.random()*0xffffffff)>>>0;sound(300,.05)}
@@ -932,6 +950,7 @@ function step(){
       if(mode==="fight")run.time++;
       playerStep();
       if(mode==="fight")bossStep();
+      else if(b.reset&&!--b.reset){if(p.action||shots.length)b.reset=1;else{b.x=360;b.hp=b.maxHp;b.posture=b.maxPosture;}}
       if(mode==="fight"||mode==="trial")shotsStep();
     }
     partsStep();if(msgTime)msgTime--;
@@ -948,6 +967,13 @@ function text(t,x,y,size=10,col="#dfe1f1",align="left"){
 function background(){
   const g=cx.createLinearGradient(0,0,0,CH);g.addColorStop(0,"#090a19");g.addColorStop(1,"#171226");cx.fillStyle=g;cx.fillRect(0,0,CW,CH);
   for(const s of stars){cx.globalAlpha=.25+s[2]*.2;cx.fillStyle="#b8c9ff";cx.fillRect(s[0],s[1],s[2],s[2])}cx.globalAlpha=1;
+  // All seven colors return together in three arcs; progress is not color loot.
+  const n=mode==="title"?0:freed();
+  cx.save();cx.lineWidth=3;
+  for(let i=0;i<7;i++){
+    cx.strokeStyle=PAL[i];cx.globalAlpha=.055;cx.beginPath();cx.arc(320,302,186+i*5,Math.PI,Math.PI*2);cx.stroke();
+    if(n){cx.globalAlpha=.26;cx.beginPath();cx.arc(320,302,186+i*5,Math.PI,Math.PI+Math.PI*n/3);cx.stroke()}
+  }cx.restore();
   cx.fillStyle="#1f1830";for(let x=0;x<CW;x+=58)cx.fillRect(x,230+(x%3)*8,34,77);
   cx.fillStyle="#2b2038";cx.fillRect(0,FLOOR,CW,CH-FLOOR);cx.fillStyle="#594569";cx.fillRect(0,FLOOR,CW,2);
 }
@@ -964,7 +990,7 @@ function HOLD_COL(m){
   優先順は設計 design/tree/read/tell/palette の 1.2.1 と同じ 黄→青→紫→橙。
   判定は変換後の実フレームで行う（段のままだと予備動作の半減が反映されない）。
   */
-  if(m.bare)return "#c9c6d8";          // 素手は出発点なので無色
+  if(m.bare)return "#c9c6d8";          // 初期の角は無色
   if(m.wind<=18)return PAL[2];         // 黄 高速（実フレーム18F以下）
   if(m[R]===4)return PAL[4];           // 青 長射程
   if(m[N]>1)return PAL[6];             // 紫 多段
@@ -1039,9 +1065,67 @@ function drawPerson(x,y,scale,col,u=p){
   if(shape===2)cx.fillRect(len-7,-thick-3,7,thick*2+6);
   cx.restore();cx.restore();
 }
+function unicorn(x,y,face,m,action="",timer=0,stride=0){
+  const wind=action==="attack"&&timer<m.wind,live=action==="attack"&&timer>=m.wind&&timer<activeEnd(m);
+  const recover=action==="attack"&&timer>=activeEnd(m),s=m[S];
+  const crouch=action==="roll"?9:recover?3:0,rear=wind&&s===2?-7:0,head=headPose(m,action,timer);
+  cx.save();cx.translate(x,y);cx.scale(face,1);cx.lineCap="round";
+  const poly=(v,col)=>{cx.fillStyle=col;cx.beginPath();cx.moveTo(v[0],v[1]);for(let i=2;i<v.length;i+=2)cx.lineTo(v[i],v[i+1]);cx.closePath();cx.fill()};
+  // Tail, four independently articulated legs, torso, neck and long horse muzzle.
+  poly([-12,-17,-21,-23,-24,-11,-19,-16,-12,-10],"#b6a5d5");
+  for(let i=0;i<4;i++){
+    const xx=(i<2?-11:7)+(i%2)*4,step=Math.sin(stride+(i%2)*Math.PI+(i<2?0:Math.PI))*(stride?4:0);
+    cx.strokeStyle=i%2?"#a49cbb":HERO.col;cx.lineWidth=3;cx.beginPath();
+    cx.moveTo(xx,-11+crouch);cx.lineTo(xx+step,-5+crouch/2+(i>=2?rear:0));cx.lineTo(xx-step,(i>=2?rear:0));cx.stroke();
+  }
+  cx.save();cx.translate(0,crouch);
+  poly([-14,-19,-6,-23,10,-21,14,-11,6,-6,-10,-7],HERO.col);
+  cx.restore();cx.save();cx.translate(head[0],head[1]);
+  poly([6,-20,11,-30,17,-31,18,-23,26,-19,25,-14,17,-15,12,-18,10,-8],HERO.col);
+  poly([10,-29,8,-34,14,-30],HERO.col);
+  poly([11,-29,7,-28,3,-15,8,-18,13,-25],"#b6a5d5");
+  cx.fillStyle="#171226";cx.fillRect(16,-25,2,2);cx.fillRect(24,-18,2,1);
+  // The single forehead horn ends at the shared projectile / attack origin.
+  poly([16,-28,22,-37,20,-28],HOLD_COL(m));
+  if(wind||live){cx.strokeStyle=HOLD_COL(m);cx.globalAlpha=live?.9:.4;cx.lineWidth=1;cx.beginPath();cx.arc(22,-37,live?6:3+timer/m.wind*4,0,6.3);cx.stroke()}
+  cx.restore();cx.restore();
+}
 function drawHero(){
-  cx.save();if(isRollInv())cx.globalAlpha=.55;drawPerson(p.x+9,p.y+18,1,HERO.col);cx.restore();
-  if(p.action==="parry"){cx.strokeStyle="#fff";cx.globalAlpha=isParry()?1:.25;cx.beginPath();cx.arc(p.x+9+p.face*9,p.y+13,12,-1.4,1.4);cx.stroke();cx.globalAlpha=1}
+  const m=p.hold,trial=mode==="trial"||mode==="pause"&&pauseFrom==="trial",h=horn();
+  cx.save();if(isRollInv())cx.globalAlpha=.55;
+  unicorn(p.x+9,p.y+30,p.face,m,p.action,p.timer,p.vx?p.x*.22:0);cx.restore();
+  cx.save();cx.strokeStyle=cx.fillStyle=HOLD_COL(m);cx.lineWidth=2;
+  if(m[S]===5){
+    const aiming=!p.action,locked=p.action==="attack"&&p.timer<activeEnd(m);
+    if(aiming||locked)for(let i=0;i<m[N];i++){
+      const x=aiming?rainAim(m,i):p.targets[i];cx.globalAlpha=aiming?.3:.75;cx.setLineDash(aiming?[2,3]:[]);
+      cx.beginPath();cx.moveTo(x-10,FLOOR-3);cx.lineTo(x+10,FLOOR-3);cx.moveTo(x,FLOOR-10);cx.lineTo(x,FLOOR);cx.stroke();
+      if(locked){cx.globalAlpha=.16;cx.beginPath();cx.moveTo(h.x,h.y);cx.quadraticCurveTo(h.x,100,x,130);cx.stroke()}
+    }
+  }
+  cx.setLineDash([]);
+  if(p.action==="attack"){
+    const t=p.timer-m.wind,span=m.active+10;
+    if(t>=0&&p.timer<activeEnd(m)&&t%span<m.active&&m[S]!==4){
+      const q=moveRect(m,Math.floor(t/span),p);cx.globalAlpha=.16;cx.fillRect(q.x,q.y,q.w,q.h);
+      cx.globalAlpha=.7;cx.strokeRect(q.x,q.y,q.w,q.h);
+    }
+  }
+  if(p.action==="parry"){
+    cx.strokeStyle="#fff";cx.globalAlpha=isParry()?1:.25;cx.beginPath();cx.arc(h.x,h.y,12,-1.4,1.4);cx.stroke();
+  }
+  if(feedback.kind==="parry"&&feedback.ttl>45){
+    for(let i=0;i<7;i++){cx.strokeStyle=PAL[i];cx.globalAlpha=(feedback.ttl-45)/20;cx.beginPath();cx.arc(h.x,h.y,12+i*2,-2.6,.5);cx.stroke()}
+  }
+  cx.restore();
+  if(trial)text("TRIAL HORN",p.x+9,p.y-15,8,HOLD_COL(m),"center");
+  drawAttune(h);
+}
+function drawAttune(h){
+  if(!attune)return;
+  const t=1-attune.ttl/45,x=attune.x+(h.x-attune.x)*t,y=attune.y+(h.y-attune.y)*t-Math.sin(t*Math.PI)*65;
+  cx.fillStyle=attune.col;cx.fillRect(x-3,y-3,6,6);
+  if(mode!=="result")text("ONE HORN · ONE MOVE",320,88,10,attune.col,"center");
 }
 function drawBoss(){
   const col=PAL[b.hue],x=b.x+22,y=b.y+36;cx.save();cx.translate(x,y);
@@ -1071,7 +1155,8 @@ function hud(){
   cx.fillStyle="#8a8298";for(const n of[18,24,p.hold.cost])cx.fillRect(41+128*(n/100),346,1,5);
   // 所持技を常時出す。スタミナの目盛りと並べて読めるようにする（設計 hud）。
   const m=p.hold;cx.fillStyle=HOLD_COL(m);cx.fillRect(180,340,4,4);
-  text(SHAPE_NAME[m[S]]+"  "+m.cost+"ST",190,344,9,"#c4c6dc");
+  text("HORN: "+SHAPE_NAME[m[S]]+"  "+m.cost+"ST",190,344,9,"#c4c6dc");
+  text("RAINBOW "+freed()+"/3",620,344,9,"#c4c6dc","right");
   if(feedback.ttl)text(feedback.kind.toUpperCase()+": "+feedback.text,320,70,feedback.kind==="hurt"?10:12,"#fff","center");
   else if(!trial&&b.phase==="wind")text(SHAPE_NAME[b.moves[b.move][S]]+" / TRY: "+lesson(b.moves[b.move]),320,70,10,"#fff","center");
   else if(msgTime)text(msg,CW/2,70,12,"#fff","center");
@@ -1085,8 +1170,8 @@ function drawTake(){
   選ぶ意味が消える。出すのは間合いと速さと代償だけ——それが実際に変わるもの。
   */
   cx.fillStyle="#080914e8";cx.fillRect(24,60,CW-48,240);
-  text("PRISM SHATTERED",CW/2,96,22,"#f0efff","center");
-  text("TAKE ONE MOVE   ←/→ A/D CHOOSE   J/Z TRY   ENTER CONFIRM",CW/2,120,10,"#a3a6c2","center");
+  text("ONE HORN · ONE MOVE",CW/2,96,22,"#f0efff","center");
+  text("COPY A FOE'S MOVE   A/D CHOOSE   J/Z TRY   ENTER CONFIRM",CW/2,120,10,"#a3a6c2","center");
   const n=take.list.length,w=Math.min(96,(CW-80)/n);
   take.list.forEach((m,i)=>{
     const x=CW/2+(i-(n-1)/2)*w,on=i===take.i,own=m===take.held;
@@ -1095,10 +1180,10 @@ function drawTake(){
     cx.strokeRect(x-w/2+3,146,w-6,116);
     cx.fillStyle=HOLD_COL(m);cx.fillRect(x-w/2+3,146,w-6,4);
     text(SHAPE_NAME[m[S]],x,168,10,"#f0efff","center");
-    text(["LOW ARC","STRAIGHT","AREA IMPACT","RUSH FORWARD","FLYING SHOT","FALLING HITS"][m[S]],x,184,8,"#c4c6dc","center");
-    text(["CLOSE","MID REACH","LONG REACH","FAR REACH"][m[R]-1],x,199,8,"#c4c6dc","center");
+    text(ROLE_GOOD[m[S]],x,184,8,"#c4c6dc","center");
+    text(ROLE_RISK[m[S]],x,199,8,"#ec9348","center");
     text((m.wind<=18?"QUICK":m.wind<=27?"STEADY":"SLOW")+" START",x,212,8,"#9a9cb4","center");
-    text((m[C]<=2?"FAST":"LONG")+" RESET",x,225,8,"#9a9cb4","center");
+    text((m.rest<=30?"FAST":"LONG")+" RESET",x,225,8,"#9a9cb4","center");
     text(m[N]+" HIT / "+m.cost+" ST",x,240,8,m.cost>26?"#ed596f":"#e7d96d","center");
     if(own)text("HELD",x,256,8,"#5dcc8a","center");
     cx.globalAlpha=1;
@@ -1127,15 +1212,17 @@ function draw(){
   }
   cx.restore();
   if(mode==="title"){
+    cx.save();cx.translate(320,82);cx.scale(1.8,1.8);unicorn(0,0,1,bareHand());cx.restore();
     text("PRISMATIC",CW/2,112,16,"#a9aad0","center");text("DUEL",CW/2,158,48,"#f1efff","center");
     for(let i=0;i<7;i++){cx.fillStyle=PAL[i];cx.fillRect(224+i*28,177,22,3+i%2*3)}
-    text("DEFEAT A FOE > STEAL ONE MOVE > USE IT NEXT",CW/2,207,11,"#f0efff","center");
-    text("READ THE WINDUP > EVADE > STRIKE THE OPENING",CW/2,225,10,"#a3a6c2","center");text("SEED  "+seedText(),CW/2,252,12,"#c4c6dc","center");text("ENTER  BEGIN    N  NEW SEED",CW/2,280,11,"#ead85b","center");
+    text("A UNICORN. ONE HORN. ONE STOLEN MOVE.",CW/2,207,11,"#f0efff","center");
+    text("DEFEAT 3 GUARDIANS. FREE THE RAINBOW.",CW/2,225,10,"#a3a6c2","center");text("SEED  "+seedText(),CW/2,252,12,"#c4c6dc","center");text("ENTER  BEGIN    N  NEW SEED",CW/2,280,11,"#ead85b","center");
   }else if(mode==="dead")overlay("YOU FELL",b.name+" remembers every move.","ENTER / R  RETRY SAME FOE     N  NEW SEED");
   else if(mode==="bosswin")drawTake();
   else if(mode==="trial"){
     text("TRY "+SHAPE_NAME[p.hold[S]]+" · "+p.hold.cost+" ST · J/Z ATTACK · TARGET WILL NOT ATTACK",CW/2,92,10,"#f0efff","center");
     text("R CHOOSE AGAIN   ENTER "+(run.boss===2?"RESULT":"NEXT FOE")+"   ESC PAUSE",CW/2,110,10,"#ead85b","center");
+    text(ROLE_GOOD[p.hold[S]]+" / "+ROLE_RISK[p.hold[S]]+" · TARGET RESETS AFTER HITS",CW/2,128,9,"#c4c6dc","center");
   }
   else if(mode==="result")drawResult();
   else if(mode==="pause")overlay("PAUSED","The duel waits.","ENTER / ESC  RESUME");
@@ -1160,6 +1247,7 @@ function drawResult(){
     text(`${SHAPE_NAME[m[S]]}  ${REACH[m[R]-1]}px  ${m.wind}F  ${m.cost}ST`,156,y+18,9,"#c4c6dc");
   });
   const h=p.hold;
+  unicorn(530,300,1,h);drawAttune({x:552,y:263});
   text("HOLDING",CW/2,290,8,"#777b99","center");
   cx.fillStyle=HOLD_COL(h);cx.fillRect(CW/2-52,296,4,4);
   text(`${SHAPE_NAME[h[S]]}  ${REACH[h[R]-1]}px  ${h.wind}F  ${h.cost}ST`,CW/2-42,302,10,"#f0efff");

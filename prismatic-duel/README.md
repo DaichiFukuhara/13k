@@ -2,6 +2,9 @@
 
 既存の Virginight を変更せずに並存する、制約付き生成ボスとの2Dアクション実装です。
 
+主人公は四足のユニコーン。敵の技を1つだけ角へ写し、3体の守護者を倒して虹を取り戻します。
+横薙ぎで距離を作り、突きで短い隙へ差し込み、叩きつけで体勢を崩すなど、6形状で立ち回りが変わります。
+
 ## 起動
 
 このディレクトリをHTTPサーバーで配信し、`index.html`を開きます。
@@ -38,6 +41,7 @@ node prismatic-duel/test.mjs
 node prismatic-duel/steal.test.mjs
 node prismatic-duel/experience.test.mjs
 node prismatic-duel/telegraph.test.mjs
+node prismatic-duel/roles.test.mjs
 node prismatic-duel/submit.mjs
 ```
 
@@ -45,6 +49,8 @@ node prismatic-duel/submit.mjs
 `steal.test.mjs`は奪取した技の変換規則と、全6形状を連続3回撃てることを検査します。
 `experience.test.mjs`は実入力と戦闘更新を通して、試用の隔離・選び直し・最終結果・ポーズ復帰・反撃と被弾理由を検査します。
 `telegraph.test.mjs`は82件の時間・方向の条件で、予告と当たり判定の対応、RAINの後段と段間、試用中の表示、描画が状態を変更しないことを検査します。
+`roles.test.mjs`は13件の技比較・多段効果の上限・角と胴体の判定・試用・虹進行・描画の回帰検査です。
+`node prismatic-duel/roles.sim.mjs 20`で、初期技と6形状×3段階×20シードの自動操作サンプルを再現できます。人の勝率や全シードの攻略保証を表すものではありません。
 
 ## 提出手順
 
