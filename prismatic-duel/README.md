@@ -25,19 +25,26 @@ http://localhost:4173/?seed=TEST01
 | 攻撃 | J または Z |
 | パリィ | K または X |
 | ローリング | L または C |
-| 交代 | S または下キー |
-| ポーズ | Escape |
+| ポーズ | Escape（試用中も可） |
+| 撃破後の技選択 | A/D または左右キー |
+| 選択した技を試す | J または Z |
+| 試用から技選択へ戻る | R |
+| 技を確定して次へ | Enter |
 
 ## 検証と提出ビルド
 
 ```powershell
 node prismatic-duel/test.mjs
 node prismatic-duel/steal.test.mjs
+node prismatic-duel/experience.test.mjs
+node prismatic-duel/telegraph.test.mjs
 node prismatic-duel/submit.mjs
 ```
 
 `test.mjs`は10,000シード×3段階、合計30,000体のボスを生成し、再現性と危険度制約を検査します。
 `steal.test.mjs`は奪取した技の変換規則と、全6形状を連続3回撃てることを検査します。
+`experience.test.mjs`は実入力と戦闘更新を通して、試用の隔離・選び直し・最終結果・ポーズ復帰・反撃と被弾理由を検査します。
+`telegraph.test.mjs`は82件の時間・方向の条件で、予告と当たり判定の対応、RAINの後段と段間、試用中の表示、描画が状態を変更しないことを検査します。
 
 ## 提出手順
 

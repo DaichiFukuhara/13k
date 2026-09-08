@@ -10,6 +10,62 @@ uses_seams: [r1.screen-state, t2.color-result]
 
 # telegraph（システム: 危険範囲と発生時刻を、`s1` の値だけから描く）
 
+## 2026-09-08 現行差分 — 実時間充填と後段予告
+
+`telegraph@2026-09-08-decision-4`。親は `tell@2026-09-08-decision-5` / `split-5`。
+以下を差分の正本とし、未変更範囲のみ旧本文を継承する。深さ3のため分割なし。
+ユーザーの実施許可による設計編集・実装であり、具体版の人間決定承認・正式precheckは未記録。
+
+| 現行索引 | 正本 |
+| --- | --- |
+| 時間・全段・方向の決定 | この節の1〜7 |
+| 親からの責任・seam | 下の「親からの振り分け」の2026-09-08差分 |
+| 実装 | `prismatic-duel/game.js` の `drawTelegraph` のみ |
+| 承認状態 | 実施許可あり。旧approval-3を新差分の承認としない |
+
+### 1. 決めるもの
+
+全6形状のwindに実 `WIND[m[W]-1]` と残り `b.timer` の線形進行を使う。
+矩形は全体輪郭を残して底から上へ充填する。SHOTは全射線を破線で残し、発射点から実線を伸ばす。
+RAINは未発生の全段を `moveRect(m,i,b)` で展開し、後段を薄い破線と段番号、現在発生を濃い実線と全面塗りで区別する。
+CHARGEは実 `b.face` の短い矢印を頭上に出す。本体矩形以外の経路を危険判定として塗らない。
+
+### 2. なぜ要るか
+
+色だけでは発生までの残り時間が分からず、RAINの後段とCHARGEの向きを初見で見落とすため。
+
+### 3. 利用者
+
+初見と同じボスへ再挑戦するDesktopプレイヤー。無音でも範囲・時間・段順・方向を読む。
+
+### 4. 受け入れ条件
+
+- [x] G1（T2）: 全6形状・4つのwind長で開始/半分/直前の充填が実時間に一致する。
+- [x] G2（T3）: RAINの未発生全段が共有矩形と一致し、発生済み段と段間の現在段を濃く表示しない。
+- [x] G3（T3）: 左右CHARGEの矢印がfaceと一致し、SHOTは射線と発射までの進行がある。
+- [x] G4（T5）: trialの標的に敵予告を出さず、反復描画で戦闘状態を変更しない。
+- [ ] G5（T6）: 統合実画面・ZIP容量は親で確認。人間の初見理解・18F知覚は未検証として残す。
+
+### 5. 不変条件とseam
+
+危険範囲の全体矩形は `moveRect` の戻り値そのまま。充填・番号・方向記号は装飾であり判定を生成しない。
+実更新器はactiveの判定後にtimerを増やすため、描画は `max(0,b.timer-1)` を使い、timer=0は未発生として薄く示す。
+色は既存 `attackColor`、状態は読み取り専用。Canvasのsave/restoreで描画属性も復帰する。
+段番号はY=128、矢印は頭上に置き、HUD・trial案内を避ける。trialでは即returnする。
+親のモノリシック実装継続を適用し、旧本文のsnapshot物理分離・装飾を含む座標算術禁止は今回の要件にしない。
+
+### 6. 実装へ任せるもの
+
+破線の長さ、薄さ、線幅は軽量なCanvas描画で決める。形状・戦闘値・生成器・HUDは編集しない。
+全体容量は根の13,312 bytes実測を正本とし、旧葉の1,400 inlined bytes目安で機能を落とさない。
+
+### 7. 未確定
+
+RAINの全段予告と旧同時予告上限の解釈差は根が受理し、根F2でRAINに限り最大3箇所へ更新した。段番号と破線で区別する。
+実画面と人間知覚の最終判断は親へ返し、自動検査で代替しない。
+
+検証記録: `node prismatic-duel/telegraph.test.mjs` が成功。実drawTelegraphのCanvas呼出しを記録し、82件の時間/方向fixture、RAIN全段の共有矩形一致と段間、trial非表示、反復描画の状態不変を検査した。実画面・全体ZIPの最終結果は根へ委ねる。
+
 ## 📍 現行契約への索引
 
 <!-- 2026-09-04 Codex 監査 P1-10: 「履歴が正本本文に大量に残り、
@@ -32,6 +88,20 @@ uses_seams: [r1.screen-state, t2.color-result]
      ここに座標計算を1行でも書いたら、設計が壊れる。 -->
 
 ## 親からの振り分け
+
+<!-- tellが2026-09-08に追加転記。子本文の旧版より優先する差分。子はこの節を変更しない。 -->
+- 容量の優先: 全追加のZIP余裕は現時点約3,426 bytes。軽量なCanvas形状で時間と範囲の読みやすさを優先し、画像生成/外部素材は追加しない。
+- parent_decision_ref（追加）: tell@2026-09-08-decision-5 / tell@2026-09-08-split-5。read@2026-09-08-decision-6 / split-5とroot@2026-09-08-decision-13 / split-12を継承。
+- 実施根拠: 根先頭のユーザーによる設計編集・サブエージェント実装・検証の許可。具体版の人間決定/分割承認・正式precheckは未記録。旧approval-3を今回の承認としない。
+- 責任と詳細化: tell先頭差分1〜7。SWEEP/THRUST/SLAM/CHARGE/SHOT/RAINの全6形状に実wind時間に従う充填を付け、RAIN未発生段とCHARGEの進行方向を予告する。充填方向/輪郭/段の区別/方向記号の具体形はこの葉が決める。
+- 実装所有: prismatic-duel/game.jsのdrawTelegraphのみ。drawPerson/drawHero/drawBoss、共有draw、HUD、palette、runtime、moveRectは編集しない。共有ファイル全体の整形をしない。範囲拡張が要る場合はtellへ返す。
+- 範囲と時間: ボスwindの進行はWIND[m[W]-1]と残りb.timerから0〜1へ正規化。全体輪郭を残して充填する。RAINは各未発生pulseのmoveRect(m,pulse,b)を使い、現在activeと後段を線/薄さで区別する。targets/幅/段数を独自展開しない。CHARGEの矢印はb.faceの方向の案内であり、移動経路全体を現在の判定として塗らない。SHOTの射線にも時間表現を持つが弾全域の安全保証としない。activeと段間は実更新区切りに従う。
+- 継承制約: 描画からp/b/shots/mode/タイマー/候補/戦績を書かない。同じmoveRectで危険範囲を得て判定と一致させる。paletteの既存性能分類/優先順位を維持し、特性の色に独自規則を足さない。640×360/床Y=307/描画順序/無音と色以外の冗長化は親契約を継承。
+- s1追加の継承: lesson(m)はSHOTの弾パリィを含むduelの純関数。feedbackは{ text,kind,ttl }、kindはhit/counter/parry/hurt/tired、ttlは残り更新F。lastLessonは被弾した技名と対処の正本（弾は発射時の技情報）。modeのtrialはduel所有でpauseの戻り先もduel所有。takeはnullまたは{ list:Move[],i:number,held:Move,foe:{name:string,hue:number} }でheldは撃破時所持技。全て読み取り専用、私有の退避内部へ依存しない。
+- 成功/失敗と試用: counterは実際のrecover/stagger命中イベントだけ。hurt/parryは同一イベントのtiredより優先。姿勢から成功を推測せずttlを減らさず、lastLessonを現在b.moveから推測しない。対処を描く場合はlesson(m)の正本を使い安全保証にしない。trialは実状態で描き、試用の隔離/入力/確定を表示側で変更しない。
+- 割当受け入れ条件: tell T2/T3主、T4協力、T5/T6担当分。6形状のwind開始/途中/終了とactive/段間、RAIN後段、左右CHARGE、fight/trial/pause復帰、反復描画の非変更を検証する。人間の初見/18F知覚/面白さは未実施なら未検証。
+- uses_seams: [s1.presentation-state（祖先から継承）, r1.screen-state, t2.color-result]。提供は既存t1.color-request。actorsを呼ばない。RAIN後段と予告上限の矛盾はtellへ境界要求を返し、生成器を変えて解消しない。ZIP 13,312 bytesは根の統合実測。結果と制約はseam_inbox経由で親へ返す。
+
 
 - **責任**: 危険範囲と発生時刻を、`s1` の値だけから描く
 - **詳細化の対象**: 親の本文1の機能「予告を出す」。根の 1.1（どこが危険かといつ発生するかが

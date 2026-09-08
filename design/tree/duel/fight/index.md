@@ -3,14 +3,140 @@ id: duel.fight
 parent: duel
 depth: 2
 children: [avatar, foe, arena]
-status: children-created   # 決定 fight@2026-09-06-decision-5 / 分割 fight@2026-09-06-split-5。
-                        # いずれも人間の承認 root@2026-09-06-approval-3。
+status: children-created   # 2026-09-08差分 decision-6 / split-6 を先頭節で優先適用。
+                        # 今回はユーザー作業許可による実施。具体版の人間個別承認・正式precheckは未取得。
                         # Codex 深さ3監査（2026-09-04・判定不能）の指摘を反映済み
 seams: [f1.avatar-state, f2.foe-state, f3.avatar-verdict, f4.foe-verdict]
 uses_seams: [d1.run-definition]   # gen から受け取る
 ---
 
 # fight（解決法: 確定したランを、噛み合う戦闘として最後まで走らせる）
+
+## 2026-09-08 現行差分 — 判定の学習情報と隔離した技試用
+
+`fight@2026-09-08-decision-6` / `fight@2026-09-08-split-6`。
+親の `duel@2026-09-08-decision-11` / `split-7` を詳細化する。
+この節を優先し、無関係な9月6日基準版・承認履歴は維持する。
+
+### 1. 決めるもの
+
+実際の命中・パリィ・被弾・ST不足を説明できる情報へ変換し、撃破候補を本戦と同じ更新器で
+任意に試せるようにする。今回のモノリシックruntime統合実装はarena一つが所有する。
+
+### 2. なぜ要るか
+
+反撃成功と体勢崩しによる状態変化を取り違えず、遅れて届く敵弾も発射した技で説明する。
+試用のために技を模倣せず、所持技とランを保護した状態で発生・射程・段数・消費を体験させる。
+
+### 3. 利用者
+
+初見と同seed再挑戦のDesktopプレイヤー。試用を省略する人も同じ候補から直接確定できる。
+readは公開された状態だけを読み、判定・候補・試用の可変状態を書き換えない。
+
+### 4. 受け入れ条件
+
+- [ ] FT3（D-F3）: 実ダメージ成立前の敵状態を採取し、recover/staggerならcounter、
+  それ以外ならhit。命中による新規stagger、空振り、shift中の無効接触をcounterにしない。
+  近接・弾のパリィ成功はparry。同じ更新でhurt/parryをtiredが上書きしない。
+- [ ] FT4（D-F4）: 実被弾の技名と対処を死亡まで保持し、新戦で消す。
+  発射後にb.moveや技データが変わっても被弾原因はその弾の発射時情報。
+  ST不足で実行できない要求行動だけtired。パリィ不可を可能と案内しない。
+- [ ] FT5（D-F5）: 全6形状で本戦と同じ更新器・ST消費を使い、各3回連続使用できる。
+  試用を繰り返してもrun.boss/time/hits/parries/log、確定所持技、生成用乱数は変わらない。
+  Rで同じカーソルの候補へ戻り、別候補の試用と直接確定もできる。
+- [ ] FT6（D-F6）: 最終撃破でも試用・候補復帰・Resultへの確定ができ、記録は一度だけ。
+  trialのEscape/blur→pause→Enter/Escapeはtrialへ復帰し、復帰入力で確定しない。
+  試用退出後に弾・一時効果・入力バッファが漏れず、同seed再挑戦の敵定義が一致する。
+- [ ] FT7: arenaは実施コマンド・結果・未検証項目をfightへ返す。容量と実画面は根の統合で確認。
+  人間による学習確認F8と正式precheckはこの自動検査で代用しない。
+
+### 5. 不変条件・seamの更新
+
+HP14・3連戦・生成分布・プレイヤー性能・敵AI・奪取変換/ST式は据え置く。
+d1と既存形状展開を継承し、表示文を判定に使わない。f1〜f4の4 IDと接続方向は維持する。
+
+| seam | 今回追加する意味・実装上の受け渡し |
+| --- | --- |
+| f1.avatar-state | 既存のプレイヤー状態と攻撃情報を再利用。メニュー操作を選択/試用/確定/候補復帰/一時停止へ詳細化。入力採取は既存keys/tapの一箇所で、arenaの統合分岐が一度だけ消費する |
+| f2.foe-state | 命中直前のphaseでcounterを判定。敵弾を作る時点の技名とlessonの値を弾へ保存する。性能・山札・AIには変更を要求しない |
+| f3.avatar-verdict | 試用開始の一時所持技と、確定時だけの本戦所持技更新を区別。被弾/ST不足のイベント挿入もarenaの統合所有 |
+| f4.foe-verdict | 試用標的の被ダメージは本戦の撃破・変異・戦績へ送らず、標的を再利用する。foe本戦AIの追加実装は不要 |
+| 根s1.presentation-state | arenaがlesson(m)、feedback、lastLesson、mode trial、takeを生成し、fight→duelのseam_inbox経由で報告。readへは根の公開契約で渡す |
+
+`lesson(m)`は純関数。形状と実際のパリィ可否に基づく短い対処例を返す。
+SHOTは既存の弾パリィ対応を含め、技のフラグだけから誤って非対応と判断しない。
+敵弾は発射時に技名とlesson文字列を値として保存し、hurtPlayerへ原因を渡す。
+近接は接触した技を渡す。無敵・重複ヒット等で被弾が成立しなければlastLessonを更新しない。
+
+`feedback={text,kind,ttl}`、kindはhit/counter/parry/hurt/tired、ttlは残り更新F。
+pauseでは減らさず、同じ更新でhurt/parryをtiredが上書きしない。
+shakeの減衰とゼロ化もarenaがruntimeの更新側で行い、pause中は停止する。
+描画側がshakeを書き換えずに済むようreadへ渡す（read側の削除と統合時に合わせる）。
+`lastLesson`は技名と対処を含む文字列で、新戦開始時は空。死亡へ遷移しても消さない。
+
+`take`の公開shapeは `null` または
+`{list: Move[], i: number, held: Move, foe: {name: string, hue: number}}`。
+撃破時にlistとheldとfoeを固定し、試用だけではheldもrun.logも更新しない。
+試用用の退避情報はarenaの私有としreadに依存させない。
+
+| 状態・入力 | 遷移と保護するもの |
+| --- | --- |
+| bosswin 左右/A・D | take.iだけを変更する |
+| bosswin J/Z | 撃破直後のp/bを退避し、参照の共有による変更を防いだ試用p/bを用意。候補を試用p.holdへ装着しtrialへ |
+| bosswin Enter | 選択候補を一度だけ確定し次戦またはResultへ |
+| trial 通常の移動・ジャンプ・攻撃 | playerStep/heroStrike/shotsStepとST更新を再使用。bossStepは回さず、攻撃しない標的だけを置く |
+| trial R | 試用を破棄して退避p/bを復帰しbosswinへ。take.i/held/foeを保持 |
+| trial Enter | まず退避p/bを復帰し、bosswinと共通の確定処理を一度だけ通す |
+| fight/trial Escapeまたはblur | pause元状態を保存してpauseへ。キー押下状態を整理して押しっぱなしを残さない |
+| pause Enter/Escape | 保存したfight/trialへ復帰。復帰操作を消費し同一更新で試用確定等を実行しない |
+
+試用中はrun全フィールドと生成用乱数を更新しない。標的は攻撃・第2形態・撃破遷移を行わず、
+ダメージを受けても継続使用可能にする。試用のためにstartBoss/generateBossを呼ばない。
+本戦p/bの配列・技定義は試用から変更しない。退出時はshots/parts、freeze/shake、メッセージ、
+feedback、試用の行動/入力バッファを整理し、試用前に残っていた敵弾も再開しない。
+確定時だけtake.foeと選択候補をrun.logへ一度記録し、所持技更新・run.boss加算を行う。
+3体目ならResultへ、それ以前なら既存の次戦初期化へ進む。
+
+### 6. arenaへ任せることと親に残す権限
+
+退避の具体的な変数、標的の配置と再利用、短文とttl、回帰検査方法はarenaが決める。
+今回に限る共通runtimeのイベント挿入・入力ルーティング・試用分岐の統合権限をarenaへ明示付与する。
+旧分割の「arenaはキーを知らない」は今回のモノリシック統合では上の単一入力経路へ更新する。
+avatar/foeの性能・AI設計の所有は移さず、両ノードへの今回の実装変更依頼は行わない。
+編集対象はgame.jsのruntime節と必要なブラウザ入力/blur接続。rendering節はread所有である。
+性能や生成変更が必要ならfightへboundary_request。runtimeを複数葉で並行編集しない。
+
+### 7. 未確定・実施根拠
+
+根に記録された2026-09-08のユーザー作業許可で設計・可逆な実装・検証を進める。
+今回具体版の人間個別承認・別実装AIの正式precheckは未取得。過去承認を流用しない。
+安全席は次版扱いを継承。実装前のため上の受け入れ条件は未検証である。
+
+### 分割差分 `fight@2026-09-08-split-6`
+
+| 子 | 今回の責任・受け入れ条件 | 所有 |
+| --- | --- | --- |
+| avatar | 既存性能・入力/行動更新器を維持。今回の個別実装依頼なし | 性能設計は維持、統合接続変更はarena |
+| foe | 既存AI・生成済み定義を維持。今回の個別実装依頼なし | 敵AI設計は維持、原因採取と試用分岐はarena |
+| arena | FT3/FT4/FT5/FT6/FT7すべて。学習イベント・試用・ラン隔離の実装と報告 | game.js runtimeと必要な入力/blur接続を単独で編集 |
+
+子3つ・深さ3・seam 4 IDを維持する。試用を別子へ分けると更新器とラン状態の共有が増えるため採らない。
+追加公開契約・単一編集権限・条件の割当は親fightに残す。
+arenaの親振り分けへ転記し、既存葉の閉包から実装に進める状態にする。
+
+### arenaへの追加振り分け（転記元）
+
+- child: arena
+  責任: 戦闘の確定イベントから学習情報を作り、本戦を隔離した任意の奪取技試用を統合する。
+  詳細化の対象: fight先頭2026-09-08差分1〜7、特に5の公開shape・入力・退避復帰・確定の一回性。shakeの減衰とゼロ化をruntime更新へ置き、pause中は止める。
+  継承する制約: 根/duel/fight先頭差分。HP14・3連戦・生成分布・性能・敵AI・奪取変換/ST式を維持。試用は同じ更新器を使い、run/確定所持技/生成用乱数を汚染しない。
+  割り当てられた受け入れ条件: FT3/FT4/FT5/FT6/FT7。実施コマンド・結果・未検証をfightへ報告。
+  uses_seams: [f1.avatar-state, f2.foe-state, d1.run-definition]
+  提供する seam: f3.avatar-verdict / f4.foe-verdict、根s1追加のlesson(m)/feedback/lastLesson/mode trial/take。
+  実装所有: prismatic-duel/game.jsのruntime全体と必要な入力/blur接続。共通更新器内のイベント挿入・試用分岐を明示許可。renderingはread所有。
+  境界: avatar/foeへの今回は実装変更依頼なし。数値・AIは据え置き、変更が必要ならfightへboundary_request。
+  parent_decision_ref: fight@2026-09-08-decision-6 / fight@2026-09-08-split-6
+  実施根拠: 根に記録されたユーザー作業許可。具体版の人間個別承認・正式precheckは未取得。
 
 ## 📍 現行契約への索引
 
@@ -20,9 +146,9 @@ uses_seams: [d1.run-definition]   # gen から受け取る
 
 **この順に読めば現行の契約だけが揃う。**
 
-1. **有効な版**: 決定 `fight@2026-09-06-decision-5` / 分割 `fight@2026-09-06-split-5`
-2. **現行の決定本文**: 1〜7（🔒 が付いた節が最新の凍結）
-3. **現行の分割**: `## 分割提案` 節（見出しの版が上の分割と一致するものだけが有効）
+1. **今回の適用版**: `fight@2026-09-08-decision-6` / `fight@2026-09-08-split-6`（作業許可あり・個別承認未取得）
+2. **現行の決定本文**: 先頭2026-09-08差分1〜7を優先し、無関係な9月6日基準版を維持する
+3. **現行の分割**: 先頭分割差分を優先し、既存の子3つと4 IDは基準版を維持する
 4. **承認証跡**: `### 現在有効なもの` 表 → その下の該当エントリ
 
 > ⚠️ **`superseded` と書かれた節・`~~取り消し線~~`・「旧文は」で始まる引用は履歴である。**
@@ -40,6 +166,22 @@ uses_seams: [d1.run-definition]   # gen から受け取る
      親の seam_inbox に権威化された版に全部書かれている。 -->
 
 ## 親からの振り分け
+
+### 2026-09-08 親による追加振り分け
+
+- child: fight
+  責任: 確定したランを保護しながら、戦闘結果の学習情報と任意の奪取技試用を提供する。
+  詳細化の対象: duel先頭「2026-09-08 現行差分」の1〜7、特に5のtrial隔離とs1追加契約。
+  継承する制約: HP14・3連戦・生成分布・奪取変換/ST式の維持。trialは同じ更新器を使い、戦績・進行・ラン時間・確定所持技・生成用乱数を汚染しない。描画は状態を書き換えない。安全席機構の次版扱いを継続。
+  割り当てられた受け入れ条件: D-F3、D-F4、D-F5、D-F6。F7用の実施結果と未検証項目をduelのseam_inboxへ報告する。
+  uses_seams: [d1.run-definition]
+  提供する seam: 根s1.presentation-state追加のlesson(m)/feedback/lastLesson/mode trial/take。duelのseam_inbox経由で報告する。
+  追加固定契約: 上の5のtake公開shapeと入力を使用。敵弾は発射時の技名とlessonを保持してhurtPlayerへ渡し、被弾時b.moveで推測しない。hurt/parryはtiredに優先する。
+  実装所有: prismatic-duel/game.jsのruntime節。既存arenaを想定して葉一つへ集約し、具体化はfightで行う。
+  parent_decision_ref: duel@2026-09-08-decision-11 / duel@2026-09-08-split-7
+  実施根拠: 根に記録されたユーザー作業許可。今回具体版の人間個別承認・正式precheckは未取得。
+
+
 
 <!-- 親（duel）が duel-split-2 の承認時に転記した（duel@2026-09-04-children-created）。
      子は書き換えない。間違っていると判断したら boundary_request で duel へ返す -->
@@ -419,6 +561,17 @@ status: **approved**（`fight@2026-09-06-split-5` / 人間の承認 `root@2026-0
 
 <!-- 子孫からの境界変更の起票。追記のみ -->
 
+- from: duel.fight.arena / date: 2026-09-08
+  対象: runtime実装結果の受理、s1表示側とのshake更新境界、統合検証
+  理由: experience 11件、steal 28,000変換と全6形状3回、生成30,000体を通過。
+    trial/pause/確定を既存更新器へ接続した。heroStrikeに最終active超過後の再判定・CHARGE再前進が
+    あったため、既存持続内だけ動くガードを追加。旧stealのCHARGE/RAIN fixtureはこの誤動作に
+    依存していたので実持続内の到達位置へ修正した。性能値・生成・奪取式・敵AIは変更していない。
+  要求: fightで実施証跡を受理しduelへ伝達する。read側drawからshake減衰/ゼロ化を除去し、
+    runtimeだけが更新する契約と合わせる。最終ZIP容量・提出検査・実画面は根で検証し、
+    人間F8/正式precheckは未検証として扱う。
+  status: open
+
 ## seam_inbox
 
 <!-- 子同士の seam 成果物はここへ追記され、親が権威化して宛先の子へ降ろす -->
@@ -429,8 +582,10 @@ status: **approved**（`fight@2026-09-06-split-5` / 人間の承認 `root@2026-0
 
 | 種別 | 版参照 | status |
 | --- | --- | --- |
-| **決定** | `fight@2026-09-06-decision-5` | **active** |
-| **分割** | `fight@2026-09-06-split-5` | **active**（承認済み・`children-created`） |
+| **今回の決定差分** | `fight@2026-09-08-decision-6` | 作業許可に基づき適用。具体版の人間個別承認・正式precheck未取得 |
+| **今回の分割差分** | `fight@2026-09-08-split-6` | 既存3子を維持、arenaへ転記済み。作業許可に基づく実施対象 |
+| **基準決定** | `fight@2026-09-06-decision-5` | 変更のない部分のみ有効。承認は当時の版に限る |
+| **基準分割** | `fight@2026-09-06-split-5` | 変更のない部分のみ有効。今回差分が優先 |
 
 ---
 

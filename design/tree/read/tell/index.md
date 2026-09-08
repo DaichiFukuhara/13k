@@ -3,7 +3,7 @@ id: read.tell
 parent: read
 depth: 2
 children: [telegraph, palette, actors]
-status: children-created   # 決定 tell@2026-09-05-decision-4 / 分割 tell@2026-09-05-split-4。
+status: children-created   # 先頭2026-09-08差分 decision-5 / split-5を優先。旧人間承認は基準版のみ。
                         # 人間の承認 root@2026-09-06-approval-3。
                         # Codex 深さ3監査の着手前9（palette の結合）を反映した版
 seams: [t1.color-request, t2.color-result]   # palette がハブ。telegraph <-> actors の線は無い
@@ -11,6 +11,103 @@ uses_seams: [r1.screen-state]
 ---
 
 # tell（解決法: 戦闘画面の中身。来るものが読める）
+
+## 2026-09-08 現行差分 — 構え・振り抜き・硬直と時間予告
+
+`tell@2026-09-08-decision-5` / `tell@2026-09-08-split-5`。
+親は `read@2026-09-08-decision-6` / `read@2026-09-08-split-5`。
+この節の1〜7と分割差分を優先し、未変更範囲に限り9月5日の基準版を継承する。
+根先頭のユーザーによる設計編集・サブエージェント実装・検証の実施許可に基づく。
+新しい具体版の人間決定承認・分割承認および正式precheckは未記録。
+
+### 1. 決めるもの
+
+人物の構えから発生までを読め、振り抜いた後の隙へ反撃できる画面にする。
+actorsがプレイヤーとボスの全6形状の姿勢を、telegraphが時間充填と範囲を詳細化する。
+windでは引く/溜める、activeでは形状に応じて振り抜く/突き出す、recoverでは腕と重心を戻す。
+ボスのstaggerも通常姿勢と区別する。姿勢の角度は装飾であり、位置や判定を移動しない。
+SWEEP/THRUST/SLAM/CHARGE/SHOT/RAINの6形状すべてに構え・発生・硬直の区別を持たせる。
+既存のpaletteの性能分類・優先順位を変えず、色以外の姿勢と時間進行で補強する。
+
+### 2. なぜ要るか
+
+現在のボスの腕と武器はphaseによる変化が乏しく、反撃できる時間が姿から読み取りにくい。
+プレイヤーも予備動作後の振り抜きが続き、技の種類と硬直の対応が弱い。
+予告は全長を示しつつ発生までの時間を充填で知らせ、RAINの後段とCHARGEの向きを読み落とさないようにする。
+
+### 3. 利用者
+
+初めて遊ぶDesktopプレイヤーと、同じ生成ボスへ再挑戦するプレイヤー。
+試用中も同じ技の姿勢と弾を表示し、実際の発生・射程・段数を使用感として確かめられる。
+
+### 4. 受け入れ条件
+
+- [ ] T1（read R2 / actors）: 全6形状のプレイヤーとボスでwind/active/recoverを静止画の比較でも区別できる。staggerはボスの別姿勢。連続使用で硬直姿勢が次の攻撃へ残らない。
+- [ ] T2（read R2 / telegraph）: 全6形状の予告に発生までの時間進行がある。ボスwindの充填率は実際の `WIND[m[W]-1]` と残り `b.timer` から0〜1へ正規化し、固定の仮時間を使わない。SHOTにも射線と時間表現を持つ。
+- [ ] T3（read R2 / telegraph）: 多段RAINの未発生段を `moveRect(m,pulse,b)` から予告し、現在のactive範囲と後段を線/薄さで区別する。CHARGEは実際の `b.face` を示す方向記号を持つ。矩形本体は判定の共有展開値と一致する。
+- [ ] T4（read R3/R4協力 / 両葉）: recover/staggerは反撃できる姿勢として見せるが、命中成功は `feedback` のイベントだけを正本とする。予告へ対処を書く場合は `lesson(m)` をそのまま使い、パリィ可否や被弾理由を推測しない。
+- [ ] T5（read R5/R6 / 両葉）: fightとtrialで同じ人物・攻撃描画を使う。試用標的は実状態の位置で描き、停止/復帰でも描画エラーがない。繰り返し描画してもp/b/shots/feedback/mode/take/runとタイマーを変更しない。
+- [ ] T6（read R6/R7 / 両葉と統合）: 色を外しても姿勢/範囲/充填/方向の手がかりを維持し、中央の攻防を塞がない。画面検査と容量結果を親へ返す。人間による初見理解・18F知覚・面白さは未実施なら未検証のまま残す。
+
+従来の予告一致・無音・色以外の冗長化を継承する。容量の最終合否は根のZIP 13,312 bytesの実測。
+
+### 5. 不変条件とseam
+
+根とread先頭差分の不変条件を継承する。モノリシック `prismatic-duel/game.js` を使い、snapshotの物理分離は要求しない。
+`s1.presentation-state` はduel所有の読み取り契約、`r1.screen-state` はframeからの画面状態でtrialを含む。
+`t1.color-request` / `t2.color-result` とpaletteをハブにする既存構成は維持し、actorsとtelegraphの相互呼出しを追加しない。
+技の分類は既存の `attackColor` / `HOLD_COL` / `PAL` を利用し、その性能分類や優先順位を変更しない。
+中立の輪郭・白い残像を用いても、特性の色を別規則で上書きしない。
+
+親のs1追加契約 `lesson(m)` / `{text,kind,ttl}` の `feedback` / `lastLesson` / `mode === "trial"` / `take` を両葉へ同じ意味で継承する。
+すべてduelが生成/更新し、描画はttlを減らさず、候補/held/戦績/経過時間を書かない。
+`take` はnullまたは `{list: Move[],i:number,held:Move,foe:{name:string,hue:number}}`、heldは撃破時の所持技。退避内部に依存しない。
+`feedback.kind` はhit/counter/parry/hurt/tired。counterは実際のrecover/stagger命中、hurt/parryは同一イベントのtiredより優先。
+`lastLesson`は被弾した技と対処の正本で、弾は発射時の技情報を用いる。現在のb.moveから原因を推測しない。
+`lesson(m)`はduelの純関数で、SHOTの弾パリィ対応を含む。対処を安全保証にしない。
+HUD/死亡理由/候補案内の主担当はframeで、tellはこれらの状態を再生成しない。
+
+姿勢に必要なphase/経過率の算出は描画用の読み取りのみ。プレイヤーの予備時間は所持技の `m.wind`、ボスは `WIND[m[W]-1]` を使い分ける。
+複数段のactive/段間/最終recoverは実更新器の区切りに対応させる。技の性能値・HP・標的の座標・target列は変更しない。
+危険矩形は `moveRect(m,pulse,src)` を判定と共有し、RAIN幅/位置を描画側に複製しない。
+CHARGEの方向記号は方向の案内であり、移動経路全体を現在の判定として塗らない。SHOTの射線も弾全域の安全保証ではない。
+全体輪郭を残した内側の充填/線幅/不透明度で時間を示す。装飾の姿勢や矢印を危険範囲定義として使わない。
+640×360、床Y=307、背景→予告→弾→プレイヤー→ボス→効果→HUD→オーバーレイを維持する。
+
+### 6. 葉へ任せること
+
+actorsは具体的な腕・脚・武器角度、重心、残像の量を決める。telegraphは充填方向、輪郭、段の区別、方向記号を決める。
+棒人間の角度だけでなく、同じ判定サイズを保ちながら輪郭/武器/姿勢を読みやすく整える。とくに敵の予備動作と硬直の見分けを優先する。
+全追加で使えるZIP余裕は現時点で約3,426 bytesのため、軽量なCanvas形状を使う。画像生成や外部素材は追加しない。
+装飾が容量を圧迫したら装飾から削り、判定との一致と時刻/姿勢の区別を優先する。
+この差分でpaletteの実装編集は要求しない。HUDや共有drawの編集はframe所有として境界要求で返す。
+
+### 7. 未確定と検証の限界
+
+RAINの複数段予告と従来の同時予告上限が衝突する場合はreadへ返す。生成器や段数を描画側で変えて解決しない。
+実wind/phase/標的が契約から取れない場合も境界要求とする。人間知覚の代替として静止画/自動検査を合格扱いしない。
+実装前のためT1〜T6は未検証。正式承認/precheckも完了と記録しない。
+
+### 分割差分 `tell@2026-09-08-split-5`
+
+既存telegraph/palette/actorsの3子とt1/t2を維持し、深さ3の葉を追加分割しない。
+共有するのは親のs1/r1/解像度/描画順序だけで、姿勢と予告の間に新たな相互依存を作らない。
+
+| 子 | 責任と詳細化 | 条件 | 今回の実装所有 |
+| --- | --- | --- | --- |
+| actors | 全6形状の人物/ボスの構え・振り抜き・硬直とstagger、trialでも実状態の人物描画 | T1主、T4協力、T5/T6担当分 | `drawPerson` / `drawHero` / `drawBoss` の3関数のみ |
+| telegraph | 全6形状の実wind充填、RAIN未発生段、CHARGE方向、共有矩形一致 | T2/T3主、T4協力、T5/T6担当分 | `drawTelegraph` のみ |
+| palette | 性能分類と色以外の冗長化の既存規則を維持 | 基準版の担当条件を維持 | 今回は編集しない |
+
+既存の背景/弾/効果等の責任分割は維持するが今回の変更対象には含めない。
+共有draw/hud/drawTake/drawResult/オーバーレイはframe所有。runtime/`moveRect`/入力はduel所有。
+両葉は編集を指定関数に閉じ、共有ファイル全体の整形をしない。必要な範囲拡張は親へ返す。
+試用・s1追加・R2の詳細化でactors/telegraphを再検証する。paletteの規則は変更していないため今回の実装依頼を出さない。
+
+### 実施許可と基準版
+
+下表の「現行」は作業契約を意味し、具体版の人間個別承認を意味しない。
+旧approval-3は基準版の承認履歴として保存する。変更のない条項だけ基準版を継承する。
 
 ## 📍 現行契約への索引
 
@@ -20,10 +117,10 @@ uses_seams: [r1.screen-state]
 
 **この順に読めば現行の契約だけが揃う。**
 
-1. **有効な版**: 決定 `tell@2026-09-05-decision-4` / 分割 `tell@2026-09-05-split-4`
-2. **現行の決定本文**: 1〜7（🔒 が付いた節が最新の凍結）
-3. **現行の分割**: `## 分割提案` 節（見出しの版が上の分割と一致するものだけが有効）
-4. **承認証跡**: `### 現在有効なもの` 表 → その下の該当エントリ
+1. **現行差分**: `tell@2026-09-08-decision-5` / `tell@2026-09-08-split-5`（作業許可あり、具体版の正式承認未記録）
+2. **現行の決定本文**: 先頭2026-09-08差分1〜7を優先し、未変更範囲のみ基準版 `tell@2026-09-05-decision-4`
+3. **現行の分割**: 先頭split-5を優先し、未変更範囲のみ基準版 `tell@2026-09-05-split-4`
+4. **承認証跡**: 末尾の `### 現在有効なものと基準版` 表。旧承認エントリは基準版の履歴
 
 > ⚠️ **`superseded` と書かれた節・`~~取り消し線~~`・「旧文は」で始まる引用は履歴である。**
 > **現行の命令として読んではいけない。**
@@ -38,6 +135,27 @@ uses_seams: [r1.screen-state]
      兄弟（frame）の index.md は読まない。接続は r1.screen-state の片方向1本だけ。 -->
 
 ## 親からの振り分け
+
+
+<!-- readが2026-09-08に転記。以下は追加振り分け。子本文の旧版より優先。 -->
+- 追加のparent_decision_ref: read@2026-09-08-decision-6 / read@2026-09-08-split-5（root@2026-09-08-decision-13 / split-12を継承）。
+- 実施の根拠: 根先頭のユーザーによる設計編集・サブエージェント実装・検証の作業許可。具体版への人間決定/分割承認と正式precheckは未記録。旧approval-3を新差分の承認と扱わない。
+- 継承制約: read先頭差分1〜7。生成3連戦/HP14/同seed再挑戦/所持技1つ/正規化を維持。prismatic-duel/game.jsのrenderingだけを関数単位で所有する。戦闘状態・入力・mode・HP・タイマー・候補を描画から更新しない。snapshot物理分離は要求しない。
+- s1追加契約（両子へ等しく継承、全てduel所有で読み取り専用）:
+  - lesson(m): duelの純関数。技から短い対処例を返す。SHOTは弾のparry対応を含む。予告/死亡に表示し、対処文言を判定や安全保証に使わない。
+  - feedback: {text,kind,ttl}。kindはhit/counter/parry/hurt/tired、ttlは残り更新F。中央の攻防を塞がず表示する。ttlを描画で減らさない。counterは実際のrecover/stagger命中イベントのみ。hurt/parryとtiredが同一イベントで競合したら前者優先。
+  - lastLesson: 被弾時の技名と対処文字列。新戦開始で空へ。敵弾は発射時の技情報を保持して被弾した弾の情報を使うため、readは現在のb.moveから原因を推測しない。
+  - mode === "trial": duel所有の安全な技試用状態。pauseの戻り先もduelが保持。専用の試し場と案内を表示する。
+  - take: null または {list: Move[], i: number, held: Move, foe: {name: string, hue: number}}。heldは撃破時の所持技、foeは撃破相手。候補/カーソル/試用中の選択を読む。HELD表示はtake.heldを使いp.holdと比較しない。duelの私有する退避内部へ依存しない。
+- 試用の隔離: 攻撃/移動/弾は本戦と同じ更新器。標的は攻撃せず、被弾で結果画面/第2形態へ移らない。退出で弾/一時効果/試用状態を捨てる。戦績/次の敵/所持技確定/ラン経過時間を汚染しない。これらの更新はduelの責任。本戦標的を装飾で別位置へ動かさない。
+- 入力の表示契約: bosswinは左右/A・Dで候補選択、J/Zで試用、Enterで直接確定。trialは通常の移動/ジャンプ/攻撃、Rで候補へ戻る、Enterで確定。Escape/フォーカス喪失でpause、Enter/Escapeで直前のfight/trialへ復帰。戻ったカーソルを保存し、試用だけではheld/run.logを更新しない。最終ボスも同じ確定操作でResultへ進み確定を1回だけ記録。readは表示のみ。
+- r1.screen-state: frame → tell、1:1。従来の画面状態へtrialを追加。modeの所有権はduel。640×360/床Y=307/描画順序はread共有規則を継承。
+- 検証: 人間初見/再挑戦（根F8、read R7）と知覚の未検証を自動検査の合格で置換しない。ZIP上限13,312 bytesは根の統合実測。結果はseam_inbox経由で親へ返す。
+- 追加責任・詳細化: actorsへ全6形状のwind/active/recoverを読める姿勢、telegraphへ実wind全長/残りFに基づく充填、RAIN後段位置とCHARGE進行方向を降ろす。危険範囲は共有定義/展開を読み、独自展開を持たない。
+- 割当条件: read R2主、R3/R4協力、R5の試用戦闘描画、R6担当分、R7未検証の保持。
+- 所有境界: renderingの人物/ボス/技/弾/効果/予告の関数。hud/drawTake/drawResult/共有drawはframe所有で編集しない。uses_seams: [s1.presentation-state（継承）, r1.screen-state]。葉同士も関数を重複所有しない。
+
+
 
 - **責任**: 何が・いつ・どこへ来るかを、色と形と時間で同時に伝える
 - **詳細化の対象**: 親の本文1の「3つの読み筋」と「姿から性格を推測させる」。
@@ -354,12 +472,24 @@ status: **approved**（`tell@2026-09-05-split-4` / **人間の承認 `root@2026-
 
 ## seam_inbox
 
+- from: read.tell.actors / date: 2026-09-08 / status: implemented
+  対象: actors@2026-09-08-decision-4。game.jsのdrawPerson/drawHero/drawBossのみ実装。
+  結果: 全6形状のwind/active/段間/recoverとボスstaggerを状態から算出。面のある胴・兜・短いケープ・敵の角・武器をCanvasで描き、同じ関数をtrial標的にも使用。判定座標の変更なし。
+  検査: node --check通過。Canvas呼出しモックの60ケース（6形状×主人公/敵×5姿勢）で有限座標・p/b/shots/mode/take/run不変を確認。wind/active/段間/recoverの呼出し列が各形状で別になることを確認。
+  境界: 主人公の最終判定終了wind+(ACTIVE+10)*N-10からrecover表示へ移す。実画面・グレースケール知覚・初見理解・18F知覚・統合ZIPは根の検査待ち。正式承認/precheckを完了と扱わない。
+
 ## 承認証跡
+
+### 現在有効なものと基準版
 
 | 種別 | 版参照 | status |
 | --- | --- | --- |
-| **決定** | `tell@2026-09-05-decision-4` | **active**（人間の承認 `root@2026-09-06-approval-3`） |
-| **分割** | `tell@2026-09-05-split-4` | **active**（同上・`children-created`） |
+| 現行差分の決定 | `tell@2026-09-08-decision-5` | 作業許可に基づく。具体版の人間承認未記録 |
+| 現行差分の分割 | `tell@2026-09-08-split-5` | 既存3子を維持しactors/telegraphへ追加振り分け。正式承認/precheck未実施 |
+| 基準版の決定 | `tell@2026-09-05-decision-4` | 未変更範囲のみ継承。人間の承認 `root@2026-09-06-approval-3` は当時の履歴 |
+| 基準版の分割 | `tell@2026-09-05-split-4` | 未変更範囲のみ継承。既存 `children-created` の履歴 |
+
+以下の旧activeは基準版当時の状態であり、今回の差分の承認を表さない。
 
 - **`tell@2026-09-05-decision-4`** / 承認者: **人間（DaichiFukuhara、`root@2026-09-06-approval-3` により）**/
   日時: 2026-09-05 / 種別: `decision` / 承認者の種別: **人間** / **status: active**

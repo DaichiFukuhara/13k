@@ -399,7 +399,7 @@ function validateBoss(b){
 
 主要な可変状態:
 
-  mode   title / fight / pause / dead / bosswin / result の画面状態
+  mode   title / fight / trial / pause / dead / bosswin / result の画面状態
   seed   1ランを再現する32bit整数
   run    3戦をまたいで保持するボス番号・時間・集計値
   p      プレイヤー座標、HP、スタミナ、行動タイマー
@@ -413,6 +413,7 @@ function validateBoss(b){
 
 let cv,cx,mode="title",seed=1,run,p,b,take=null,keys={},tap={},shots=[],parts=[],stars=[];
 let acc=0,last=0,freeze=0,shake=0,msg="",msgTime=0,audio;
+let feedback={text:"",kind:"",ttl:0},lastLesson="",pauseFrom="fight",saved;
 
 /*
 CONTROLS -> 操作割当の唯一の正本
@@ -444,7 +445,7 @@ function boot(){
     if(!e.repeat)tap[e.code]=1;keys[e.code]=1;wakeAudio();
   });
   addEventListener("keyup",e=>keys[e.code]=0);
-  addEventListener("blur",()=>{if(mode==="fight")mode="pause"});
+  addEventListener("blur",()=>{if(mode==="fight"||mode==="trial")pauseGame();else clearInput()});
   requestAnimationFrame(loop);
 }
 function wakeAudio(){
@@ -474,6 +475,32 @@ function pressed(...a){return a.some(k=>tap[k])}
 function held(...a){return a.some(k=>keys[k])}
 function runSeed(i){return(seed^Math.imul(i+1,0x85ebca6b))>>>0}
 function seedText(){return(seed>>>0).toString(36).toUpperCase().padStart(6,"0")}
+function clearInput(){keys={};tap={};if(p)p.jumpBuf=p.actBuf=p.parryBuf=p.rollBuf=0}
+function pauseGame(){pauseFrom=mode;mode="pause";clearInput()}
+function lesson(m){
+  return ["JUMP OVER THE LOW SWEEP","STEP BACK FROM THE THRUST","LEAVE THE SLAM AREA","ROLL THROUGH THE CHARGE","JUMP THE SHOT","LEAVE THE MARKED COLUMNS"][m[S]]+
+    (m[S]===4||m[F]&PARRY?" / TRY PARRY":" / NO PARRY");
+}
+function moveLesson(m){return SHAPE_NAME[m[S]]+": "+lesson(m)}
+function respond(kind,text){
+  if(kind==="tired"&&feedback.ttl&&(feedback.kind==="hurt"||feedback.kind==="parry"))return;
+  feedback={text,kind,ttl:kind==="hurt"?150:65};
+}
+function cleanArena(){shots=[];parts=[];freeze=shake=msgTime=0;msg="";feedback={text:"",kind:"",ttl:0};clearInput()}
+function startTrial(){
+  saved=[p,b];
+  p={...p,x:180,y:FLOOR-30,vx:0,vy:0,hp:HERO.hp,st:100,delay:0,face:1,ground:1,
+    action:"",timer:0,inv:0,lastHit:"",hold:take.list[take.i],targets:[]};
+  b={...b,x:360,hp:b.maxHp,posture:b.maxPosture,phase:"wait",defense:0,targets:[],deck:[]};
+  cleanArena();mode="trial";
+}
+function endTrial(){[p,b]=saved;saved=null;cleanArena();mode="bosswin"}
+function confirmTake(){
+  if(mode==="trial")endTrial();
+  const m=take.list[take.i];run.log.push([take.foe.name,take.foe.hue,m]);
+  p.hold=m;take=null;cleanArena();sound(520,.1,"square",.04);
+  run.boss++;if(run.boss>=3)mode="result";else startBoss();
+}
 
 function newRun(s=seed){
   // ランを完全初期化。Rで同じランを再開するときだけ同じseedを渡す。
@@ -505,7 +532,7 @@ function startBoss(){
     hp:HERO.hp,st:100,delay:0,
     action:"",timer:0,inv:0,lastHit:"",jumpBuf:0,actBuf:0,parryBuf:0,rollBuf:0,
     hold:p&&p.hold?p.hold:bareHand(),attack:0,pulse:-1,hitId:"",aim:0,targets:[0]};
-  shots=[];parts=[];mode="fight";
+  cleanArena();take=null;saved=null;lastLesson="";mode="fight";
   if(!run.boss)say("READ THE COLORS. LEARN THE RHYTHM.",120);
 }
 function say(t,n=70){msg=t;msgTime=n}
@@ -517,7 +544,7 @@ function boxBoss(){return{x:b.x+5,y:b.y+4,w:37,h:68}}
 function hit(a,z){return a.x<z.x+z.w&&a.x+a.w>z.x&&a.y<z.y+z.h&&a.y+a.h>z.y}
 function spend(n){
   // 消費後30fは回復しない。成功/失敗を返し、スタミナ不足で行動開始させない。
-  if(p.st<n)return 0;p.st-=n;p.delay=30;return 1;
+  if(p.st<n){respond("tired","LOW STAMINA — LET IT REFILL");return 0}p.st-=n;p.delay=30;return 1;
 }
 function begin(a){p.action=a;p.timer=0;p.vx=0}
 // ロール24f中の4～14fだけ無敵。開始直後と終端には当たり判定が残る。
@@ -598,7 +625,7 @@ function heroStrike(){
   「見えているものと当たるもの」がプレイヤー側でも一致する（不変条件8）。
   */
   const m=p.hold,w=m.wind,span=ACTIVE[m[A]-1]+10,t=p.timer-w;
-  if(t<0)return;
+  if(t<0||t>=span*m[N]-10)return;
   if(p.timer===w)sound(moveTone(m,m.wind),.07,WAVE[m[S]],.025);
   const pulse=Math.min(m[N]-1,(t/span)|0),local=t%span;
   if(m[S]===4){ // 弾は段が変わった最初のフレームで一発だけ生成する
@@ -630,20 +657,23 @@ function bossDamage(dmg,post,kind){
   recover/stagger中は明確な反撃窓なのでHPダメージ1.25倍。
   HP0を最優先し、その後に最終形態移行、体勢崩しを判定する。
   */
-  if(mode!=="fight"||b.phase==="shift")return;
+  if((mode!=="fight"&&mode!=="trial")||b.phase==="shift")return;
+  const counter=b.phase==="recover"||b.phase==="stagger";
   if(b.phase==="guard"){dmg*=.3;post*=.35}
   if(b.defense===2&&kind==="shot"&&!b.barrier)dmg*=.3;
   if(b.defense===1&&b.phase!=="recover"&&b.phase!=="stagger")post*=.5;
   if(kind==="melee"&&b.defense===2)b.barrier=180;
   if(b.phase==="recover"||b.phase==="stagger")dmg*=1.25;
   b.hp=Math.max(0,b.hp-dmg);b.posture=Math.max(0,b.posture-post);
+  respond(counter?"counter":"hit",counter?"COUNTER!":"HIT");
   spark(b.x+20,b.y+28,PAL[b.hue],7);freeze=kind==="melee"?3:1;shake=kind==="melee"?3:1;
+  if(mode==="trial"){if(!b.hp)b.hp=b.maxHp;if(!b.posture)b.posture=b.maxPosture;return}
   if(b.hp<=0){
     /*
     撃破。奪取の候補をここで組み立てる（設計 arena の 1.4.1）。
     倒したボスの全技＋今の所持技。選ぶのはduel側で、readは描くだけ。
     */
-    mode="bosswin";take={list:b.moves.map(steal).concat([p.hold]),i:0};
+    mode="bosswin";take={list:b.moves.map(steal).concat([p.hold]),i:0,held:p.hold,foe:{name:b.name,hue:b.hue}};
     sound(70,.5,"sawtooth",.05);return;
   }
   if(b.tier===2&&!b.mutated&&b.hp<=b.maxHp/2){
@@ -657,7 +687,7 @@ function breakBoss(){
   // 110fの大きな反撃窓。終了後に体勢を全回復して通常ループへ戻す。
   b.phase="stagger";b.timer=110;b.posture=0;freeze=6;shake=6;spark(b.x+22,b.y+30,"#fff",22);say("POSTURE BROKEN",70);sound(880,.18,"square",.05);
 }
-function hurtPlayer(dmg,id){
+function hurtPlayer(dmg,id,cause=moveLesson(b.moves[b.move])){
   /*
   プレイヤー被弾の唯一の入口。
 
@@ -666,6 +696,7 @@ function hurtPlayer(dmg,id){
   逃げ場は残機ではなくスタミナ1本だけ（根の 1.5）。
   */
   if(mode!=="fight"||p.inv||isRollInv()||p.lastHit===id)return;
+  lastLesson=cause;respond("hurt",cause);
   p.lastHit=id;p.hp=Math.max(0,p.hp-dmg);p.inv=42;run.hits++;shake=5;freeze=4;
   spark(p.x+9,p.y+12,HERO.col,12);sound(75,.16,"sawtooth",.045);
   if(!p.hp){mode="dead";say("THE PRISM GOES DARK",999);return}
@@ -680,6 +711,7 @@ function parryBoss(id){
   - 体勢0ならstagger、残っていれば42fのrecoverへ送る
   */
   if(p.lastHit===id)return;p.lastHit=id;run.parries++;b.posture=Math.max(0,b.posture-8);freeze=6;shake=4;
+  respond("parry","PARRY! COUNTER NOW");
   p.action="";spark(p.x+p.face*12,p.y+12,"#fff",18);sound(1100,.1,"square",.055);say("PARRY",35);
   if(!b.posture)breakBoss();else{b.phase="recover";b.timer=42}
 }
@@ -827,7 +859,7 @@ function activeBossMove(){
 function spawnBossShot(m,pulse){
   const speed=3.1+(5-m[W])*.45;
   const distance=Math.max(60,Math.abs((b.x+20)-(p.x+9)));
-  shots.push({x:b.x+20+b.face*22,y:b.y+29,vx:b.face*speed,vy:(b.aimY-b.y-29)/distance*speed,owner:1,dmg:m[D],post:0,col:PAL[b.hue],life:220,track:m[T]*.018,id:b.attack+":"+pulse,parry:1});
+  shots.push({x:b.x+20+b.face*22,y:b.y+29,vx:b.face*speed,vy:(b.aimY-b.y-29)/distance*speed,owner:1,dmg:m[D],post:0,col:PAL[b.hue],life:220,track:m[T]*.018,id:b.attack+":"+pulse,parry:1,lesson:moveLesson(m)});
   sound(moveTone(m,WIND[m[W]-1],pulse)*.6,.08,"sawtooth",.028);
 }
 function shotsStep(){
@@ -846,8 +878,8 @@ function shotsStep(){
     if(s.owner===0){
       if(hit({x:s.x-4,y:s.y-3,w:8,h:6},boxBoss())){bossDamage(s.dmg,s.post,"shot");s.life=0}
     }else if(hit({x:s.x-5,y:s.y-5,w:10,h:10},boxPlayer())){
-      if(isParry()&&s.parry){s.owner=0;s.vx*=-1.35;s.vy*=-1;s.dmg=3;s.post=7;s.col="#fff";run.parries++;freeze=4;sound(960,.08,"square",.05)}
-      else if(!isRollInv()&&!p.inv){hurtPlayer(s.dmg,s.id);s.life=0}
+      if(isParry()&&s.parry){s.owner=0;s.vx*=-1.35;s.vy*=-1;s.dmg=3;s.post=7;s.col="#fff";if(mode==="fight")run.parries++;respond("parry","PARRY! SHOT RETURNED");freeze=4;sound(960,.08,"square",.05)}
+      else if(!isRollInv()&&!p.inv){hurtPlayer(s.dmg,s.id,s.lesson);s.life=0}
     }
   }
   shots=shots.filter(s=>s.life>0&&s.x>-30&&s.x<CW+30&&s.y>-30&&s.y<CH+30);
@@ -862,14 +894,21 @@ function step(){
 
     title   Nでseed再生成、EnterでnewRun
     fight   戦闘更新。freeze中は物理を止め、火花だけ進める
-    pause   Enter/Escapeでfightへ戻る
+    pause   Enter/Escapeで直前のfight/trialへ戻り、復帰入力を消費
     dead    Enter/Rで同じボス、Nで新seed
-    bosswin Enterで次ボス。3体目ならresult
+    bosswin J/Zでtrial、Enterで候補を確定。3体目ならresult
+    trial   本戦と同じプレイヤー・弾更新。Rで候補、Enterで確定
     result  Rで同seed再走、Enter/Nで新ラン
 
   step末尾でtapを空にするため、一回のキー入力が複数固定stepへ重複しない。
   */
-  if(pressed("Escape")){mode=mode==="pause"?"fight":mode==="fight"?"pause":mode}
+  if(mode==="pause"){
+    if(pressed("Enter","Escape")){mode=pauseFrom;clearInput()}
+    tap={};return;
+  }
+  if((mode==="fight"||mode==="trial")&&pressed("Escape")){pauseGame();return}
+  if(feedback.ttl)feedback.ttl--;
+  shake*=.82;if(shake<.3)shake=0;
   if(mode==="title"){
     if(pressed("KeyN")){seed=(Math.random()*0xffffffff)>>>0;sound(300,.05)}
     if(pressed("Enter"))newRun(seed);
@@ -880,20 +919,21 @@ function step(){
     // カーソルはduel側が持つ。readは位置を描くだけ（片方向性の保持）。
     if(pressed("ArrowLeft","KeyA"))take.i=(take.i+take.list.length-1)%take.list.length;
     if(pressed("ArrowRight","KeyD"))take.i=(take.i+1)%take.list.length;
-    if(pressed("Enter")){
-      // ランの記録: 倒した相手と、そこで選んだ技。Result で並べる。
-      run.log.push([b.name,b.hue,take.list[take.i]]);
-      p.hold=take.list[take.i];take=null;sound(520,.1,"square",.04);
-      run.boss++;if(run.boss>=3)mode="result";else startBoss();
-    }
+    if(pressed("Enter"))confirmTake();
+    else if(pressed("KeyJ","KeyZ"))startTrial();
   }else if(mode==="result"){
     if(pressed("KeyR"))newRun(seed);
     if(pressed("Enter","KeyN")){seed=(Math.random()*0xffffffff)>>>0;mode="title"}
-  }else if(mode==="pause"){
-    if(pressed("Enter"))mode="fight";
-  }else if(mode==="fight"){
+  }else if(mode==="trial"&&pressed("Enter"))confirmTake();
+  else if(mode==="trial"&&pressed("KeyR"))endTrial();
+  else if(mode==="fight"||mode==="trial"){
     if(freeze)freeze--;
-    else{run.time++;playerStep();bossStep();shotsStep()}
+    else{
+      if(mode==="fight")run.time++;
+      playerStep();
+      if(mode==="fight")bossStep();
+      if(mode==="fight"||mode==="trial")shotsStep();
+    }
     partsStep();if(msgTime)msgTime--;
   }
   tap={};
@@ -935,80 +975,106 @@ function attackColor(m){
   if(m[D]>=4)return PAL[0];if(m[T]>=1)return PAL[5];if(m[W]===1)return PAL[2];if(m[R]===4)return PAL[4];if(m[N]>1)return PAL[6];return PAL[b.hue];
 }
 function drawTelegraph(){
-  /*
-  攻撃予告と発生中の危険範囲を描く。
-
-  wind中: 経過率に応じて薄い矩形を濃くする。SHOTだけは射線を描く。
-  active中: 現在pulseの矩形を高い不透明度で描く。
-
-  attackColor()は高威力=赤、追尾=藍、高速=黄、長射程=青、多段=紫を優先し、
-  色を見れば生成特性を推測できる。ただし矩形と動きだけでも回避可能にする。
-  */
-  if(!b||!(b.phase==="wind"||b.phase==="active"))return;
-  const m=b.moves[b.move],col=attackColor(m);
-  if(b.phase==="wind"){
-    const q=moveRect(m,0),progress=1-b.timer/WIND[m[W]-1];
-    if(m[S]!==4){cx.globalAlpha=.08+progress*.2;cx.fillStyle=col;cx.fillRect(q.x,q.y,q.w,q.h);cx.globalAlpha=.4;cx.strokeStyle=col;cx.strokeRect(q.x+.5,q.y+.5,q.w-1,q.h-1)}
-    else{cx.globalAlpha=.15+progress*.4;cx.strokeStyle=col;cx.beginPath();cx.moveTo(b.x+20,b.y+29);cx.lineTo(b.x+b.face*REACH[m[R]-1],b.aimY);cx.stroke()}
-  }else if(m[S]!==4){const span=ACTIVE[m[A]-1]+10,pulse=Math.min(m[N]-1,(b.timer/span)|0),local=b.timer%span;if(local<ACTIVE[m[A]-1]){const q=moveRect(m,pulse);cx.globalAlpha=.45;cx.fillStyle=col;cx.fillRect(q.x,q.y,q.w,q.h)}}
-  cx.globalAlpha=1;
-}
-function drawPerson(x,y,scale,col,active=0){
-  /*
-  攻撃モーションは所持技の性格を姿に出す（根の 1.10）。
-  射程が長いほど武器が伸び、予備動作の進行で腕が引かれて振り抜かれる。
-  250pxのSHOTと48pxのTHRUSTが同じ見た目では、持ち替えが体験にならない。
-  */
-  const m=p.hold,atk=active&&p.action==="attack";
-  let sw=0,arm=0,len=14;
-  if(atk){
-    const w=m.wind,t=p.timer;
-    // 予備動作は引く（負）、発生以降は振り抜く（正）。硬直でゆっくり戻る。
-    sw=t<w?-t/w:Math.min(1,(t-w)/6);
-    arm=sw;
-    len=14+REACH[m[R]-1]*.14*(sw>0?sw:.3);   // 射程が長いほど伸びる
+  // Read only: active timer has already advanced past the last collision frame.
+  if(!b||mode==="trial"||!(b.phase==="wind"||b.phase==="active"))return;
+  const m=b.moves[b.move],col=attackColor(m),wind=b.phase==="wind",span=ACTIVE[m[A]-1]+10;
+  const t=Math.max(0,b.timer-1),pulse=wind?0:Math.min(m[N]-1,(t/span)|0);
+  const live=!wind&&b.timer>0&&t%span<ACTIVE[m[A]-1],progress=wind?clamp(1-b.timer/WIND[m[W]-1],0,1):1;
+  cx.save();cx.fillStyle=cx.strokeStyle=col;cx.lineWidth=1;
+  if(m[S]===4&&wind){
+    const x=b.x+20+b.face*22,y=b.y+29,dx=b.face*REACH[m[R]-1];
+    const dy=(b.aimY-y)/Math.max(60,Math.abs((b.x+20)-(p.x+9)))*REACH[m[R]-1];
+    cx.globalAlpha=.4;cx.setLineDash([5,5]);cx.beginPath();cx.moveTo(x,y);cx.lineTo(x+dx,y+dy);cx.stroke();
+    cx.setLineDash([]);cx.lineWidth=3;cx.globalAlpha=.9;cx.beginPath();cx.moveTo(x,y);cx.lineTo(x+dx*progress,y+dy*progress);cx.stroke();
+  }else if(m[S]!==4){
+    for(let i=pulse;i<(m[S]===5?m[N]:pulse+1);i++){
+      if(!wind&&!live&&b.timer>0&&i===pulse)continue;
+      const q=moveRect(m,i,b),next=i>pulse;
+      cx.setLineDash(next?[3,6]:wind?[6,3]:[]);cx.lineWidth=next?1:live?2:1;
+      cx.globalAlpha=next?.3:.65;cx.strokeRect(q.x,q.y,q.w,q.h);
+      cx.globalAlpha=next?.035:live?.45:.06;cx.fillRect(q.x,q.y,q.w,q.h);
+      if(wind&&!next){cx.globalAlpha=.25;cx.fillRect(q.x,q.y+q.h*(1-progress),q.w,q.h*progress)}
+      if(m[S]===5){cx.globalAlpha=next?.45:1;text(i+1,q.x+q.w/2,128,12,col,"center")}
+    }
   }
-  cx.save();cx.translate(x,y);cx.scale(scale*(p.face<0&&active?-1:1),scale);
-  cx.lineCap="round";cx.strokeStyle=col;cx.fillStyle=col;cx.lineWidth=3;
-  const lean=active&&p.action==="roll"?8:0,tilt=arm*4;
-  cx.beginPath();cx.arc(tilt,-22+lean,5,0,6.3);cx.fill();
-  cx.beginPath();cx.moveTo(tilt,-17+lean);cx.lineTo(0,0);cx.lineTo(-6,12);cx.moveTo(0,0);cx.lineTo(7,12);
-  cx.moveTo(0,-12+lean);cx.lineTo(-8+arm*3,-2);cx.moveTo(0,-11+lean);cx.lineTo(9,-4-arm*6);cx.stroke();
-  // 武器。色は所持技の色（持ち替えが見える）
-  const a=-.6+arm*1.2;
-  cx.beginPath();cx.moveTo(8,-5-arm*6);cx.lineTo(8+Math.cos(a)*len,-5-arm*6+Math.sin(a)*len);
-  cx.strokeStyle=HOLD_COL(m);cx.lineWidth=atk&&sw>0?5:4;cx.stroke();
+  if(m[S]===3){
+    const x=b.x+20,y=b.y-15,d=b.face;
+    cx.setLineDash([]);cx.globalAlpha=.9;cx.lineWidth=2;cx.beginPath();cx.moveTo(x,y);cx.lineTo(x+d*32,y);cx.lineTo(x+d*24,y-6);cx.moveTo(x+d*32,y);cx.lineTo(x+d*24,y+6);cx.stroke();
+  }
   cx.restore();
 }
+function drawPerson(x,y,scale,col,u=p){
+  // Poses read the same wind, pulse gaps and recovery boundaries as the update.
+  const hero=u===p,m=hero?p.hold:b.moves[b.move||0],shape=m[S],span=ACTIVE[m[A]-1]+10;
+  let phase=hero?u.action:u.phase,t=u.timer,q=0;
+  if(hero&&phase==="attack"){
+    t-=m.wind;phase=t<0?"wind":t<span*m[N]-10?"active":"recover";
+    if(phase==="recover")t=REC[m[C]-1]-(t-span*m[N]);
+  }
+  if(phase==="wind")q=clamp(hero?u.timer/m.wind:1-t/WIND[m[W]-1],0,1);
+  if(phase==="active"&&t%span>=ACTIVE[m[A]-1])phase="gap";
+  const wind=phase==="wind",fire=phase==="active",down=phase==="recover",stun=phase==="stagger";
+  const drop=stun?9:down?3+3*clamp(t/REC[m[C]-1],0,1):phase==="roll"?7:0;
+  const lean=stun?7:fire?(shape===3?9:4):wind?-2*q:down?3:0;
+  let a=-.6,hx=8,hy=-7;
+  if(wind){a=[-2.7,-3,-1.8,-.4,-2.5,-1.3][shape];hx=-3-5*q;hy=shape===2||shape===5?-20:-10}
+  if(fire){a=[.65,0,1.2,0,-.15,-1.6][shape];hx=12;hy=shape===5?-22:shape===0?-2:-10;a+=(shape===0||shape===2)?(t%span/ACTIVE[m[A]-1]-.5)*.7:0}
+  if(phase==="gap"){a=-1.9;hx=0;hy=-12}
+  if(down||stun){a=1.15;hx=7;hy=drop-2}
+  const len=hero?12+REACH[m[R]-1]*.055:14+m[R]*4;
+  cx.save();cx.translate(x,y);cx.scale(scale*u.face,scale);cx.lineCap="round";
+  const poly=(v,fill)=>{cx.beginPath();cx.moveTo(v[0],v[1]);for(let i=2;i<v.length;i+=2)cx.lineTo(v[i],v[i+1]);cx.closePath();cx.fillStyle=fill;cx.fill()};
+  poly([lean-5,-14+drop,-12-lean,5,-4,1,lean+2,-12+drop],"#594569");
+  cx.strokeStyle=col;cx.lineWidth=4;cx.beginPath();cx.moveTo(-3,0);cx.lineTo(-6-lean*.3,12);cx.moveTo(3,0);cx.lineTo(7+lean*.3,12);cx.stroke();
+  poly([lean-6,-14+drop,lean+6,-14+drop,7,1,-6,1],col);
+  poly([lean,-13+drop,lean+5,-12+drop,5,0,0,-2],"#151426");
+  poly([lean-5,-21+drop,lean+4,-22+drop,lean+7,-16+drop,lean+2,-13+drop,lean-5,-15+drop],col);
+  cx.fillStyle="#151426";cx.fillRect(lean+1,-18+drop,6,2);
+  if(!hero)poly([lean-5,-19+drop,lean-9,-25+drop,lean,-21+drop],col);
+  cx.lineWidth=3;cx.beginPath();cx.moveTo(lean,-11+drop);cx.lineTo(hx,hy);cx.moveTo(lean-4,-10+drop);cx.lineTo(-8,drop);cx.stroke();
+  if(fire){cx.strokeStyle="#fff";cx.lineWidth=1;cx.beginPath();cx.arc(hx,hy,len*.8,a-.45,a);cx.stroke()}
+  cx.save();cx.translate(hx,hy);cx.rotate(a);cx.fillStyle=hero?HOLD_COL(m):col;
+  const thick=hero?2:1+m[D]*.45;
+  cx.fillRect(-3,-thick,len,thick*2);cx.fillRect(2,-thick-3,2,thick*2+6);
+  if(shape===2)cx.fillRect(len-7,-thick-3,7,thick*2+6);
+  cx.restore();cx.restore();
+}
 function drawHero(){
-  cx.save();if(isRollInv())cx.globalAlpha=.55;drawPerson(p.x+9,p.y+18,1,HERO.col,1);cx.restore();
+  cx.save();if(isRollInv())cx.globalAlpha=.55;drawPerson(p.x+9,p.y+18,1,HERO.col);cx.restore();
   if(p.action==="parry"){cx.strokeStyle="#fff";cx.globalAlpha=isParry()?1:.25;cx.beginPath();cx.arc(p.x+9+p.face*9,p.y+13,12,-1.4,1.4);cx.stroke();cx.globalAlpha=1}
 }
 function drawBoss(){
-  const col=PAL[b.hue],x=b.x+22,y=b.y+36;cx.save();cx.translate(x,y);if(b.phase==="stagger")cx.rotate(-.2);
+  const col=PAL[b.hue],x=b.x+22,y=b.y+36;cx.save();cx.translate(x,y);
   if(b.defense===2&&!b.barrier){cx.strokeStyle=PAL[3];cx.globalAlpha=.45;cx.lineWidth=3;cx.beginPath();cx.arc(0,0,34,0,6.3);cx.stroke();cx.globalAlpha=1}
   if(b.phase==="guard"){cx.fillStyle=PAL[3]+"66";cx.fillRect(b.face<0?-32:14,-28,18,58)}
-  cx.strokeStyle=col;cx.fillStyle="#151426";cx.lineWidth=5;cx.beginPath();cx.arc(0,-22,8,0,6.3);cx.fill();cx.stroke();cx.fillRect(-14,-13,28,42);cx.strokeRect(-14,-13,28,42);
-  cx.beginPath();cx.moveTo(-7,29);cx.lineTo(-12,48);cx.moveTo(7,29);cx.lineTo(12,48);cx.stroke();
-  const shape=b.moves[b.move||0][S],len=28+b.moves[b.move||0][R]*8;cx.lineWidth=shape===2?8:4;cx.beginPath();cx.moveTo(b.face*10,-5);cx.lineTo(b.face*len,-18);cx.stroke();
-  for(let i=0;i<7;i++){cx.fillStyle=PAL[i];cx.globalAlpha=i===b.hue?1:.25;cx.fillRect(-13+i*4,-11,3,22)}cx.globalAlpha=1;cx.restore();
+  drawPerson(0,12,2,col,b);
+  for(let i=0;i<7;i++){cx.fillStyle=PAL[i];cx.globalAlpha=i===b.hue?1:.25;cx.fillRect(-13+i*4,9,3,5)}cx.globalAlpha=1;cx.restore();
 }
 function hud(){
-  text(`PRISM ${run.boss+1}/3  ${b.name}`,20,20,11,PAL[b.hue]);text(`SEED ${seedText()}`,620,20,9,"#777b99","right");
-  bar(20,28,390,8,b.hp,b.maxHp,PAL[b.hue]);bar(20,39,390,4,b.posture,b.maxPosture,"#f2e6a2");
-  if(b.defense)text(DEF_NAME[b.defense]+(b.defense===2&&b.barrier?" BROKEN":""),420,43,9,PAL[3]);
+  const trial=mode==="trial"||mode==="pause"&&pauseFrom==="trial";
+  text(trial?"TARGET":`PRISM ${run.boss+1}/3  ${b.name}`,20,20,11,PAL[b.hue]);text(`SEED ${seedText()}`,620,20,9,"#777b99","right");
+  text("HP",20,35,9);text("POSTURE",20,44,9);
+  bar(80,28,330,8,b.hp,b.maxHp,PAL[b.hue]);bar(80,39,330,4,b.posture,b.maxPosture,"#f2e6a2");
+  if(!trial){
+    if(b.defense)text(DEF_NAME[b.defense]+(b.defense===2&&b.barrier?" BROKEN":""),420,43,9,PAL[3]);
+    if(b.phase==="recover"||b.phase==="stagger")text("[OPEN] COUNTER NOW",620,33,11,"#fff","right");
+  }
+  ["RED power","ORANGE lasts","YELLOW fast","GREEN guard","BLUE range","INDIGO tracks","VIOLET multi"].forEach((s,i)=>text(s,20+i*86,55,9,PAL[i]));
   /*
   バーは色ではなく位置と太さで区別する（上=敵/下=自分、太い=命/細い=崩れ・資源）。
   グレースケールでも4本を見分けられる（根の不変条件11）。
   スタミナには「ロール24」「パリィ18」の必要量に目盛りを置く。残量がそれを
   下回っているかが一目で分かる（design/tree/read/frame/hud の decision-3）。
   */
-  bar(20,339,150,5,p.hp,HERO.hp,HERO.col);bar(20,347,150,3,p.st,100,"#e7d96d");
-  cx.fillStyle="#8a8298";for(const n of[18,24,p.hold.cost])cx.fillRect(21+148*(n/100),346,1,5);
+  text("HP",20,343,9);text("ST",20,351,9);
+  bar(40,339,130,5,p.hp,HERO.hp,HERO.col);bar(40,347,130,3,p.st,100,"#e7d96d");
+  cx.fillStyle="#8a8298";for(const n of[18,24,p.hold.cost])cx.fillRect(41+128*(n/100),346,1,5);
   // 所持技を常時出す。スタミナの目盛りと並べて読めるようにする（設計 hud）。
   const m=p.hold;cx.fillStyle=HOLD_COL(m);cx.fillRect(180,340,4,4);
   text(SHAPE_NAME[m[S]]+"  "+m.cost+"ST",190,344,9,"#c4c6dc");
-  if(msgTime)text(msg,CW/2,68,12,"#fff","center");
+  if(feedback.ttl)text(feedback.kind.toUpperCase()+": "+feedback.text,320,70,feedback.kind==="hurt"?10:12,"#fff","center");
+  else if(!trial&&b.phase==="wind")text(SHAPE_NAME[b.moves[b.move][S]]+" / TRY: "+lesson(b.moves[b.move]),320,70,10,"#fff","center");
+  else if(msgTime)text(msg,CW/2,70,12,"#fff","center");
 }
 function drawTake(){
   /*
@@ -1020,27 +1086,31 @@ function drawTake(){
   */
   cx.fillStyle="#080914e8";cx.fillRect(24,60,CW-48,240);
   text("PRISM SHATTERED",CW/2,96,22,"#f0efff","center");
-  text("TAKE ONE MOVE   ←/→ CHOOSE   ENTER CONFIRM",CW/2,120,10,"#a3a6c2","center");
+  text("TAKE ONE MOVE   ←/→ A/D CHOOSE   J/Z TRY   ENTER CONFIRM",CW/2,120,10,"#a3a6c2","center");
   const n=take.list.length,w=Math.min(96,(CW-80)/n);
   take.list.forEach((m,i)=>{
-    const x=CW/2+(i-(n-1)/2)*w,on=i===take.i,own=m===p.hold;
-    cx.globalAlpha=on?1:.4;
+    const x=CW/2+(i-(n-1)/2)*w,on=i===take.i,own=m===take.held;
+    cx.globalAlpha=on?1:.68;
     cx.strokeStyle=on?"#fff":"#4a4760";cx.lineWidth=on?2:1;
     cx.strokeRect(x-w/2+3,146,w-6,116);
     cx.fillStyle=HOLD_COL(m);cx.fillRect(x-w/2+3,146,w-6,4);
     text(SHAPE_NAME[m[S]],x,168,10,"#f0efff","center");
-    text(REACH[m[R]-1]+"px",x,186,9,"#c4c6dc","center");
-    text(m.wind+"F WIND",x,200,8,"#9a9cb4","center");
-    text(REC[m[C]-1]+"F REC",x,212,8,"#9a9cb4","center");
-    if(m[N]>1)text(m[N]+" HITS",x,224,8,"#9a9cb4","center");
-    text(m.cost+" ST",x,240,10,m.cost>26?"#ed596f":"#e7d96d","center");
+    text(["LOW ARC","STRAIGHT","AREA IMPACT","RUSH FORWARD","FLYING SHOT","FALLING HITS"][m[S]],x,184,8,"#c4c6dc","center");
+    text(["CLOSE","MID REACH","LONG REACH","FAR REACH"][m[R]-1],x,199,8,"#c4c6dc","center");
+    text((m.wind<=18?"QUICK":m.wind<=27?"STEADY":"SLOW")+" START",x,212,8,"#9a9cb4","center");
+    text((m[C]<=2?"FAST":"LONG")+" RESET",x,225,8,"#9a9cb4","center");
+    text(m[N]+" HIT / "+m.cost+" ST",x,240,8,m.cost>26?"#ed596f":"#e7d96d","center");
     if(own)text("HELD",x,256,8,"#5dcc8a","center");
     cx.globalAlpha=1;
   });
-  text(b.name+" · "+(run.boss===2?"LAST PRISM":"PRISM "+(run.boss+2)+"/3 NEXT"),CW/2,285,9,"#777b99","center");
+  text(take.foe.name+" · ENTER: "+(run.boss===2?"RESULT":"PRISM "+(run.boss+2)+"/3 NEXT"),CW/2,285,9,PAL[take.foe.hue],"center");
 }
 function overlay(title,sub,action){
   cx.fillStyle="#080914d9";cx.fillRect(85,78,470,206);text(title,CW/2,126,28,"#f0efff","center");text(sub,CW/2,160,11,"#a3a6c2","center");text(action,CW/2,246,12,"#ead85b","center");
+  if(mode==="dead"&&lastLesson){
+    const lines=lastLesson.split(" / ");
+    lines.forEach((line,i)=>text(line,CW/2,192+i*17,10,"#f0efff","center"));
+  }
 }
 function draw(){
   /*
@@ -1050,7 +1120,7 @@ function draw(){
   当たり判定は一切ここで変更しない。shakeはCanvas座標だけを揺らすため、
   見た目が揺れてもゲーム内部の座標と判定は安定したまま。
   */
-  background();cx.save();if(shake){cx.translate((Math.random()-.5)*shake,(Math.random()-.5)*shake);shake*=.82;if(shake<.3)shake=0}
+  background();cx.save();if(shake)cx.translate((Math.random()-.5)*shake,(Math.random()-.5)*shake);
   if(mode!=="title"&&mode!=="result"){
     drawTelegraph();for(const s of shots){cx.fillStyle=s.col;cx.globalAlpha=.9;cx.fillRect(s.x-5,s.y-3,10,6)}cx.globalAlpha=1;
     drawHero();drawBoss();for(const q of parts){cx.globalAlpha=q.life/30;cx.fillStyle=q.col;cx.fillRect(q.x,q.y,2,2)}cx.globalAlpha=1;hud();
@@ -1059,9 +1129,14 @@ function draw(){
   if(mode==="title"){
     text("PRISMATIC",CW/2,112,16,"#a9aad0","center");text("DUEL",CW/2,158,48,"#f1efff","center");
     for(let i=0;i<7;i++){cx.fillStyle=PAL[i];cx.fillRect(224+i*28,177,22,3+i%2*3)}
-    text("GENERATED FOES. LEARNABLE ATTACKS.",CW/2,211,10,"#777b99","center");text("SEED  "+seedText(),CW/2,244,12,"#c4c6dc","center");text("ENTER  BEGIN    N  NEW SEED",CW/2,280,11,"#ead85b","center");
+    text("DEFEAT A FOE > STEAL ONE MOVE > USE IT NEXT",CW/2,207,11,"#f0efff","center");
+    text("READ THE WINDUP > EVADE > STRIKE THE OPENING",CW/2,225,10,"#a3a6c2","center");text("SEED  "+seedText(),CW/2,252,12,"#c4c6dc","center");text("ENTER  BEGIN    N  NEW SEED",CW/2,280,11,"#ead85b","center");
   }else if(mode==="dead")overlay("YOU FELL",b.name+" remembers every move.","ENTER / R  RETRY SAME FOE     N  NEW SEED");
   else if(mode==="bosswin")drawTake();
+  else if(mode==="trial"){
+    text("TRY "+SHAPE_NAME[p.hold[S]]+" · "+p.hold.cost+" ST · J/Z ATTACK · TARGET WILL NOT ATTACK",CW/2,92,10,"#f0efff","center");
+    text("R CHOOSE AGAIN   ENTER "+(run.boss===2?"RESULT":"NEXT FOE")+"   ESC PAUSE",CW/2,110,10,"#ead85b","center");
+  }
   else if(mode==="result")drawResult();
   else if(mode==="pause")overlay("PAUSED","The duel waits.","ENTER / ESC  RESUME");
 }

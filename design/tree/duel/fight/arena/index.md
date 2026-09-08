@@ -3,12 +3,81 @@ id: duel.fight.arena
 parent: duel.fight
 depth: 3
 children: []           # 深さ3は葉。分割しない
-status: decision-approved   # arena@2026-09-05-decision-5（人間の承認 root@2026-09-06-approval-3）
+status: implementation-verified   # 2026-09-08 runtime自動回帰通過。統合容量・実画面・具体版個別承認は別
 seams: []
 uses_seams: [f1.avatar-state, f2.foe-state, d1.run-definition]
 ---
 
 # arena（システム: 両者を突き合わせ、1戦の決着とランの進行を決める）
+
+## 2026-09-08 現行差分 — 学習イベントと実技試用
+
+`arena@2026-09-08-decision-6`。親 `fight@2026-09-08-decision-6` / `split-6` を詳細化する。
+この節を優先し、無関係な基準版と過去承認は維持する。深さ3のため分割しない。
+
+### 1. 決めるもの
+
+runtime単独編集者として判定イベントからfeedback/lastLessonを作り、安全なtrialへ同じ
+playerStep/heroStrike/shotsStepを接続する。描画と生成器・性能・奪取/ST式は変更しない。
+
+### 2. なぜ要るか
+
+実際の隙への命中・パリィ・被弾原因を画面へ伝え、奪取候補を本戦状態の変更前に体験させる。
+
+### 3. 利用者
+
+初見と再挑戦のDesktopプレイヤー、公開seamだけを読むread。試用は省略できる。
+
+### 4. 受け入れ条件
+
+- [x] A3/FT3: 命中前recover/staggerだけcounter。通常命中、新規stagger、無効接触を区別し、接触したパリィだけparry。
+- [x] A4/FT4: 実被弾の技名とlessonを死亡まで保持、新戦で消す。敵弾の原因は発射時の文字列。実際のST不足だけtired、hurt/parryを優先。
+- [x] A5/FT5: 全6形状を各3回、実更新器の発生・段数・射程・消費で試す。run全項目と生成用乱数、確定所持技を保存する。
+- [x] A6/FT6: Rで元p/bと同じカーソルへ復帰、J/Zで再試用。Enterは次戦/Resultへ一度だけ記録する。Esc/blurのpause復帰先を保持し入力を消費する。
+- [ ] A7/FT7: experience/test/stealの実行結果を親へ返す。ZIPと実画面は根の統合検証、人間の学習と正式precheckは別の未検証事項。
+
+### 5. 不変条件と実装契約
+
+`lesson(m)`は純関数で実形状とSHOTを含む実パリィ可否から短文を返す。
+`feedback={text,kind,ttl}`、`lastLesson`文字列、`mode="trial"`、
+`take={list,i,held,foe:{name,hue}}`を公開する。敵弾には発射時の技名+lessonを文字列で保存する。
+counterはダメージ前phaseで判定。trial標的は攻撃せず、命中時にHPを減らし、HP0なら回復して
+繰り返し使える。撃破/変異/戦績へ進まない。p/bは元参照を私有退避し、新しい試用状態を作る。
+trialの移動・攻撃は通常入力。R/Enter時に元参照を戻し、弾・効果・feedback・メッセージ・
+freeze/shake・キーと行動入力バッファを清掃する。確定だけがhold/log/bossを更新する。
+Esc/blurは元fight/trialを記録、pause復帰入力は同更新で再処理しない。
+shakeとfeedback.ttlは更新側で減らし、pauseでは止める。死亡・撃破後もshakeを減衰して
+画面揺れが残り続けることを防ぐ。描画は状態を書き換えない。
+所持技の最終activeは `wind + (ACTIVE[A-1]+10)*N - 10` 未満まで。
+以後の既存action終了時刻は維持し、硬直中の近接判定・弾生成・CHARGE前進を再発させない。
+
+### 6. 任せること
+
+短文・ttl・標的の配置とHP再利用はarenaの実装判断。数値調整・生成・敵AI・描画変更は境界外。
+親からの振り分け本文は変更しない。
+
+### 7. 未確定・実施根拠
+
+根に記録された2026-09-08ユーザー依頼は設計編集・サブエージェント実装・検証の作業許可。
+今回具体版の人間個別承認・別実装AIの正式precheckは未取得であり、過去承認を流用しない。
+人間の被弾理由理解・学習F8は自動回帰で代用しない。
+
+### 実装・検証記録（2026-09-08 続行）
+
+- `game.js` のruntime所有内でtrial/確定をstepへ接続。Escape/blurのpause元を保存し、
+  復帰更新はその場で終了してEnterの二重確定を防いだ。戦闘終了後は後続の敵更新を止める。
+- `heroStrike` の最終active超過ガードを追加。従来の剰余計算が硬直中にも判定とCHARGE前進を
+  再発させていた。発生・持続・段数・回復時間・移動速度・奪取式は変更しない。
+- `node prismatic-duel/experience.test.mjs`: 11件通過。任意試用、候補復帰、全6形状各3回、
+  ST消費、run隔離、最終結果の一回記録、pause入力消費/TTL/shake停止、死亡後shake収束、
+  実命中counter、新規stagger/shift、近接/弾パリィ、発射元の変更後も保持する被弾原因を確認。
+- `node prismatic-duel/steal.test.mjs`: 28,000技の変換、全6形状3回、SHOT 1/2/3段、RAIN座標通過。
+  旧fixtureのCHARGE/RAINは硬直中の再前進・再判定で遅れて当たることに依存していたため、
+  CHARGEは実持続内で届く距離、RAINは固定落下地点へ標的を配置した。期待ダメージ値は維持。
+- `node prismatic-duel/test.mjs`: 30,000ボス・6形状・4防御・21外見識別を通過。
+- コード境界: runtime節、experience/steal回帰fixture、自ノードだけを編集。
+  生成器・steal数式・HP・敵AI・renderingは変更なし。shadeではなく既存変数名はshake。
+- 統合ZIP 13,312 bytes、実画面、提出検査は根へ引き渡す。人間F8・正式precheckは未実施。
 
 ## 📍 現行契約への索引
 
@@ -18,8 +87,8 @@ uses_seams: [f1.avatar-state, f2.foe-state, d1.run-definition]
 
 **この順に読めば現行の契約だけが揃う。**
 
-1. **有効な版**: 決定 `arena@2026-09-05-decision-5` / 分割なし（深さ3の葉）
-2. **現行の決定本文**: 1〜7（🔒 が付いた節が最新の凍結）
+1. **今回の適用版**: `arena@2026-09-08-decision-6`（作業許可あり・具体版個別承認未取得）/ 分割なし
+2. **現行の決定本文**: 先頭2026-09-08差分1〜7を優先し、無関係な基準版を維持する
 3. **承認証跡**: `### 現在有効なもの` 表 → その下の該当エントリ
 
 > ⚠️ **`superseded` と書かれた節・`~~取り消し線~~`・「旧文は」で始まる引用は履歴である。**
@@ -36,6 +105,21 @@ uses_seams: [f1.avatar-state, f2.foe-state, d1.run-definition]
        閉包（自ノードと祖先チェーンの index.md）を先に読んでください。 -->
 
 ## 親からの振り分け
+
+### 2026-09-08 親による追加振り分け
+
+- child: arena
+  責任: 戦闘の確定イベントから学習情報を作り、本戦を隔離した任意の奪取技試用を統合する。
+  詳細化の対象: fight先頭2026-09-08差分1〜7、特に5の公開shape・入力・退避復帰・確定の一回性。shakeの減衰とゼロ化をruntime更新へ置き、pause中は止める。
+  継承する制約: 根/duel/fight先頭差分。HP14・3連戦・生成分布・性能・敵AI・奪取変換/ST式を維持。試用は同じ更新器を使い、run/確定所持技/生成用乱数を汚染しない。
+  割り当てられた受け入れ条件: FT3/FT4/FT5/FT6/FT7。実施コマンド・結果・未検証をfightへ報告。
+  uses_seams: [f1.avatar-state, f2.foe-state, d1.run-definition]
+  提供する seam: f3.avatar-verdict / f4.foe-verdict、根s1追加のlesson(m)/feedback/lastLesson/mode trial/take。
+  実装所有: prismatic-duel/game.jsのruntime全体と必要な入力/blur接続。共通更新器内のイベント挿入・試用分岐を明示許可。renderingはread所有。
+  境界: avatar/foeへの今回は実装変更依頼なし。数値・AIは据え置き、変更が必要ならfightへboundary_request。
+  parent_decision_ref: fight@2026-09-08-decision-6 / fight@2026-09-08-split-6
+  実施根拠: 根に記録されたユーザー作業許可。具体版の人間個別承認・正式precheckは未取得。
+
 
 - **責任**: 両者を突き合わせ、1戦の決着とランの進行を決める
 - **詳細化の対象**: 親の本文1の機能「突き合わせる」。根の 1.1（1戦の中身）、
