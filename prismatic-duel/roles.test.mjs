@@ -38,7 +38,7 @@ test('short opening rewards thrust; long opening rewards posture damage',()=>{
     rows.push(plain('[10000-b.hp,100-b.posture,p.x]'));
   }
   assert.equal(rows[1][0],7);assert.equal(rows[2][0],0);
-  read('fixture(2);fire();finish()');assert.equal(read('100-b.posture'),8);
+  read('fixture(2);fire();finish()');assert.equal(read('100-b.posture'),12);
   read('fixture(1);fire();finish()');assert.equal(read('100-b.posture'),1);
   console.log('  short opening HP damage (SWEEP/THRUST/SLAM/CHARGE/SHOT/RAIN):',rows.map(r=>r[0]));
 });
@@ -46,7 +46,7 @@ test('short opening rewards thrust; long opening rewards posture damage',()=>{
 test('sweep creates distance in either direction with no wall damage',()=>{
   for(const face of [-1,1]){
     read(`fixture(0,1,${face});globalThis.oldX=b.x;fire();finish()`);
-    assert.equal(read('b.x-oldX'),face*24);assert.equal(read('10000-b.hp'),7);
+    assert.equal(read('b.x-oldX'),face*40);assert.equal(read('10000-b.hp'),7);
   }
   read('fixture(0);b.x=575;p.x=525;fire();finish()');
   assert.equal(read('b.x'),575);assert.equal(read('10000-b.hp'),7);
@@ -60,8 +60,8 @@ test('multi-hit knockback and posture have a per-cast cap; stagger never extends
       b.x=p.x+40;p.timer=p.hold.wind+i*(p.hold.active+10);
       const x=b.x;heroStrike();heroStrike();shift+=b.x-x;
     }return shift})()`);
-    assert.ok(Math.abs(read('100-b.posture')-(s===0?2:8))<1e-9);
-    assert.equal(read('10000-b.hp'),7);assert.equal(delta,s===0?24:0);
+    assert.ok(Math.abs(read('100-b.posture')-(s===0?2:12))<1e-9);
+    assert.equal(read('10000-b.hp'),7);assert.ok(Math.abs(delta-(s===0?40:0))<1e-9);
   }
   read("fixture(2);b.phase='stagger';b.timer=66;b.posture=0;fire();finish()");
   assert.equal(read('b.timer'),66);

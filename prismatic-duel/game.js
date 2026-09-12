@@ -111,8 +111,8 @@ steal(m) -> プレイヤー版の技
 */
 const HOLD_D=3;
 // Shape envelopes preserve the enemy's timing tier without losing the role.
-const ROLE_WIND=[18,8,34,20,22,32],ROLE_STEP=[3,2,4,3,3,3],ROLE_REST=[22,14,42,30,28,28];
-const ROLE_POST=[2,1,8,1,1,2],ROLE_COST=[2,0,6,4,4,4];
+const ROLE_WIND=[18,8,34,14,16,32],ROLE_STEP=[3,2,4,3,3,3],ROLE_REST=[22,14,34,18,18,20];
+const ROLE_POST=[2,1,12,2,1,6],ROLE_COST=[2,0,4,2,0,2];
 const ROLE_GOOD=["MAKE SPACE","SHORT OPENING","BREAK POSTURE","CLOSE THE GAP","FIRE FROM AFAR","AIM AHEAD"];
 const ROLE_RISK=["PUSHES AWAY","NARROW HIT","SLOW COMMIT","ENDS UP CLOSE","FEET LOCKED","LANDS LATE"];
 function activeEnd(m){return m.wind+(m.active+10)*m[N]-10}
@@ -267,8 +267,8 @@ function makeMove(r,shape,tier,signature){
   if(signature&&tier===2&&r()>.82)repeat=3;
   if(signature&&r()>.7)active=3;
   let flags=MOVEABLE;
-  // SHOTは弾をパリィで反射できる。宣言と実装を一本にする（設計 duel の 4.1）
-  if(shape===0||shape===1||shape===3||shape===4)flags|=PARRY;
+  // 武器・本体・弾はパリィ可能。落下する範囲攻撃RAINだけは回避で対処する。
+  if(shape!==5)flags|=PARRY;
   if(shape===0||shape===3)flags|=JUMPABLE;
   return balance([shape,damage,range,wind,active,recovery,track,repeat,flags],tier,signature);
 }
@@ -291,6 +291,7 @@ generateBoss(seed, tier) -> ボスの不変な設計データ
 初期化すべき可変状態なので、startBoss()が別オブジェクトとして付け足す。
 */
 function generateBoss(seed,tier){
+  const level=tier;tier=Math.min(3,tier);
   const r=seeded((seed^Math.imul(tier+1,0x9e3779b9))>>>0);
   const shapes=tier===0?
     [1,0,pick(r,[3,4]),pick(r,[2,5])]:
@@ -361,9 +362,10 @@ function generateBoss(seed,tier){
   const hue=pick(r,traits.length?traits:[0]);
   const sig=moves[moves.length-1][S];
   return{
-    seed:seed>>>0,tier,moves,defense,hue,
+    seed:seed>>>0,tier:level,moves,defense,hue,
     name:COLOR_NAME[hue]+" "+WEAPON_NAME[sig],
-    maxHp:[120,160,210][tier],maxPosture:[24,32,42][tier]
+    maxHp:[120,160,210][level]||174+level*18,
+    maxPosture:[24,32,42][level]||36+level*3
   };
 }
 function validateBoss(b){
@@ -381,7 +383,7 @@ function validateBoss(b){
 
   test.mjsは10,000 seed × 3 tierを生成し、エラー配列が空か検査する。
   */
-  const errors=[],tier=b.tier;
+  const errors=[],tier=Math.min(3,b.tier);
   if(b.moves.length!==4+(tier>0))errors.push("move count");
   if(!b.moves.some(m=>m[F]&JUMPABLE))errors.push("no jump answer");
   if(b.moves.filter(m=>m[F]&PARRY).length<2)errors.push("too few parries");
@@ -406,7 +408,7 @@ function validateBoss(b){
 
   mode   title / fight / trial / pause / dead / bosswin / result の画面状態
   seed   1ランを再現する32bit整数
-  run    3戦をまたいで保持するボス番号・時間・集計値
+  run    全戦をまたいで保持するボス番号・時間・集計値
   p      プレイヤー座標、HP、スタミナ、行動タイマー
   b      生成データ + ボス現在HP、座標、状態、技山札、標的位置
   shots プレイヤー弾と敵弾をownerで共有する配列
@@ -416,8 +418,8 @@ function validateBoss(b){
 
 ---------------------------------------------------------------------------- */
 
-let cv,cx,mode="title",seed=1,run,p,b,take=null,keys={},tap={},shots=[],parts=[],stars=[];
-let acc=0,last=0,freeze=0,shake=0,msg="",msgTime=0,audio;
+let cv,cx,mode="title",seed=1,run,p,b,take=null,keys={},tap={},shots=[],parts=[],stars=[],best=0;
+let acc=0,last=0,freeze=0,shake=0,msg="",msgTime=0,audio,musicFrame=0,musicRoot=55,song=[];
 let feedback={text:"",kind:"",ttl:0},lastLesson="",pauseFrom="fight",saved,attune=null;
 
 /*
@@ -441,6 +443,7 @@ function boot(){
   - requestAnimationFrameを開始する
   */
   cv=document.getElementById("c");cx=cv.getContext("2d");
+  try{best=+localStorage.prismBest||0}catch(e){}
   const q=new URLSearchParams(location.search).get("seed");
   seed=q?parseInt(q,36)>>>0:(Math.random()*0xffffffff)>>>0;
   const sr=seeded(71);for(let i=0;i<70;i++)stars.push([sr()*CW,sr()*220,sr()*1.8+.3]);
@@ -457,12 +460,27 @@ function wakeAudio(){
   if(!audio)try{audio=new AudioContext}catch(e){}
   if(audio&&audio.state==="suspended")audio.resume();
 }
-function sound(f=220,d=.06,type="square",vol=.035){
+function sound(f=220,d=.06,type="square",vol=.035,delay=0){
   if(!audio)return;
-  const o=audio.createOscillator(),g=audio.createGain(),t=audio.currentTime;
-  o.type=type;o.frequency.setValueAtTime(f,t);o.frequency.exponentialRampToValueAtTime(Math.max(40,f*.65),t+d);
-  g.gain.setValueAtTime(vol,t);g.gain.exponentialRampToValueAtTime(.0001,t+d);
+  const o=audio.createOscillator(),g=audio.createGain(),t=audio.currentTime+delay;
+  o.type=type;o.frequency.setValueAtTime(f,t);o.frequency.exponentialRampToValueAtTime(Math.max(40,f*(type==="sine"?1:.65)),t+d);
+  g.gain.setValueAtTime(.0001,t);g.gain.linearRampToValueAtTime(vol,t+(vol<.02?.08:.004));g.gain.exponentialRampToValueAtTime(.0001,t+d);
   o.connect(g).connect(audio.destination);o.start(t);o.stop(t+d);
+}
+function chime(n){for(let i=0;i<n;i++)sound(440*[1,1.25,1.5,2][i],.22,"sine",.028,i*.09)}
+/* The run seed writes one minor-mode phrase. Later foes add voices, not a new tune. */
+function makeMusic(){
+  const r=seeded(seed^0x51ed270b),scale=[0,2,3,5,7,8+(seed&1),10,12];
+  musicRoot=55*Math.pow(2,(r()*7|0)/12);let n=r()*6|0;
+  song=Array.from({length:16},(_,i)=>scale[n=i===15?0:clamp(n+(r()*3|0)-1,0,7)]);musicFrame=0;
+}
+function music(){
+  if(audio&&!(musicFrame++%20)){
+    const i=(musicFrame/20|0)&15,f=musicRoot*Math.pow(2,song[i]/12),level=run.boss%3;
+    if(level||!(i&1))sound(f*2,.3,"sine",.006);
+    if(!(i&3))sound(musicRoot,1.1,"sine",.009);
+    if(level>1&&i&1)sound(f*3,.18,"sine",.004);
+  }
 }
 /*
 音は形状と技の性格で変える（設計 sound の 1.2）。
@@ -511,14 +529,15 @@ function endTrial(){[p,b]=saved;saved=null;cleanArena();mode="bosswin"}
 function confirmTake(){
   if(mode==="trial")endTrial();
   const m=take.list[take.i],from=b.x+22;run.log.push([take.foe.name,take.foe.hue,m]);
-  p.hold=m;take=null;cleanArena();sound(520,.1,"square",.04);
-  run.boss++;if(run.boss>=3)mode="result";else startBoss();
+  p.hold=m;take=null;cleanArena();chime(run.boss%3===2?4:3);
+  run.boss++;best=Math.max(best,run.boss);try{localStorage.prismBest=best}catch(e){}
+  run.boss%3?startBoss():mode="result";
   attune={x:from,y:FLOOR-45,ttl:45,col:HOLD_COL(m)};
 }
 
 function newRun(s=seed){
   // ランを完全初期化。Rで同じランを再開するときだけ同じseedを渡す。
-  seed=s>>>0;run={boss:0,time:0,hits:0,parries:0,log:[]};p=null;startBoss();
+  seed=s>>>0;makeMusic();run={boss:0,time:0,hits:0,parries:0,log:[]};p=null;startBoss();
 }
 function startBoss(){
   /*
@@ -536,17 +555,17 @@ function startBoss(){
     targets          多段落下攻撃の全X座標
     attacks          SHIELD発動周期のための使用技数
     barrier          0ならBARRIER有効。正数なら破壊中の残り時間
-    mutated          3体目のHP50%変異を一度だけ行うフラグ
+    mutated          3体ごとのHP50%変異を一度だけ行うフラグ
 
   */
   const cfg=generateBoss(runSeed(run.boss),run.boss);
   b={...cfg,hp:cfg.maxHp,posture:cfg.maxPosture,x:500,y:FLOOR-72,face:-1,phase:"wait",timer:70,
-    deck:[],move:0,attack:0,pulse:0,target:140,aimY:FLOOR-18,targets:[],lastGuard:-1,attacks:0,broken:0,barrier:0,mutated:0};
+    deck:[],move:0,attack:0,pulse:0,target:140,aimY:FLOOR-18,targets:[],lastGuard:-1,attacks:0,barrier:0,mutated:0};
   p={x:125,y:FLOOR-30,vx:0,vy:0,face:1,ground:1,coyote:6,
     hp:HERO.hp,st:100,delay:0,
     action:"",timer:0,inv:0,lastHit:"",jumpBuf:0,actBuf:0,parryBuf:0,rollBuf:0,
-    hold:p&&p.hold?p.hold:bareHand(),attack:0,pulse:-1,hitId:"",aim:0,targets:[0]};
-  cleanArena();take=null;saved=null;lastLesson="";mode="fight";
+    hold:p&&p.hold?p.hold:bareHand(),attack:0,pulse:-1,hitId:"",targets:[0]};
+  cleanArena();take=null;saved=null;lastLesson="";musicFrame=0;mode="fight";
   if(!run.boss)say("READ THE COLORS. LEARN THE RHYTHM.",120);
 }
 function say(t,n=70){msg=t;msgTime=n}
@@ -642,11 +661,11 @@ function heroStrike(){
   */
   const m=p.hold,w=m.wind,span=m.active+10,t=p.timer-w;
   if(t<0||t>=span*m[N]-10)return;
-  if(p.timer===w)sound(moveTone(m,m.wind),.07,WAVE[m[S]],.025);
+  if(p.timer===w&&m[S]!==4)sound(moveTone(m,m.wind),.07,WAVE[m[S]],.025);
   const pulse=Math.min(m[N]-1,(t/span)|0),local=t%span;
   if(m[S]===4){ // 弾は段が変わった最初のフレームで一発だけ生成する
     if(p.pulse!==pulse){p.pulse=pulse;
-      shots.push({...horn(),vx:p.face*5.4,vy:0,owner:0,dmg:m.seg[pulse],post:m.post/m[N],col:HOLD_COL(m),life:150});
+      shots.push({...horn(),vx:p.face*7.2,vy:0,owner:0,dmg:m.seg[pulse],post:m.post/m[N],col:HOLD_COL(m),life:150});
       sound(moveTone(m,m.wind,pulse),.06,"sawtooth",.022);}
     return;
   }
@@ -654,10 +673,11 @@ function heroStrike(){
   if(m[S]===3)p.x=clamp(p.x+p.face*(3.2+m[R]*.72),20,CW-38); // 突進は自分が前へ出る
   const id=p.attack+":"+pulse;
   if(p.hitId!==id&&hit(moveRect(m,pulse,p),boxBoss())){
-    p.hitId=id;bossDamage(m.seg[pulse],m.post/m[N],"melee",m[S]===0?p.face*24/m[N]:0);
+    p.hitId=id;bossDamage(m.seg[pulse],m.post/m[N],"melee",m[S]===0?p.face*40/m[N]:0);
     if(pulse)sound(moveTone(m,m.wind,pulse),.05,WAVE[m[S]],.02);
   }
 }
+function barrierUp(){return b.defense===2&&!b.barrier&&b.phase!=="recover"&&b.phase!=="stagger"}
 function bossDamage(dmg,post,kind,push=0){
   /*
   ボスが攻撃を受けたときの唯一の入口。
@@ -667,7 +687,7 @@ function bossDamage(dmg,post,kind,push=0){
 
   防御能力:
     SHIELD  guard中はHP30%、体勢35%だけ通す
-    BARRIER バリア有効中のshotを30%へ減らす。melee命中で180f破壊
+    BARRIER 通常時のshotを30%へ減らす。反撃窓では開き、melee命中で180f破壊
     ARMOR   通常時の体勢ダメージを半減
 
   recover/stagger中は明確な反撃窓なのでHPダメージ1.25倍。
@@ -676,14 +696,15 @@ function bossDamage(dmg,post,kind,push=0){
   if((mode!=="fight"&&mode!=="trial")||b.phase==="shift")return;
   const counter=b.phase==="recover"||b.phase==="stagger";
   if(b.phase==="guard"){dmg*=.3;post*=.35}
-  if(b.defense===2&&kind==="shot"&&!b.barrier)dmg*=.3;
+  if(barrierUp()&&kind==="shot")dmg*=.3;
   if(b.defense===1&&b.phase!=="recover"&&b.phase!=="stagger")post*=.5;
   if(kind==="melee"&&b.defense===2)b.barrier=180;
   if(b.phase==="recover"||b.phase==="stagger")dmg*=1.25;
   b.hp=Math.max(0,b.hp-dmg);b.posture=Math.max(0,b.posture-post);
   b.x=clamp(b.x+push,45,CW-65);
   respond(counter?"counter":"hit",counter?"COUNTER!":"HIT");
-  spark(b.x+20,b.y+28,PAL[b.hue],7);freeze=kind==="melee"?3:1;shake=kind==="melee"?3:1;
+  spark(b.x+20,b.y+28,PAL[b.hue],7);freeze=counter?5:kind==="melee"?3:1;shake=kind==="melee"?3:1;
+  sound(counter?660:kind==="shot"?720:[180,520,90,130,720,240][p.hold[S]],counter?.12:.07,"triangle",.04);
   if(mode==="trial"){b.reset=150;return}
   if(b.hp<=0){
     /*
@@ -691,9 +712,9 @@ function bossDamage(dmg,post,kind,push=0){
     倒したボスの全技＋今の所持技。選ぶのはduel側で、readは描くだけ。
     */
     mode="bosswin";take={list:b.moves.map(steal).concat([p.hold]),i:0,held:p.hold,foe:{name:b.name,hue:b.hue}};
-    sound(70,.5,"sawtooth",.05);return;
+    chime(2);return;
   }
-  if(b.tier===2&&!b.mutated&&b.hp<=b.maxHp/2){
+  if(b.tier%3===2&&!b.mutated&&b.hp<=b.maxHp/2){
     // 最終形態は既知の固有技を強化するだけで、別の回避規則には変えない。
     b.mutated=1;const m=b.moves[b.moves.length-1];m[D]=Math.min(4,m[D]+1);m[W]=Math.min(4,m[W]+1);m[C]=Math.min(4,m[C]+1);harden(m);
     b.phase="shift";b.timer=75;shots=shots.filter(s=>s.owner===0);say("THE PRISM CHANGES",100);sound(65,.35,"sawtooth",.04);return;
@@ -702,7 +723,7 @@ function bossDamage(dmg,post,kind,push=0){
 }
 function breakBoss(){
   // 110fの大きな反撃窓。終了後に体勢を全回復して通常ループへ戻す。
-  b.phase="stagger";b.timer=110;b.posture=0;freeze=6;shake=6;spark(b.x+22,b.y+30,"#fff",22);say("POSTURE BROKEN",70);sound(880,.18,"square",.05);
+  b.phase="stagger";b.timer=110;b.posture=0;freeze=6;shake=6;spark(b.x+22,b.y+30,"#fff",22);say("POSTURE BROKEN",70);sound(90,.18,"triangle",.05);sound(880,.25,"sine",.035);
 }
 function hurtPlayer(dmg,id,cause=moveLesson(b.moves[b.move])){
   /*
@@ -729,7 +750,7 @@ function parryBoss(id){
   */
   if(p.lastHit===id)return;p.lastHit=id;run.parries++;b.posture=Math.max(0,b.posture-8);freeze=6;shake=4;
   respond("parry","PARRY! COUNTER NOW");
-  p.action="";spark(p.x+p.face*12,p.y+12,"#fff",18);sound(1100,.1,"square",.055);say("PARRY",35);
+  p.action="";spark(p.x+p.face*12,p.y+12,"#fff",18);sound(1320,.16,"sine",.035);say("PARRY",35);
   if(!b.posture)breakBoss();else{b.phase="recover";b.timer=42}
 }
 function bossContact(q,id,parryable){
@@ -760,6 +781,10 @@ function nextMove(){
   }
   return b.deck.splice(k,1)[0];
 }
+function aimBoss(m){
+  b.target=p.x+8;b.aimY=p.y+14;b.face=p.x<b.x?-1:1;
+  for(let i=0;i<m[N];i++)b.targets[i]=clamp(b.target+(i?((i%2?1:-1)*(55+18*i)):0),30,CW-30);
+}
 function startMove(){
   /*
   waitからwindへ入る処理。
@@ -767,8 +792,7 @@ function startMove(){
   tracking>0の技だけはwind前半まで標的を更新するが、activeへ入った後は変えない。
   */
   b.move=nextMove();const m=b.moves[b.move];b.phase="wind";b.timer=WIND[m[W]-1];b.attack++;b.attacks++;b.pulse=0;
-  b.face=p.x<b.x?-1:1;b.target=p.x+8;b.aimY=p.y+14;b.targets=[];
-  for(let i=0;i<m[N];i++)b.targets.push(clamp(b.target+(i?((i%2?1:-1)*(55+18*i)):0),30,CW-30));
+  b.targets=[];aimBoss(m);
   say(SHAPE_NAME[m[S]]+"  "+m[D]+"·"+m[R],Math.min(55,b.timer));
   // 予備動作の開始を音でも出す。画面の予告と同じ情報なので、切っても読める。
   sound(moveTone(m,WIND[m[W]-1])*.6,.09,WAVE[m[S]],.03);
@@ -790,7 +814,7 @@ function bossStep(){
   割り込み状態:
     guard    SHIELD持ちが山札一巡ごとに60f構える
     stagger  体勢0による110fの大きな隙
-    shift    3体目HP50%の75f変異演出。敵弾も消す
+    shift    3体ごとのHP50%の75f変異演出。敵弾も消す
 
   敵弾が画面に残っている間はwaitタイマーを止め、独立攻撃との重なりを防ぐ。
   */
@@ -811,11 +835,11 @@ function bossStep(){
     if(--b.timer<=0){b.phase="wait";b.timer=24}
   }else if(b.phase==="wind"){
     const m=b.moves[b.move],total=WIND[m[W]-1];
-    if(m[T]&&b.timer>total*.38){b.target=p.x+8;b.aimY=p.y+14;b.face=p.x<b.x?-1:1;for(let i=0;i<m[N];i++)b.targets[i]=clamp(b.target+(i?((i%2?1:-1)*(55+18*i)):0),30,CW-30)}
+    if(m[T]&&b.timer>total*.38)aimBoss(m);
     if(--b.timer<=0){b.phase="active";b.timer=0;b.pulse=-1}
   }else if(b.phase==="active")activeBossMove();
   else if(b.phase==="recover"){
-    if(--b.timer<=0){b.phase="wait";b.timer=[42,34,28][b.tier]}
+    if(--b.timer<=0){b.phase="wait";b.timer=[42,34,28][Math.min(2,b.tier)]}
   }else if(b.phase==="stagger"){
     if(--b.timer<=0){b.posture=b.maxPosture;b.phase="wait";b.timer=48}
   }else if(b.phase==="shift"){
@@ -833,7 +857,7 @@ function moveRect(m,pulse=0,src=b){
   Moveから現在段のAABB矩形{x,y,w,h}を作る。
 
     SWEEP  床上24pxの横長矩形。ジャンプで抜けられる
-    THRUST ボス胸元から正面へ伸びる細い矩形
+    THRUST 四足の胴体の高さへ向ける細い矩形
     SLAM   ボスを中心とする地上の広い矩形
     CHARGE 移動中のボス本体矩形
     SHOT   shots配列で処理するためここでは空矩形
@@ -845,7 +869,7 @@ function moveRect(m,pulse=0,src=b){
   const reach=REACH[m[R]-1],dir=src.face,hero=src!==b,ox=src.x,oy=src.y;
   const front=hero?horn(src).x:dir<0?ox:ox+40;
   if(m[S]===0)return{x:dir<0?front-reach:front,y:FLOOR-24,w:reach,h:24};
-  if(m[S]===1)return{x:dir<0?front-reach:front,y:hero?horn(src).y-6:oy+26,w:reach,h:hero?12:18};
+  if(m[S]===1)return{x:dir<0?front-reach:front,y:hero?horn(src).y-6:oy+48,w:reach,h:hero?12:18};
   if(m[S]===2)return{x:ox-reach*.55,y:FLOOR-57,w:reach+44,h:57};
   if(m[S]===3)return hero?boxPlayer():boxBoss();
   if(m[S]===5){const w=28+m[R]*9,t=src.targets[pulse];return{x:t-w/2,y:18,w,h:FLOOR-18}}
@@ -869,6 +893,8 @@ function activeBossMove(){
   if(local<ACTIVE[m[A]-1]&&m[S]!==4){
     if(m[S]===3)b.x+=b.face*(3.2+m[R]*.72);
     bossContact(moveRect(m,pulse),b.attack+":"+pulse,!!(m[F]&PARRY));
+    // パリィで確定した反撃窓・体勢崩しを通常の攻撃終了処理で上書きしない。
+    if(b.phase!=="active")return;
   }
   b.timer++;
   if(b.timer>=span*m[N]-10){b.phase="recover";b.timer=REC[m[C]-1]}
@@ -895,7 +921,7 @@ function shotsStep(){
     if(s.owner===0){
       if(hit({x:s.x-4,y:s.y-3,w:8,h:6},boxBoss())){bossDamage(s.dmg,s.post,"shot");s.life=0}
     }else if(hit({x:s.x-5,y:s.y-5,w:10,h:10},boxPlayer())){
-      if(isParry()&&s.parry){s.owner=0;s.vx*=-1.35;s.vy*=-1;s.dmg=3;s.post=7;s.col="#fff";if(mode==="fight")run.parries++;respond("parry","PARRY! SHOT RETURNED");freeze=4;sound(960,.08,"square",.05)}
+      if(isParry()&&s.parry){s.owner=0;s.vx*=-1.35;s.vy*=-1;s.dmg=3;s.post=7;s.col="#fff";if(mode==="fight")run.parries++;respond("parry","PARRY! SHOT RETURNED");freeze=4;sound(1320,.16,"sine",.035)}
       else if(!isRollInv()&&!p.inv){hurtPlayer(s.dmg,s.id,s.lesson);s.life=0}
     }
   }
@@ -913,9 +939,9 @@ function step(){
     fight   戦闘更新。freeze中は物理を止め、火花だけ進める
     pause   Enter/Escapeで直前のfight/trialへ戻り、復帰入力を消費
     dead    Enter/Rで同じボス、Nで新seed
-    bosswin J/Zでtrial、Enterで候補を確定。3体目ならresult
+    bosswin J/Zでtrial、Enterで候補を確定。3体ごとにresult
     trial   本戦と同じプレイヤー・弾更新。Rで候補、Enterで確定
-    result  Rで同seed再走、Enter/Nで新ラン
+    result  Enterで次の3体へ、Rで同seed再走、Nで新ラン
 
   step末尾でtapを空にするため、一回のキー入力が複数固定stepへ重複しない。
   */
@@ -941,10 +967,12 @@ function step(){
     else if(pressed("KeyJ","KeyZ"))startTrial();
   }else if(mode==="result"){
     if(pressed("KeyR"))newRun(seed);
-    if(pressed("Enter","KeyN")){seed=(Math.random()*0xffffffff)>>>0;mode="title"}
+    if(pressed("Enter"))startBoss();
+    if(pressed("KeyN")){seed=(Math.random()*0xffffffff)>>>0;mode="title"}
   }else if(mode==="trial"&&pressed("Enter"))confirmTake();
   else if(mode==="trial"&&pressed("KeyR"))endTrial();
   else if(mode==="fight"||mode==="trial"){
+    music();
     if(freeze)freeze--;
     else{
       if(mode==="fight")run.time++;
@@ -1007,6 +1035,7 @@ function drawTelegraph(){
   const t=Math.max(0,b.timer-1),pulse=wind?0:Math.min(m[N]-1,(t/span)|0);
   const live=!wind&&b.timer>0&&t%span<ACTIVE[m[A]-1],progress=wind?clamp(1-b.timer/WIND[m[W]-1],0,1):1;
   cx.save();cx.fillStyle=cx.strokeStyle=col;cx.lineWidth=1;
+  if(wind&&b.timer<=9&&m[F]&PARRY)cx.strokeStyle="#fff";
   if(m[S]===4&&wind){
     const x=b.x+20+b.face*22,y=b.y+29,dx=b.face*REACH[m[R]-1];
     const dy=(b.aimY-y)/Math.max(60,Math.abs((b.x+20)-(p.x+9)))*REACH[m[R]-1];
@@ -1029,38 +1058,34 @@ function drawTelegraph(){
   }
   cx.restore();
 }
-function drawPerson(x,y,scale,col,u=p){
-  // Poses read the same wind, pulse gaps and recovery boundaries as the update.
-  const hero=u===p,m=hero?p.hold:b.moves[b.move||0],shape=m[S],span=ACTIVE[m[A]-1]+10;
-  let phase=hero?u.action:u.phase,t=u.timer,q=0;
-  if(hero&&phase==="attack"){
-    t-=m.wind;phase=t<0?"wind":t<span*m[N]-10?"active":"recover";
-    if(phase==="recover")t=REC[m[C]-1]-(t-span*m[N]);
-  }
-  if(phase==="wind")q=clamp(hero?u.timer/m.wind:1-t/WIND[m[W]-1],0,1);
+function poly(v,col){cx.beginPath();cx.moveTo(v[0],v[1]);for(let i=2;i<v.length;i+=2)cx.lineTo(v[i],v[i+1]);cx.closePath();cx.fillStyle=col;cx.fill()}
+function drawPerson(x,y,scale,col,u){
+  // Boss-only renderer. The player uses unicorn(); poses read combat timing.
+  const m=u.moves[u.move||0],shape=m[S],span=ACTIVE[m[A]-1]+10;
+  let phase=u.phase,t=u.timer,q=0;
+  if(phase==="wind")q=clamp(1-t/WIND[m[W]-1],0,1);
   if(phase==="active"&&t%span>=ACTIVE[m[A]-1])phase="gap";
   const wind=phase==="wind",fire=phase==="active",down=phase==="recover",stun=phase==="stagger";
-  const drop=stun?9:down?3+3*clamp(t/REC[m[C]-1],0,1):phase==="roll"?7:0;
+  const drop=stun?9:down?3+3*clamp(t/REC[m[C]-1],0,1):0;
   const lean=stun?7:fire?(shape===3?9:4):wind?-2*q:down?3:0;
   let a=-.6,hx=8,hy=-7;
   if(wind){a=[-2.7,-3,-1.8,-.4,-2.5,-1.3][shape];hx=-3-5*q;hy=shape===2||shape===5?-20:-10}
   if(fire){a=[.65,0,1.2,0,-.15,-1.6][shape];hx=12;hy=shape===5?-22:shape===0?-2:-10;a+=(shape===0||shape===2)?(t%span/ACTIVE[m[A]-1]-.5)*.7:0}
   if(phase==="gap"){a=-1.9;hx=0;hy=-12}
   if(down||stun){a=1.15;hx=7;hy=drop-2}
-  const len=hero?12+REACH[m[R]-1]*.055:14+m[R]*4;
+  const len=14+m[R]*4;
   cx.save();cx.translate(x,y);cx.scale(scale*u.face,scale);cx.lineCap="round";
-  const poly=(v,fill)=>{cx.beginPath();cx.moveTo(v[0],v[1]);for(let i=2;i<v.length;i+=2)cx.lineTo(v[i],v[i+1]);cx.closePath();cx.fillStyle=fill;cx.fill()};
   poly([lean-5,-14+drop,-12-lean,5,-4,1,lean+2,-12+drop],"#594569");
   cx.strokeStyle=col;cx.lineWidth=4;cx.beginPath();cx.moveTo(-3,0);cx.lineTo(-6-lean*.3,12);cx.moveTo(3,0);cx.lineTo(7+lean*.3,12);cx.stroke();
   poly([lean-6,-14+drop,lean+6,-14+drop,7,1,-6,1],col);
   poly([lean,-13+drop,lean+5,-12+drop,5,0,0,-2],"#151426");
   poly([lean-5,-21+drop,lean+4,-22+drop,lean+7,-16+drop,lean+2,-13+drop,lean-5,-15+drop],col);
   cx.fillStyle="#151426";cx.fillRect(lean+1,-18+drop,6,2);
-  if(!hero)poly([lean-5,-19+drop,lean-9,-25+drop,lean,-21+drop],col);
+  poly([lean-5,-19+drop,lean-9,-25+drop,lean,-21+drop],col);
   cx.lineWidth=3;cx.beginPath();cx.moveTo(lean,-11+drop);cx.lineTo(hx,hy);cx.moveTo(lean-4,-10+drop);cx.lineTo(-8,drop);cx.stroke();
   if(fire){cx.strokeStyle="#fff";cx.lineWidth=1;cx.beginPath();cx.arc(hx,hy,len*.8,a-.45,a);cx.stroke()}
-  cx.save();cx.translate(hx,hy);cx.rotate(a);cx.fillStyle=hero?HOLD_COL(m):col;
-  const thick=hero?2:1+m[D]*.45;
+  cx.save();cx.translate(hx,hy);cx.rotate(a);cx.fillStyle=col;
+  const thick=1+m[D]*.45;
   cx.fillRect(-3,-thick,len,thick*2);cx.fillRect(2,-thick-3,2,thick*2+6);
   if(shape===2)cx.fillRect(len-7,-thick-3,7,thick*2+6);
   cx.restore();cx.restore();
@@ -1070,7 +1095,6 @@ function unicorn(x,y,face,m,action="",timer=0,stride=0){
   const recover=action==="attack"&&timer>=activeEnd(m),s=m[S];
   const crouch=action==="roll"?9:recover?3:0,rear=wind&&s===2?-7:0,head=headPose(m,action,timer);
   cx.save();cx.translate(x,y);cx.scale(face,1);cx.lineCap="round";
-  const poly=(v,col)=>{cx.fillStyle=col;cx.beginPath();cx.moveTo(v[0],v[1]);for(let i=2;i<v.length;i+=2)cx.lineTo(v[i],v[i+1]);cx.closePath();cx.fill()};
   // Tail, four independently articulated legs, torso, neck and long horse muzzle.
   poly([-12,-17,-21,-23,-24,-11,-19,-16,-12,-10],"#b6a5d5");
   for(let i=0;i<4;i++){
@@ -1129,18 +1153,18 @@ function drawAttune(h){
 }
 function drawBoss(){
   const col=PAL[b.hue],x=b.x+22,y=b.y+36;cx.save();cx.translate(x,y);
-  if(b.defense===2&&!b.barrier){cx.strokeStyle=PAL[3];cx.globalAlpha=.45;cx.lineWidth=3;cx.beginPath();cx.arc(0,0,34,0,6.3);cx.stroke();cx.globalAlpha=1}
+  if(barrierUp()){cx.strokeStyle=PAL[3];cx.globalAlpha=.45;cx.lineWidth=3;cx.beginPath();cx.arc(0,0,34,0,6.3);cx.stroke();cx.globalAlpha=1}
   if(b.phase==="guard"){cx.fillStyle=PAL[3]+"66";cx.fillRect(b.face<0?-32:14,-28,18,58)}
   drawPerson(0,12,2,col,b);
   for(let i=0;i<7;i++){cx.fillStyle=PAL[i];cx.globalAlpha=i===b.hue?1:.25;cx.fillRect(-13+i*4,9,3,5)}cx.globalAlpha=1;cx.restore();
 }
 function hud(){
   const trial=mode==="trial"||mode==="pause"&&pauseFrom==="trial";
-  text(trial?"TARGET":`PRISM ${run.boss+1}/3  ${b.name}`,20,20,11,PAL[b.hue]);text(`SEED ${seedText()}`,620,20,9,"#777b99","right");
+  text(trial?"TARGET":`PRISM ${run.boss+1}  ${b.name}`,20,20,11,PAL[b.hue]);text(`SEED ${seedText()}`,620,20,9,"#777b99","right");
   text("HP",20,35,9);text("POSTURE",20,44,9);
   bar(80,28,330,8,b.hp,b.maxHp,PAL[b.hue]);bar(80,39,330,4,b.posture,b.maxPosture,"#f2e6a2");
   if(!trial){
-    if(b.defense)text(DEF_NAME[b.defense]+(b.defense===2&&b.barrier?" BROKEN":""),420,43,9,PAL[3]);
+    if(b.defense)text(DEF_NAME[b.defense]+(b.defense===2&&!barrierUp()?" OPEN":""),420,43,9,PAL[3]);
     if(b.phase==="recover"||b.phase==="stagger")text("[OPEN] COUNTER NOW",620,33,11,"#fff","right");
   }
   ["RED power","ORANGE lasts","YELLOW fast","GREEN guard","BLUE range","INDIGO tracks","VIOLET multi"].forEach((s,i)=>text(s,20+i*86,55,9,PAL[i]));
@@ -1188,7 +1212,7 @@ function drawTake(){
     if(own)text("HELD",x,256,8,"#5dcc8a","center");
     cx.globalAlpha=1;
   });
-  text(take.foe.name+" · ENTER: "+(run.boss===2?"RESULT":"PRISM "+(run.boss+2)+"/3 NEXT"),CW/2,285,9,PAL[take.foe.hue],"center");
+  text(take.foe.name+" · ENTER: "+(run.boss%3===2?"RECORD":"PRISM "+(run.boss+2)+" NEXT"),CW/2,285,9,PAL[take.foe.hue],"center");
 }
 function overlay(title,sub,action){
   cx.fillStyle="#080914d9";cx.fillRect(85,78,470,206);text(title,CW/2,126,28,"#f0efff","center");text(sub,CW/2,160,11,"#a3a6c2","center");text(action,CW/2,246,12,"#ead85b","center");
@@ -1216,12 +1240,12 @@ function draw(){
     text("PRISMATIC",CW/2,112,16,"#a9aad0","center");text("DUEL",CW/2,158,48,"#f1efff","center");
     for(let i=0;i<7;i++){cx.fillStyle=PAL[i];cx.fillRect(224+i*28,177,22,3+i%2*3)}
     text("A UNICORN. ONE HORN. ONE STOLEN MOVE.",CW/2,207,11,"#f0efff","center");
-    text("DEFEAT 3 GUARDIANS. FREE THE RAINBOW.",CW/2,225,10,"#a3a6c2","center");text("SEED  "+seedText(),CW/2,252,12,"#c4c6dc","center");text("ENTER  BEGIN    N  NEW SEED",CW/2,280,11,"#ead85b","center");
+    text("DEFEAT 3. CLIMB ON.",CW/2,225,10,"#a3a6c2","center");text("SEED "+seedText()+"  BEST "+best,CW/2,252,12,"#c4c6dc","center");text("ENTER BEGIN   N NEW SEED",CW/2,280,11,"#ead85b","center");
   }else if(mode==="dead")overlay("YOU FELL",b.name+" remembers every move.","ENTER / R  RETRY SAME FOE     N  NEW SEED");
   else if(mode==="bosswin")drawTake();
   else if(mode==="trial"){
     text("TRY "+SHAPE_NAME[p.hold[S]]+" · "+p.hold.cost+" ST · J/Z ATTACK · TARGET WILL NOT ATTACK",CW/2,92,10,"#f0efff","center");
-    text("R CHOOSE AGAIN   ENTER "+(run.boss===2?"RESULT":"NEXT FOE")+"   ESC PAUSE",CW/2,110,10,"#ead85b","center");
+    text("R CHOOSE AGAIN   ENTER "+(run.boss%3===2?"RECORD":"NEXT FOE")+"   ESC PAUSE",CW/2,110,10,"#ead85b","center");
     text(ROLE_GOOD[p.hold[S]]+" / "+ROLE_RISK[p.hold[S]]+" · TARGET RESETS AFTER HITS",CW/2,128,9,"#c4c6dc","center");
   }
   else if(mode==="result")drawResult();
@@ -1230,15 +1254,15 @@ function draw(){
 function drawResult(){
   /*
   Result はランの記録である（設計 screens の 1.4）。
-  数字だけ出しても「何をやったランか」が残らない。倒した3体の異名と主色、
+  数字だけ出しても「何をやったランか」が残らない。直近3体の異名と主色、
   そこで持ち替えた技を並べると、シードと合わせて共有できる形になる。
   */
   background();
-  text("RAINBOW RESTORED",CW/2,64,26,"#f0efff","center");
+  text(run.boss===3?"RAINBOW RESTORED":"PRISM "+run.boss+" CLEARED",CW/2,64,26,"#f0efff","center");
   const t=Math.floor(run.time/60);
   text(`TIME ${Math.floor(t/60)}:${String(t%60).padStart(2,"0")}   HITS ${run.hits}   PARRIES ${run.parries}`,
        CW/2,90,11,"#a3a6c2","center");
-  run.log.forEach(([nm,hue,m],i)=>{
+  run.log.slice(-3).forEach(([nm,hue,m],i)=>{
     const y=124+i*52;
     cx.fillStyle=PAL[hue];cx.fillRect(96,y-10,3,34);
     text(nm,110,y+2,13,PAL[hue]);
@@ -1251,7 +1275,7 @@ function drawResult(){
   text("HOLDING",CW/2,290,8,"#777b99","center");
   cx.fillStyle=HOLD_COL(h);cx.fillRect(CW/2-52,296,4,4);
   text(`${SHAPE_NAME[h[S]]}  ${REACH[h[R]-1]}px  ${h.wind}F  ${h.cost}ST`,CW/2-42,302,10,"#f0efff");
-  text(`SEED ${seedText()}     R  REPLAY     ENTER  NEW RUN`,CW/2,336,11,"#ead85b","center");
+  text(`SEED ${seedText()}  BEST ${best}  ENTER:CLIMB  R:REPLAY  N:NEW`,CW/2,336,11,"#ead85b","center");
 }
 function loop(now){
   /*

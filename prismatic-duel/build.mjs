@@ -29,11 +29,12 @@ ZIPライブラリ自体を依存へ増やさないため、ローカルヘッ�
 
 const root=new URL("./",import.meta.url),limit=13312;
 const read=name=>readFileSync(new URL(name,root),"utf8");
-// passes:3で複数回畳み込み、toplevel:trueでトップレベル名も短縮する。
+// passes:3で複数回畳み込み、compress.toplevelで開発専用の未使用関数を除去する。
+// mangle.toplevelは名前短縮のみなので、これだけではvalidateBossが提出物に残る。
 // unsafe_arrows/pure_gettersはこの自作コードで安全なことをテスト済み。
 const js=(await minify(read("game.js"),{
   ecma:2020,
-  compress:{passes:3,unsafe_arrows:true,pure_getters:true,booleans_as_integers:true},
+  compress:{toplevel:true,passes:3,unsafe_arrows:true,pure_getters:true,booleans_as_integers:true},
   mangle:{toplevel:true},
   format:{comments:false}
 })).code;

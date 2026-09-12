@@ -11,7 +11,7 @@ const ctx={globalAlpha:1,lineWidth:1,dash:[],
   setLineDash(v){this.dash=v},
 };
 for(const op of ["fillRect","strokeRect","beginPath","moveTo","lineTo","stroke","fillText"])
-  ctx[op]=function(...args){calls.push({op,args,alpha:this.globalAlpha,dash:[...this.dash]})};
+  ctx[op]=function(...args){calls.push({op,args,alpha:this.globalAlpha,dash:[...this.dash],stroke:this.strokeStyle})};
 const box=createContext({console,Math,Number,ctx});
 runInContext(readFileSync(new URL("game.js",import.meta.url),"utf8"),box);
 const read=s=>runInContext(s,box);
@@ -48,6 +48,11 @@ for(const [timer,rects,live] of [[0,3,0],[1,3,1],[5,3,1],[6,2,0],[15,2,0],[16,2,
 }
 for(const face of [-1,1]){setup(3);read(`b.face=${face}`);draw();
   const x=read("b.x+20");assert.equal(calls.find(c=>c.op==="lineTo").args[0],x+face*32);fixtures++;
+}
+for(let shape=0;shape<6;shape++)for(const timer of [10,9,1]){
+  setup(shape);read(`b.moves[0][F]=makeMove(seeded(72),${shape},0,false)[F];b.timer=${timer}`);draw();
+  const outline=calls.find(c=>c.op===(shape===4?'stroke':'strokeRect'));
+  assert.equal(outline.stroke==='#fff',shape!==5&&timer<=9,'white cue follows parry flag and windup');
 }
 read('mode="trial"');assert.equal(draw().length,0);
 read('mode="fight";b.phase="recover"');assert.equal(draw().length,0);

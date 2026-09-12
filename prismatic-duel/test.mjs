@@ -9,7 +9,7 @@ game.jsは末尾で `typeof document !== "undefined"` を確認してからboot�
 Nodeのvmへ読み込んでもCanvasやAudioContextを要求しない。生成器と検証関数だけを
 同じ実装のまま呼び、ブラウザ用コードとテスト用コードの二重管理を避けている。
 
-検査数は10,000 seed × tier 0/1/2 = 30,000体。
+検査数は10,000 seed × tier 0～8 = 90,000体。エンドレス域を2周分含む。
 各ボスについて次を確認する。
 
   - 同じseed/tierを二度生成したJSONが完全一致する
@@ -29,8 +29,8 @@ runInNewContext(source,box,{filename:"game.js"});
 let checked=0;
 const shapes=new Set(),defenses=new Set(),names=new Set();
 for(let seed=1;seed<=10000;seed++){
-  for(let tier=0;tier<3;tier++){
-    // tierはラン内の0:一体目、1:二体目、2:最終ボスに対応する。
+  for(let tier=0;tier<9;tier++){
+    // tier 0～2で虹を解放し、3以降はエンドレス上昇になる。
     const boss=box.generateBoss(seed,tier);
     const again=box.generateBoss(seed,tier);
     // 同じseed/tierが技順・数値・外見を含めて完全一致することを保証する。

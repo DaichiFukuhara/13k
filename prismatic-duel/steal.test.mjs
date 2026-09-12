@@ -66,9 +66,9 @@ for (let seed = 1; seed <= 2000; seed++) {
       if (t[IDX.D] !== 3) fail(`威力が段3へ正規化されていない: ${t}`);
       if (t[IDX.T] !== 0) fail(`追尾が捨てられていない: ${t}`);
       if (t[IDX.F] !== 0) fail(`宣言が捨てられていない: ${t}`);
-      const bands=[[18,27],[8,14],[34,46],[20,29],[22,31],[32,41]];
+      const bands=[[18,27],[8,14],[34,46],[14,23],[16,25],[32,41]];
       if (t.wind < bands[t[0]][0] || t.wind > bands[t[0]][1]) fail(`形状の発生範囲外: ${t.wind}`);
-      const want = Math.max(12, Math.min(40, 10 + S.threat(t) * 2 + [2,0,6,4,4,4][t[0]]));
+      const want = Math.max(12, Math.min(40, 10 + S.threat(t) * 2 + [2,0,4,2,0,2][t[0]]));
       if (t.cost !== want) fail(`消費が式と違う: ${t.cost} != ${want}`);
       const sum = t.seg.reduce((a, b) => a + b, 0);
       if (sum !== 7) fail(`HP配分の合計が7でない: [${t.seg}] = ${sum}`);
@@ -111,7 +111,7 @@ for (let shape = 0; shape < 6; shape++) {
       if (Math.abs(runs[0].posture - 1)>1e-9) fail(`SHOT N=${N}: 体勢の合計が1でない ${runs[0].posture}`);
     } else {
       if (runs[0].dmg !== 7) fail(`${S.SHAPE_NAME[shape]}: 合計ダメージが7でない ${runs[0].dmg}`);
-      if (runs[0].posture !== [2,1,8,1,1,2][shape]) fail(`${S.SHAPE_NAME[shape]}: 体勢が形状上限と違う ${runs[0].posture}`);
+      if (runs[0].posture !== [2,1,12,2,1,6][shape]) fail(`${S.SHAPE_NAME[shape]}: 体勢が形状上限と違う ${runs[0].posture}`);
     }
   }
 }

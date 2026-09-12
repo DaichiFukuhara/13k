@@ -81,6 +81,21 @@ check("optional direct confirmation and final trial → result record exactly on
   const final=stats(g);g.tick(30);assert.equal(stats(g),final);
 });
 
+check("third clear records the run and Enter continues the endless ascent",()=>{
+  const g=game();
+  for(let tier=0;tier<3;tier++){win(g);g.key("Enter");}
+  assert.equal(g.read("mode"),"result");assert.equal(g.read("run.boss"),3);
+  assert.equal(g.read("best"),3);assert.equal(g.read("run.log.length"),3);
+  g.key("Enter");assert.equal(g.read("mode"),"fight");assert.equal(g.read("run.boss"),3);
+  assert.equal(g.read("b.tier"),3);assert.equal(g.read("b.maxHp"),228);
+  assert.equal(g.read("b.maxPosture"),45);assert.equal(g.read("b.moves.length"),5);
+  g.read("run.boss=8;startBoss()");
+  assert.equal(g.read("b.maxHp"),318);assert.equal(g.read("b.maxPosture"),60);
+  assert.equal(g.read("validateBoss(b).length"),0);
+  g.read('b.hp=b.maxHp/2+1;b.phase="wait";b.defense=0;p.inv=999;bossDamage(2,0,"melee")');
+  assert.equal(g.read("b.mutated"),1);assert.equal(g.read("b.phase"),"shift");
+});
+
 check("Escape and focus-loss pause resume the previous fight/trial",()=>{
   const g=game();
   for(const trial of [false,true]){

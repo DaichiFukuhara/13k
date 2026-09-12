@@ -1,0 +1,28 @@
+<!doctype html>
+<html lang="ja"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Prismatic Duel — 音の試聴</title>
+<style>
+*{box-sizing:border-box}body{margin:0;background:#101020;color:#eeecfa;font:16px/1.65 system-ui,sans-serif}main{max-width:920px;margin:48px auto;padding:0 24px}h1{font-size:30px;margin:0 0 12px}p{color:#bebcd2}.eyebrow{color:#c4b4fb;font-size:13px;letter-spacing:.15em}section{margin:28px 0;padding:24px;border:1px solid #39344e;border-radius:12px;background:#19172b}label{display:block;margin-bottom:16px}select,input,button{font:inherit;color:inherit;background:#29243e;border:1px solid #685b85;border-radius:8px;padding:10px 15px}button{cursor:pointer}button:hover{background:#413758}button:focus-visible,select:focus-visible,input:focus-visible{outline:3px solid #d4b9ff;outline-offset:3px}.grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(170px,1fr));gap:12px}.primary{background:#695090}small{display:block;color:#b5b1c6;font-size:12px}audio{width:100%;margin-top:16px}a{color:#dfc6ff}#status{min-height:2em;color:#e3d7fb}#metrics{font-size:13px}canvas,#k{display:none}
+</style>
+<main><div class="eyebrow">PRISMATIC DUEL · SOUND LAB</div><h1>角の響きを聴き比べる</h1>
+<p>本体と同じ処理で音を鳴らす開発用ページです。ゲームの提出ZIPには含まれません。</p>
+<section><label>通常命中・空振りの形状 <select id="shape"><option value="0">横薙ぎ</option><option value="1" selected>突き</option><option value="2">叩きつけ</option><option value="3">突進</option><option value="4">射撃</option><option value="5">落下</option></select></label>
+<div class="grid">
+<button data-sound="miss">空振り<small>技を出す音だけ</small></button>
+<button data-sound="hit">通常命中<small>形状ごとの衝撃</small></button>
+<button data-sound="counter">反撃<small>隙に当てた明るい音</small></button>
+<button data-sound="parry">パリィ<small>角で受け流す高音</small></button>
+<button data-sound="break">体勢崩し<small>低い衝撃と高い余韻</small></button>
+<button data-sound="defeat">撃破<small>光を解放する2音</small></button>
+<button data-sound="attune">角へ技を宿す<small>3音の上昇旋律</small></button>
+<button data-sound="complete">虹の完成<small>4音で旋律を完結</small></button>
+</div></section>
+<section><h2>シードBGM</h2><p>同じシードは同じ旋律です。ボスが進むと同じ曲に音が重なります。</p>
+<label>シード <input id="music-seed" value="TEST01" size="10">　編成 <select id="music-stage"><option value="0">1体目・疎</option><option value="1">2体目・主旋律</option><option value="2">3体目・全レイヤー</option></select></label>
+<button id="music" class="primary">BGMを2ループ生成して聴く</button></section>
+<section><button id="compare" class="primary">4つの戦闘音を続けて聴く</button>
+<p>通常命中 → 反撃 → パリィ → 体勢崩し。各1秒間隔です。</p>
+<audio id="player" controls></audio><p id="metrics"></p><a id="download" hidden download="prismatic-duel-soundcheck.wav">比較音声を保存（WAV）</a></section>
+<p id="status" role="status">ボタンを押すと音が有効になります。</p><p><a href="dist/index.html?seed=TEST01">ゲームで確かめる →</a></p>
+<canvas id="c" width="640" height="360"></canvas><p id="k"></p></main>
+<script>const nativeRAF=window.requestAnimationFrame;window.requestAnimationFrame=()=>{};</script><script src="game.js"></script><script>window.requestAnimationFrame=nativeRAF;</script><script src="soundcheck.js"></script></html>
