@@ -1,9 +1,13 @@
 {
-  "name": "13kgame",
+  "name": "random-duel-rainbow",
+  "private": true,
   "version": "1.0.0",
-  "main": "game.js",
+  "main": "prismatic-duel/game.js",
   "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1"
+    "dev": "python -m http.server 4173 --bind 127.0.0.1 --directory prismatic-duel",
+    "build": "node prismatic-duel/build.mjs",
+    "verify": "node prismatic-duel/submit.mjs",
+    "test": "node --test prismatic-duel/test.mjs prismatic-duel/steal.test.mjs prismatic-duel/experience.test.mjs prismatic-duel/parry.test.mjs prismatic-duel/telegraph.test.mjs prismatic-duel/roles.test.mjs prismatic-duel/opportunities.test.mjs prismatic-duel/audio.test.mjs"
   },
   "repository": {
     "type": "git",
@@ -16,7 +20,7 @@
     "url": "https://github.com/DaichiFukuhara/13k/issues"
   },
   "homepage": "https://github.com/DaichiFukuhara/13k#readme",
-  "description": "",
+  "description": "A tiny seeded boss action game starring a unicorn with one stolen move.",
   "devDependencies": {
     "terser": "^5.50.0"
   }

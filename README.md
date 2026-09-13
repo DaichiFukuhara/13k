@@ -1,36 +1,87 @@
-# js13kGames 2026 — Unicorns and Rainbows
+# Random Duel Rainbow
 
-AIDE の思考フローを用いて設計を行っている。
+**One unicorn. One horn. One stolen move.**
 
-## 提出する1本
+A compact, keyboard-controlled boss action game made for the js13kGames 2026
+*Unicorns and Rainbows* theme. Read your opponent's attacks, parry with your horn,
+and copy a defeated boss's move to change the way you fight.
 
-**シードから技構成だけを生成した未知の敵を観察し、移動・ジャンプ・ローリング・パリィを
-使い分けて崩す、1画面固定の2Dボスアクション。**
+Defeat three guardians to restore the rainbow, then continue into **Prism Ascent**
+and see how far you can climb. Share a seed to challenge the same generated foes.
 
-| | |
+## Play locally
+
+With Python 3 installed, run this from the repository root:
+
+```sh
+python -m http.server 4173 --bind 127.0.0.1 --directory prismatic-duel
+```
+
+Open [localhost:4173](http://localhost:4173/), or try
+[seed TEST01](http://localhost:4173/?seed=TEST01). The playable game is currently
+in [`prismatic-duel/`](prismatic-duel/); this folder keeps its original development name.
+Use a desktop browser and keyboard. Audio starts after your first key press.
+
+## Controls
+
+| Action | Keys |
 | --- | --- |
-| **設計の正本** | [`design/tree/`](design/tree/index.md)（AIDE 設計ツリー）。全体を掴むなら [`design/SUMMARY.md`](design/SUMMARY.md) |
-| **仕様書** | [`design/spec/`](design/spec/README.md)（判断を抜いた設計書。生成・戦闘・提示・画面・器の5冊） |
-| **実装の土台** | [`prismatic-duel/`](prismatic-duel/)（2026-09-04 決定・コードと build 環境のみ） |
-| **締切** | 2026-09-13 20:00 JST / ZIP 13,312 bytes 以下 |
+| Move | A / D or Left / Right |
+| Jump | W, Up or Space |
+| Attack | J or Z |
+| Parry | K or X |
+| Roll | L or C |
+| Pause / resume | Escape; Enter also resumes |
+| Choose a move after a victory | A / D or Left / Right |
+| Try the selected move | T |
+| Return from the trial | R |
+| Keep the selected move and continue | Enter |
 
-> **土台にしたのはコードと build 環境であって、`prismatic-duel` のゲーム設計ではない。**
-> 設計は `design/tree/` が正本であり、合わない実装は捨てる。
+Watch for a **white attack outline** to time your parry. You can parry melee
+attacks and reflect projectiles; dodge falling **RAIN** attacks. A parry starts
+immediately when you are free to act, but cannot cancel an attack's recovery.
+Let stamina refill between actions.
 
-## 採用されていないもの
+## Choose your fighting style
 
-**下記は提出しない。**削除せず、経緯と素材として残している
-（2026-09-04・根の決定 `root@2026-09-04-decision-7` 本文 6.1）。
-各ファイルの冒頭にも同じ注記がある。
+| Move | Strength | Tradeoff |
+| --- | --- | --- |
+| Sweep | Push the enemy away | Creates distance you may need to close again |
+| Thrust | Strike during a short opening | Narrow reach |
+| Slam | Deal heavy posture damage | Slow commitment |
+| Charge | Close a gap while attacking | Leaves you near the enemy |
+| Shot | Attack from a distance | Locks your feet while firing |
+| Rain | Place an attack ahead of the enemy | Lands late at a fixed location |
 
-| 系統 | ファイル |
+Your horn holds **one move at a time**. Copying a move changes your options;
+it does not add another equipment slot. Trials let you test a choice before committing.
+
+## Build and verify
+
+Requires Node.js 20 or newer and npm. Run from the repository root:
+
+```sh
+npm ci
+npm test
+npm run build
+npm run verify
+```
+
+The build produces `prismatic-duel/dist/index.html` and
+`prismatic-duel/dist/prismatic-duel.zip`. The ZIP contains a single standalone
+HTML file and must fit within **13,312 bytes**. It needs no external assets or
+runtime libraries. Verification is local; it does not upload an entry.
+
+## Explore the project
+
+| Location | Contents |
 | --- | --- |
-| **Virginight**（別企画） | `game.js` / `index.html` / `style.css` / [`VIRGINIGHT_DESIGN.md`](VIRGINIGHT_DESIGN.md) / [`NIGHT_TACTICS_DESIGN.md`](NIGHT_TACTICS_DESIGN.md) / [`NIGHT_TD_DESIGN.md`](NIGHT_TD_DESIGN.md)（二重に破棄） |
-| **企画案**（決定ではない） | [`SOULS_ACTION_DESIGN.md`](SOULS_ACTION_DESIGN.md) / [`GAME_PLAN.md`](GAME_PLAN.md) |
-| **プロトタイプ** | `proto/`（`action.html` / `tactics.html` / `rainbow.html`） |
+| [Game guide](prismatic-duel/README.md) | Combat, retries, trials, seeds and endless mode |
+| [Development guide](docs/DEVELOPMENT.md) | Builds, tests, sound tools and submission steps |
+| [Current source](prismatic-duel/game.js) | Commented game implementation |
+| [Design documentation](design/README.md) | Specifications and AIDE design history, primarily in Japanese |
+| [Layout proposal](docs/REPOSITORY_LAYOUT.md) | Proposed promotion of the current game to the repository root |
 
-[`JS13KGAMES_GUIDE.md`](JS13KGAMES_GUIDE.md) は企画ではなく**大会ルールの要約**なので、
-この表には含まない（有効）。
-
-> 🧭 受け入れ条件「**一意**」（このリポジトリを初めて読む人間が、提出する1本がどれかを
-> 迷わず言える）は、**この節を読んで候補が2つ以上挙がらないこと**で判定する。
+The root `index.html`, `game.js` and `style.css` currently belong to **Virginight**,
+an earlier game retained as development history. Use the command above to launch
+Random Duel Rainbow. Earlier concepts and prototypes are not the current submission.

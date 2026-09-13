@@ -10,7 +10,7 @@
 
 | 要素 | 内容 |
 | --- | --- |
-| `<canvas id="c">` | `width=640` `height=360`。`aria-label="Prismatic Duel game"` |
+| `<canvas id="c">` | `width=640` `height=360`。`aria-label="Random Duel Rainbow game"` |
 | `<p id="k">` | **操作説明の置き場所。**中身は実行時に `CONTROLS` から生成する |
 | `<meta viewport>` | `width=device-width,initial-scale=1` |
 

@@ -1,4 +1,21 @@
-# design/ — AIDE 設計ツリー
+# Random Duel Rainbow — Design Documentation
+
+## Start here
+
+The [main README](../README.md) and [development guide](../docs/DEVELOPMENT.md)
+provide an English introduction. The specifications and decision history below
+are primarily in Japanese and retain their original wording.
+
+- [Current specifications](spec/README.md): generation, combat, presentation, interface and packaging.
+- [Design tree](tree/index.md): decisions and their precedence. Read the latest amendments first.
+- [September 13 verification](PLAYTEST_2026-09-13.md): parry response and attack timing checks.
+- [AIDE harness](harness/README.md): the design process, roles and provenance.
+
+The remaining index and progress snapshot were written during early development.
+Their dates, old paths, sizes and unresolved items describe that historical state;
+they are not the current release status.
+
+## Historical index (Japanese)
 
 このゲームを AIDE の設計ハーネスで作り直すためのツリー。
 

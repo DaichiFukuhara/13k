@@ -127,8 +127,8 @@ fightとtrialのフォーカス喪失は自動pause。文字が敵と予告や�
 
 | 要素 | 位置 |
 | --- | --- |
-| `PRISMATIC` | (320, 112) 16px |
-| `DUEL` | (320, 158) 48px |
+| `RANDOM DUEL` | (320, 112) 16px |
+| `RAINBOW` | (320, 158) 48px |
 | 7色の帯 | y=177 から 28px おきに 22幅。高さは 3 と 6 を交互 |
 | `GENERATED FOES. LEARNABLE ATTACKS.` | (320, 211) 10px |
 | `SEED XXXXXX` | (320, 244) 12px |

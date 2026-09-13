@@ -105,7 +105,7 @@ console.log(`  📎 ソース    ${remote}/tree/${head.slice(0, 12)}`);
 // ── 提出票を書き出す ────────────────────────────────────
 mkdirSync(new URL("dist/", root), {recursive: true});
 const slip = [
-  "js13kGames 2026 — Prismatic Duel",
+  "js13kGames 2026 — Random Duel Rainbow",
   "",
   `提出 ZIP     prismatic-duel/dist/prismatic-duel.zip`,
   `             ${zip1.length} bytes / ${LIMIT} (${(zip1.length / LIMIT * 100).toFixed(1)}%)`,

@@ -2,7 +2,7 @@
 
 /*
 =============================================================================
-PRISMATIC DUEL — ソースレビュー用ガイド
+RANDOM DUEL RAINBOW — ソースレビュー用ガイド
 =============================================================================
 
 このファイルは13KB提出用なので、通常の業務コードより変数名と改行を短くしている。
@@ -1241,7 +1241,7 @@ function draw(){
   cx.restore();
   if(mode==="title"){
     cx.save();cx.translate(320,82);cx.scale(1.8,1.8);unicorn(0,0,1,bareHand());cx.restore();
-    text("PRISMATIC",CW/2,112,16,"#a9aad0","center");text("DUEL",CW/2,158,48,"#f1efff","center");
+    text("RANDOM DUEL",CW/2,112,16,"#a9aad0","center");text("RAINBOW",CW/2,158,48,"#f1efff","center");
     for(let i=0;i<7;i++){cx.fillStyle=PAL[i];cx.fillRect(224+i*28,177,22,3+i%2*3)}
     text("A UNICORN. ONE HORN. ONE STOLEN MOVE.",CW/2,207,11,"#f0efff","center");
     text("DEFEAT 3. CLIMB ON.",CW/2,225,10,"#a3a6c2","center");text("SEED "+seedText()+"  BEST "+best,CW/2,252,12,"#c4c6dc","center");text("ENTER BEGIN   N NEW SEED",CW/2,280,11,"#ead85b","center");

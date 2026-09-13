@@ -1,4 +1,4 @@
-# Prismatic Duel 設計書
+# Random Duel Rainbow 設計書
 
 **この文書群は仕様だけを書く。**判断の経緯・却下案・承認の記録は
 [`design/tree/`](../tree/index.md) にあり、ここには持ち込まない。
