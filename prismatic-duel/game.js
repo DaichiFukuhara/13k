@@ -111,7 +111,7 @@ steal(m) -> プレイヤー版の技
 */
 const HOLD_D=3;
 // Shape envelopes preserve the enemy's timing tier without losing the role.
-const ROLE_WIND=[18,8,34,14,16,32],ROLE_STEP=[3,2,4,3,3,3],ROLE_REST=[22,14,34,18,18,20];
+const ROLE_WIND=[16,6,32,12,14,30],ROLE_STEP=[3,2,4,3,3,3],ROLE_REST=[22,14,34,18,18,20];
 const ROLE_POST=[2,1,12,2,1,6],ROLE_COST=[2,0,4,2,0,2];
 const ROLE_GOOD=["MAKE SPACE","SHORT OPENING","BREAK POSTURE","CLOSE THE GAP","FIRE FROM AFAR","AIM AHEAD"];
 const ROLE_RISK=["PUSHES AWAY","NARROW HIT","SLOW COMMIT","ENDS UP CLOSE","FEET LOCKED","LANDS LATE"];
@@ -129,8 +129,8 @@ function steal(m){
   t.active=m[S]===3?12+m[R]*3+2*(m[A]-1):ACTIVE[m[A]-1];
   return t;
 }
-// 初期の角突き。互換用の関数名bareHandは維持。発生9F・消費14。
-function bareHand(){const t=steal([1,3,1,3,1,2,0,1,0]);t.cost=14;t.wind=9;t.bare=1;return t}
+// 初期の角突き。互換用の関数名bareHandは維持。発生7F・消費14。
+function bareHand(){const t=steal([1,3,1,3,1,2,0,1,0]);t.cost=14;t.wind=7;t.bare=1;return t}
 
 const HERO={col:"#f3f0ff",hp:14,roll:5.0};
 
@@ -448,7 +448,7 @@ function boot(){
   seed=q?parseInt(q,36)>>>0:(Math.random()*0xffffffff)>>>0;
   const sr=seeded(71);for(let i=0;i<70;i++)stars.push([sr()*CW,sr()*220,sr()*1.8+.3]);
   addEventListener("keydown",e=>{
-    if(["ArrowLeft","ArrowRight","ArrowUp","Space","KeyA","KeyD","KeyW","KeyJ","KeyK","KeyL","KeyZ","KeyX","KeyC","Enter","KeyR","KeyN","Escape"].includes(e.code))e.preventDefault();
+    if(["ArrowLeft","ArrowRight","ArrowUp","Space","KeyA","KeyD","KeyW","KeyJ","KeyK","KeyL","KeyZ","KeyX","KeyC","KeyT","Enter","KeyR","KeyN","Escape"].includes(e.code))e.preventDefault();
     // tapは一回だけ使う入力、keysは押し続ける移動入力として分ける。
     if(!e.repeat)tap[e.code]=1;keys[e.code]=1;wakeAudio();
   });
@@ -460,11 +460,11 @@ function wakeAudio(){
   if(!audio)try{audio=new AudioContext}catch(e){}
   if(audio&&audio.state==="suspended")audio.resume();
 }
-function sound(f=220,d=.06,type="square",vol=.035,delay=0){
+function sound(f=220,d=.06,type="square",vol=.035,delay=0,attack=.004){
   if(!audio)return;
   const o=audio.createOscillator(),g=audio.createGain(),t=audio.currentTime+delay;
   o.type=type;o.frequency.setValueAtTime(f,t);o.frequency.exponentialRampToValueAtTime(Math.max(40,f*(type==="sine"?1:.65)),t+d);
-  g.gain.setValueAtTime(.0001,t);g.gain.linearRampToValueAtTime(vol,t+(vol<.02?.08:.004));g.gain.exponentialRampToValueAtTime(.0001,t+d);
+  g.gain.setValueAtTime(.0001,t);g.gain.linearRampToValueAtTime(vol,t+attack);g.gain.exponentialRampToValueAtTime(.0001,t+d);
   o.connect(g).connect(audio.destination);o.start(t);o.stop(t+d);
 }
 function chime(n){for(let i=0;i<n;i++)sound(440*[1,1.25,1.5,2][i],.22,"sine",.028,i*.09)}
@@ -477,9 +477,10 @@ function makeMusic(){
 function music(){
   if(audio&&!(musicFrame++%20)){
     const i=(musicFrame/20|0)&15,f=musicRoot*Math.pow(2,song[i]/12),level=run.boss%3;
-    if(level||!(i&1))sound(f*2,.3,"sine",.006);
-    if(!(i&3))sound(musicRoot,1.1,"sine",.009);
-    if(level>1&&i&1)sound(f*3,.18,"sine",.004);
+    // Midrange melody survives small speakers; bass and reply stay underneath it.
+    if(level||!(i&1))sound(f*4,.55,"sine",.024,0,.025);
+    if(!(i&3))sound(musicRoot*2,1.25,"sine",.016,0,.025);
+    if(level>1&&i&1)sound(f*6,.3,"sine",.008,0,.025);
   }
 }
 /*
@@ -583,8 +584,8 @@ function spend(n){
 function begin(a){p.action=a;p.timer=0;p.vx=0}
 // ロール24f中の4～14fだけ無敵。開始直後と終端には当たり判定が残る。
 function isRollInv(){return p.action==="roll"&&p.timer>=4&&p.timer<=14}
-// パリィ22f中の4～9fだけ受付。失敗後は残り時間がそのまま硬直になる。
-function isParry(){return p.action==="parry"&&p.timer>=4&&p.timer<=9}
+// 入力が行動として始まる0fから11fまで受付（12f）。全体22fで連打には隙が残る。
+function isParry(){return p.action==="parry"&&p.timer<=11}
 
 /* --------------------------- player state machine ----------------------- */
 
@@ -937,9 +938,9 @@ function step(){
 
     title   Nでseed再生成、EnterでnewRun
     fight   戦闘更新。freeze中は物理を止め、火花だけ進める
-    pause   Enter/Escapeで直前のfight/trialへ戻り、復帰入力を消費
+    pause   Enter/Escapeで復帰、Rで同seedを最初から、Nで新seedのタイトル
     dead    Enter/Rで同じボス、Nで新seed
-    bosswin J/Zでtrial、Enterで候補を確定。3体ごとにresult
+    bosswin Tでtrial、Enterで候補を確定。3体ごとにresult
     trial   本戦と同じプレイヤー・弾更新。Rで候補、Enterで確定
     result  Enterで次の3体へ、Rで同seed再走、Nで新ラン
 
@@ -947,6 +948,8 @@ function step(){
   */
   if(mode==="pause"){
     if(pressed("Enter","Escape")){mode=pauseFrom;clearInput()}
+    else if(pressed("KeyR"))newRun(seed);
+    else if(pressed("KeyN")){seed=(Math.random()*0xffffffff)>>>0;cleanArena();take=saved=null;mode="title"}
     tap={};return;
   }
   if((mode==="fight"||mode==="trial")&&pressed("Escape")){pauseGame();return}
@@ -964,7 +967,8 @@ function step(){
     if(pressed("ArrowLeft","KeyA"))take.i=(take.i+take.list.length-1)%take.list.length;
     if(pressed("ArrowRight","KeyD"))take.i=(take.i+1)%take.list.length;
     if(pressed("Enter"))confirmTake();
-    else if(pressed("KeyJ","KeyZ"))startTrial();
+    // Keep trial entry separate from attack so defeat-time mashing stays here.
+    else if(pressed("KeyT"))startTrial();
   }else if(mode==="result"){
     if(pressed("KeyR"))newRun(seed);
     if(pressed("Enter"))startBoss();
@@ -1035,7 +1039,7 @@ function drawTelegraph(){
   const t=Math.max(0,b.timer-1),pulse=wind?0:Math.min(m[N]-1,(t/span)|0);
   const live=!wind&&b.timer>0&&t%span<ACTIVE[m[A]-1],progress=wind?clamp(1-b.timer/WIND[m[W]-1],0,1):1;
   cx.save();cx.fillStyle=cx.strokeStyle=col;cx.lineWidth=1;
-  if(wind&&b.timer<=9&&m[F]&PARRY)cx.strokeStyle="#fff";
+  if(wind&&b.timer<=11&&m[F]&PARRY)cx.strokeStyle="#fff";
   if(m[S]===4&&wind){
     const x=b.x+20+b.face*22,y=b.y+29,dx=b.face*REACH[m[R]-1];
     const dy=(b.aimY-y)/Math.max(60,Math.abs((b.x+20)-(p.x+9)))*REACH[m[R]-1];
@@ -1195,7 +1199,7 @@ function drawTake(){
   */
   cx.fillStyle="#080914e8";cx.fillRect(24,60,CW-48,240);
   text("ONE HORN · ONE MOVE",CW/2,96,22,"#f0efff","center");
-  text("COPY A FOE'S MOVE   A/D CHOOSE   J/Z TRY   ENTER CONFIRM",CW/2,120,10,"#a3a6c2","center");
+  text("COPY A FOE'S MOVE   A/D CHOOSE   T TRY   ENTER CONFIRM",CW/2,120,10,"#a3a6c2","center");
   const n=take.list.length,w=Math.min(96,(CW-80)/n);
   take.list.forEach((m,i)=>{
     const x=CW/2+(i-(n-1)/2)*w,on=i===take.i,own=m===take.held;
@@ -1249,7 +1253,10 @@ function draw(){
     text(ROLE_GOOD[p.hold[S]]+" / "+ROLE_RISK[p.hold[S]]+" · TARGET RESETS AFTER HITS",CW/2,128,9,"#c4c6dc","center");
   }
   else if(mode==="result")drawResult();
-  else if(mode==="pause")overlay("PAUSED","The duel waits.","ENTER / ESC  RESUME");
+  else if(mode==="pause"){
+    overlay("PAUSED","SEED "+seedText(),"ENTER / ESC  RESUME");
+    text("R  RESTART SAME SEED    N  NEW SEED",CW/2,200,12,"#f0efff","center");
+  }
 }
 function drawResult(){
   /*

@@ -45,9 +45,30 @@ function enemySwing(g,parryable=true){
     b.phase="active";b.timer=0;b.pulse=-1;b.attack++;p.inv=0;freeze=0;`);
 }
 
-check("defeat → select → J trial → R → different trial → Enter next fight",()=>{
+check("attack mashing across melee/projectile defeat stays in selection",()=>{
+  for(const code of ["KeyJ","KeyZ"])for(const shot of [false,true])for(let tier=0;tier<3;tier++){
+    const g=game();
+    g.read(`run.boss=${tier};startBoss();b.hp=1;b.defense=0;b.timer=9999;b.x=p.x+40;
+      p.inv=999;p.hold=${shot?'steal([4,2,3,2,1,2,0,1,0])':'bareHand()'};`);
+    for(let i=0;i<120&&g.read('mode==="fight"');i++)g.key(code);
+    assert.equal(g.read("mode"),"bosswin","the real attack must defeat the foe");
+    const before=stats(g);
+    for(let i=0;i<180;i++)g.key(code);
+    g.hold(code);g.tick(120);g.release(code);
+    assert.equal(g.read("mode"),"bosswin","continued attacks must not enter the stationary trial");
+    assert.equal(g.read("saved"),null);
+    assert.equal(g.read("take.i"),0);assert.equal(stats(g),before);
+    g.key("Enter");
+    assert.equal(g.read("run.boss"),tier+1);assert.equal(g.read("run.log.length"),1);
+    if(tier===2){assert.equal(g.read("mode"),"result");g.key("Enter");}
+    assert.equal(g.read("mode"),"fight");
+    g.until("b.attacks>0");
+  }
+});
+
+check("defeat → select → T trial → R → different trial → Enter next fight",()=>{
   const g=game();win(g);const before=stats(g);
-  g.key("KeyJ");assert.equal(g.read("mode"),"trial");
+  g.key("KeyT");assert.equal(g.read("mode"),"trial");
   assert.equal(stats(g),before);
   g.hold("KeyD");g.tick(8);g.release("KeyD");g.key("Space");g.key("KeyJ");g.tick(150);
   assert.equal(stats(g),before,"trial movement/attacks must not change run statistics");
@@ -56,11 +77,11 @@ check("defeat → select → J trial → R → different trial → Enter next fi
   assert.equal(g.read("take.i"),0);assert.ok(g.read("p.hold===oldHold"));
   assert.equal(g.read("shots.length"),0);assert.equal(g.read("parts.length"),0);
   g.key("ArrowRight");assert.equal(g.read("take.i"),1);
-  g.read("globalThis.chosen=take.list[take.i]");g.key("KeyZ");
+  g.read("globalThis.chosen=take.list[take.i]");g.key("KeyT");
   assert.equal(g.read("mode"),"trial");assert.ok(g.read("p.hold===chosen"));
   g.tick(90);assert.equal(stats(g),before);
   g.key("KeyR");assert.equal(g.read("take.i"),1);
-  g.key("KeyJ");g.key("Enter");
+  g.key("KeyT");g.key("Enter");
   assert.equal(g.read("mode"),"fight");assert.equal(g.read("run.boss"),1);
   assert.equal(g.read("run.log.length"),1);assert.ok(g.read("p.hold===chosen"));
   assert.ok(g.read("run.log[0][0]===defeated.name&&run.log[0][1]===defeated.hue&&run.log[0][2]===chosen"));
@@ -74,7 +95,7 @@ check("optional direct confirmation and final trial → result record exactly on
   const g=game();
   for(let tier=0;tier<3;tier++){
     win(g);
-    if(tier===2){const before=stats(g);g.key("KeyJ");g.tick(180);assert.equal(stats(g),before);}
+    if(tier===2){const before=stats(g);g.key("KeyT");g.tick(180);assert.equal(stats(g),before);}
     g.key("Enter");assert.equal(g.read("run.log.length"),tier+1);
     assert.equal(g.read("mode"),tier===2?"result":"fight");
   }
@@ -99,7 +120,7 @@ check("third clear records the run and Enter continues the endless ascent",()=>{
 check("Escape and focus-loss pause resume the previous fight/trial",()=>{
   const g=game();
   for(const trial of [false,true]){
-    if(trial){win(g);g.key("KeyJ");}
+    if(trial){win(g);g.key("KeyT");}
     const want=trial?"trial":"fight";
     for(const byBlur of [false,true]){
       if(byBlur)g.blur();else g.key("Escape");
@@ -111,12 +132,34 @@ check("Escape and focus-loss pause resume the previous fight/trial",()=>{
   }
 });
 
+check("pause restarts the whole seed or returns to a new seed title, including from trial",()=>{
+  for(const trial of [false,true])for(const fresh of [false,true]){
+    const g=game(),originalSeed=g.read('seed');
+    const originalBoss=g.read('JSON.stringify(b.moves)'),originalSong=g.read('JSON.stringify(song)');
+    win(g);g.key('Enter'); // A restart must return to foe 1, not the current foe.
+    if(trial){win(g);g.key('KeyT');}
+    g.key('Escape');g.key(fresh?'KeyN':'KeyR');
+    if(fresh){
+      assert.equal(g.read('mode'),'title');assert.notEqual(g.read('seed'),originalSeed);
+      g.key('Enter');
+    }else{
+      assert.equal(g.read('seed'),originalSeed);
+      assert.equal(g.read('JSON.stringify(b.moves)'),originalBoss);
+      assert.equal(g.read('JSON.stringify(song)'),originalSong);
+    }
+    assert.equal(g.read('mode'),'fight');assert.equal(g.read('run.boss'),0);
+    assert.equal(g.read('run.time'),0);assert.equal(g.read('run.log.length'),0);
+    assert.ok(g.read('p.hp===HERO.hp&&JSON.stringify(p.hold)===JSON.stringify(bareHand())'));
+    assert.ok(g.read('take===null&&saved===null&&shots.length===0&&musicFrame===0'));
+  }
+});
+
 check("all six trial shapes use real windup, cost, damage/projectiles and repeat use",()=>{
   const g=game();win(g,{six:true});const before=stats(g);
   for(let shape=0;shape<6;shape++){
     if(shape)g.key("KeyD");
     assert.equal(g.read("take.list[take.i][0]"),shape);
-    g.key("KeyJ");assert.equal(g.read("mode"),"trial");
+    g.key("KeyT");assert.equal(g.read("mode"),"trial");
     // Fixture placement makes each attack reachable without altering its geometry.
     // RAIN's first target is at reach distance; CHARGE must reach in its 5 active frames.
     for(let repeat=0;repeat<3;repeat++){
@@ -160,7 +203,7 @@ check("counter feedback requires a real hit during recovery/stagger",()=>{
 check("attack recovery cannot strike again or continue a charge",()=>{
   const g=game();win(g,{six:true});
   for(let shape=0;shape<6;shape++){
-    if(shape)g.key("KeyD");g.key("KeyJ");
+    if(shape)g.key("KeyD");g.key("KeyT");
     g.read('p.x=100;p.face=1;b.x=550;p.st=100;');
     g.key("KeyJ");
     g.until('p.timer===p.hold.wind+(p.hold.active+10)*p.hold[N]-10');
@@ -176,7 +219,7 @@ check("attack recovery cannot strike again or continue a charge",()=>{
 });
 
 check("pause freezes effect timers and consumes resume inputs",()=>{
-  const g=game();win(g);g.key("KeyJ");
+  const g=game();win(g);g.key("KeyT");
   g.read('feedback={kind:"counter",text:"COUNTER!",ttl:65};shake=5;freeze=3;');
   g.key("Escape");g.hold("KeyD");g.hold("KeyJ");g.tick(90);
   assert.equal(g.read('feedback.ttl'),65);assert.equal(g.read('shake'),5);

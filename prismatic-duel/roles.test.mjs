@@ -31,6 +31,13 @@ test('normalized HP and distinct timing envelopes across every timing tier',()=>
   }
 });
 
+test('starting horn connects on frame seven, never during its windup',()=>{
+  read('fixture(1);p.hold=bareHand();fire();tickPlayer(6)');
+  assert.equal(read('10000-b.hp'),0);
+  read('tickPlayer(1)');assert.equal(read('10000-b.hp'),7);
+  assert.equal(read('p.st'),86);
+});
+
 test('short opening rewards thrust; long opening rewards posture damage',()=>{
   const rows=[];
   for(let s=0;s<6;s++){

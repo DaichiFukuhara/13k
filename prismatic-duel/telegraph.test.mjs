@@ -49,10 +49,10 @@ for(const [timer,rects,live] of [[0,3,0],[1,3,1],[5,3,1],[6,2,0],[15,2,0],[16,2,
 for(const face of [-1,1]){setup(3);read(`b.face=${face}`);draw();
   const x=read("b.x+20");assert.equal(calls.find(c=>c.op==="lineTo").args[0],x+face*32);fixtures++;
 }
-for(let shape=0;shape<6;shape++)for(const timer of [10,9,1]){
+for(let shape=0;shape<6;shape++)for(const timer of [12,11,1]){
   setup(shape);read(`b.moves[0][F]=makeMove(seeded(72),${shape},0,false)[F];b.timer=${timer}`);draw();
   const outline=calls.find(c=>c.op===(shape===4?'stroke':'strokeRect'));
-  assert.equal(outline.stroke==='#fff',shape!==5&&timer<=9,'white cue follows parry flag and windup');
+  assert.equal(outline.stroke==='#fff',shape!==5&&timer<=11,'white cue follows parry flag and windup');
 }
 read('mode="trial"');assert.equal(draw().length,0);
 read('mode="fight";b.phase="recover"');assert.equal(draw().length,0);

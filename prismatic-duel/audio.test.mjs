@@ -55,7 +55,15 @@ assert.equal(tune(233),tune(233));assert.notEqual(tune(233),tune(234));
 for(let level=0;level<3;level++){
   const es=play(`newRun(233);run.boss=${level};musicFrame=0;for(let i=0;i<320;i++)music()`);
   assert.equal(es.length,[12,20,28][level]);
-  assert.ok(es.every(e=>e.type==='sine'&&e.peak<=.009&&e.attack-e.start>=.08));
+  assert.ok(es.every(e=>e.type==='sine'&&e.peak<=.024&&e.attack>e.start&&e.attack<e.stop));
+  const melody=es.filter(e=>e.peak===.024);
+  assert.equal(melody.length,level?16:8);
+  assert.ok(melody.every(e=>e.f>=220&&e.f<=623&&e.stop-e.start>=.5),
+    'the foreground melody stays in speaker-friendly midrange with a readable tail');
+}
+// Quiet short SFX must peak before they stop, independently of BGM envelopes.
+for(const code of ['sound(170,.05,"sine",.018)','sound(110,.05,"sine",.02)']){
+  const [e]=play(code);assert.ok(e.attack<e.stop);assert.ok(Math.abs(e.attack-e.start-.004)<1e-9);
 }
 assert.deepEqual(play("newRun(233);mode='pause';step()"),[]);
 // No impact/success when aiming away; SHOT must not duplicate its launch tone.

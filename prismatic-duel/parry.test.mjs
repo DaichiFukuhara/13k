@@ -42,9 +42,9 @@ for(const active of [1,2,3])for(const repeat of [1,3])for(const rest of [1,4]){
 }
 
 // All reception boundaries; a failed attempt must actually be dangerous on the ground.
-for(const shape of [0,1,2,3,5])for(const timer of [3,4,9,10]){
+for(const shape of [0,1,2,3,5])for(const timer of [0,1,10,11,12,21]){
   read(`fixture(${shape});p.action='parry';p.timer=${timer};bossStep()`);
-  const success=shape!==5&&timer>=4&&timer<=9;
+  const success=shape!==5&&timer<=11;
   assert.equal(read('run.parries'),success?1:0,`shape ${shape}, parry frame ${timer}`);
   assert.equal(read('run.hits'),success?0:1);
   assert.equal(read('p.hp'),success?14:12);
@@ -63,6 +63,28 @@ for(const shape of [0,1,2,3]){
   assert.equal(read('run.hits'),0,'roll remains a valid answer');assert.equal(read('run.parries'),0);
 }
 
+// The input frame itself and every remaining windup frame in the white cue
+// must work, with the next earlier frame failing. Use real step ordering.
+for(const shape of [0,1,2,3])for(const lead of [0,1,4,9,11,12]){
+  read(`fixture(${shape});b.phase=${lead?'"wind"':'"active"'};b.timer=${lead};
+    tap={KeyK:1};step();for(let i=0;i<${lead};i++)step()`);
+  assert.equal(read('run.parries'),lead<=11?1:0,`reaction ${shape}, lead ${lead}`);
+  assert.equal(read('run.hits'),lead<=11?0:1);
+}
+
+// A held button cannot keep guarding, and another press cannot cancel the
+// failed parry's recovery. Buffered re-entry still pays stamina at frame 22.
+read(`fixture(0);b.x=550;tap={KeyK:1};keys={KeyK:1};step();
+  for(let i=0;i<12;i++)step()`);
+assert.equal(read('isParry()'),false);
+read('tap={KeyK:1};step()');assert.equal(read('p.timer'),13);
+read('for(let i=0;i<9;i++)step()');
+assert.equal(read('p.action'),'');assert.equal(read('p.st'),82);
+read(`fixture(0);b.x=550;tap={KeyK:1};step();for(let i=0;i<20;i++)step();
+  tap={KeyK:1};step();step()`);
+assert.equal(read('p.action'),'parry');assert.equal(read('p.timer'),0);
+assert.equal(read('p.st'),64);
+
 // Real input -> windup -> contact -> hitstop -> immediate counter, both directions.
 for(const shape of [0,1,2,3])for(const face of [-1,1]){
   read(`fixture(${shape},${face});b.phase='wind';b.timer=4;tap={KeyK:1};step();
@@ -74,8 +96,12 @@ for(const shape of [0,1,2,3])for(const face of [-1,1]){
   assert.equal(read('p.action'),'attack','successful parry releases recovery');
 }
 
-read(`fixture(4);p.action='parry';p.timer=4;
+for(const timer of [0,11,12]){
+read(`fixture(4);p.action='parry';p.timer=${timer};
   shots=[{x:p.x+9,y:p.y+14,vx:2,vy:0,owner:1,parry:1,dmg:2,life:100}];shotsStep()`);
+if(timer<=11){
 assert.equal(read('shots[0].owner'),0);assert.equal(read('shots[0].vx'),-2.7);
 assert.equal(read('run.parries'),1);assert.equal(read('run.hits'),0);
+}else {assert.equal(read('run.parries'),0);assert.equal(read('run.hits'),1);}
+}
 console.log('OK parry: '+contacts+' melee combinations, reception boundaries, full recovery/stagger, input counters, avoidance, reflection');

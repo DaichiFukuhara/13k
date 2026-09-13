@@ -66,7 +66,7 @@ for (let seed = 1; seed <= 2000; seed++) {
       if (t[IDX.D] !== 3) fail(`威力が段3へ正規化されていない: ${t}`);
       if (t[IDX.T] !== 0) fail(`追尾が捨てられていない: ${t}`);
       if (t[IDX.F] !== 0) fail(`宣言が捨てられていない: ${t}`);
-      const bands=[[18,27],[8,14],[34,46],[14,23],[16,25],[32,41]];
+      const bands=[[16,25],[6,12],[32,44],[12,21],[14,23],[30,39]];
       if (t.wind < bands[t[0]][0] || t.wind > bands[t[0]][1]) fail(`形状の発生範囲外: ${t.wind}`);
       const want = Math.max(12, Math.min(40, 10 + S.threat(t) * 2 + [2,0,4,2,0,2][t[0]]));
       if (t.cost !== want) fail(`消費が式と違う: ${t.cost} != ${want}`);
