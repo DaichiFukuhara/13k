@@ -5,7 +5,7 @@ import {createContext,runInContext} from 'node:vm';
 // Real update functions; no replacement damage or physics. Fixtures isolate
 // opportunities before the generated-boss sampling at the end of this file.
 const ctx=createContext({console,Math,Number,JSON});
-runInContext(readFileSync(new URL('game.js',import.meta.url),'utf8'),ctx);
+runInContext(readFileSync(new URL('../game.js',import.meta.url),'utf8'),ctx);
 const read=s=>runInContext(s,ctx);
 const plain=s=>JSON.parse(read(`JSON.stringify(${s})`));
 let count=0;

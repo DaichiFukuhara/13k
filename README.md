@@ -14,12 +14,12 @@ and see how far you can climb. Share a seed to challenge the same generated foes
 With Python 3 installed, run this from the repository root:
 
 ```sh
-python -m http.server 4173 --bind 127.0.0.1 --directory prismatic-duel
+python -m http.server 4173 --bind 127.0.0.1
 ```
 
 Open [localhost:4173](http://localhost:4173/), or try
-[seed TEST01](http://localhost:4173/?seed=TEST01). The playable game is currently
-in [`prismatic-duel/`](prismatic-duel/); this folder keeps its original development name.
+[seed TEST01](http://localhost:4173/?seed=TEST01). The root `index.html`,
+`game.js` and `style.css` are the game.
 Use a desktop browser and keyboard. Audio starts after your first key press.
 
 ## Controls
@@ -67,8 +67,8 @@ npm run build
 npm run verify
 ```
 
-The build produces `prismatic-duel/dist/index.html` and
-`prismatic-duel/dist/prismatic-duel.zip`. The ZIP contains a single standalone
+The build produces `dist/index.html` and `dist/random-duel-rainbow.zip`.
+The ZIP contains a single standalone
 HTML file and must fit within **13,312 bytes**. It needs no external assets or
 runtime libraries. Verification is local; it does not upload an entry.
 
@@ -76,12 +76,14 @@ runtime libraries. Verification is local; it does not upload an entry.
 
 | Location | Contents |
 | --- | --- |
-| [Game guide](prismatic-duel/README.md) | Combat, retries, trials, seeds and endless mode |
+| [Game guide](docs/GAMEPLAY.md) | Combat, retries, trials, seeds and endless mode |
 | [Development guide](docs/DEVELOPMENT.md) | Builds, tests, sound tools and submission steps |
-| [Current source](prismatic-duel/game.js) | Commented game implementation |
+| [Source](game.js) | Commented game implementation |
+| [Tests](tests/) and [tools](tools/) | Regression suites, sound lab, move inspector and simulations |
 | [Design documentation](design/README.md) | Specifications and AIDE design history, primarily in Japanese |
-| [Layout proposal](docs/REPOSITORY_LAYOUT.md) | Proposed promotion of the current game to the repository root |
+| [Repository layout](docs/REPOSITORY_LAYOUT.md) | What lives where, including archived work |
 
-The root `index.html`, `game.js` and `style.css` currently belong to **Virginight**,
-an earlier game retained as development history. Use the command above to launch
-Random Duel Rainbow. Earlier concepts and prototypes are not the current submission.
+Earlier games, concepts and prototypes are frozen under [`archive/`](archive/):
+**Virginight** (`archive/virginight/`, the previous root game with its designs,
+build script and playtest images), `archive/proto/`, and the early concept
+documents. They are not part of the submission.

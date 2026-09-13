@@ -4,7 +4,7 @@ import {createContext,runInContext} from 'node:vm';
 
 const events=[];
 const ctx=createContext({console,Math,Number,JSON});
-runInContext(readFileSync(new URL('game.js',import.meta.url),'utf8'),ctx);
+runInContext(readFileSync(new URL('../game.js',import.meta.url),'utf8'),ctx);
 const read=s=>runInContext(s,ctx);
 // Record Web Audio calls, without replacing any game event or sound function.
 ctx.recording={currentTime:10,destination:{},createOscillator(){

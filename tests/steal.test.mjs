@@ -21,7 +21,7 @@ test.mjs は generateBoss/validateBoss だけを検査するので、steal() と
   4. 色は黄/青/紫/橙/無色の5種だけで、優先順が設計どおり
 */
 
-const src = readFileSync(new URL("game.js", import.meta.url), "utf8");
+const src = readFileSync(new URL("../game.js", import.meta.url), "utf8");
 const hook = `globalThis.__s={
   steal,bareHand,threat,HOLD_COL,generateBoss,PAL,WIND,ACTIVE,REC,REACH,SHAPE_NAME,
   arm(m){seed=1;run={boss:0,time:0,hits:0,parries:0};mode="fight";shots=[];parts=[];p=null;startBoss();

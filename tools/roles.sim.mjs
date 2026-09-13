@@ -5,7 +5,7 @@ import {runInNewContext} from 'node:vm';
 // stress sample, NOT a prediction of human win rate or proof of all-seed safety.
 const count=Number(process.argv[2]||20);
 const box={console,Math,Number,JSON,count};
-runInNewContext(readFileSync(new URL('game.js',import.meta.url),'utf8')+`
+runInNewContext(readFileSync(new URL('../game.js',import.meta.url),'utf8')+`
 const results=[];
 for(let shape=-1;shape<6;shape++)for(let tier=0;tier<3;tier++){
   let wins=0,deaths=0,timeouts=0,total=0;

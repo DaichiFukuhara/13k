@@ -2,12 +2,12 @@
   "name": "random-duel-rainbow",
   "private": true,
   "version": "1.0.0",
-  "main": "prismatic-duel/game.js",
+  "main": "game.js",
   "scripts": {
-    "dev": "python -m http.server 4173 --bind 127.0.0.1 --directory prismatic-duel",
-    "build": "node prismatic-duel/build.mjs",
-    "verify": "node prismatic-duel/submit.mjs",
-    "test": "node --test prismatic-duel/test.mjs prismatic-duel/steal.test.mjs prismatic-duel/experience.test.mjs prismatic-duel/parry.test.mjs prismatic-duel/telegraph.test.mjs prismatic-duel/roles.test.mjs prismatic-duel/opportunities.test.mjs prismatic-duel/audio.test.mjs"
+    "dev": "python -m http.server 4173 --bind 127.0.0.1",
+    "build": "node scripts/build.mjs",
+    "verify": "node scripts/submit.mjs",
+    "test": "node --test tests/generation.test.mjs tests/steal.test.mjs tests/experience.test.mjs tests/parry.test.mjs tests/telegraph.test.mjs tests/roles.test.mjs tests/opportunities.test.mjs tests/audio.test.mjs"
   },
   "repository": {
     "type": "git",

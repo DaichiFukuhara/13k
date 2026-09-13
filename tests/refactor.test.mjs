@@ -5,7 +5,7 @@ import {createHash} from 'node:crypto';
 
 // Compare a refactor with a saved source and its actual built HTML. No fixture
 // edits are injected into the minified bundle: it runs through keyboard / RAF.
-// node prismatic-duel/refactor.test.mjs before.js after.js built/index.html
+// node tests/refactor.test.mjs before.js after.js dist/index.html
 const [beforePath,afterPath,htmlPath]=process.argv.slice(2);
 assert.ok(beforePath&&afterPath&&htmlPath,'Pass before.js, after.js and built/index.html');
 const before=readFileSync(beforePath,'utf8'),after=readFileSync(afterPath,'utf8');

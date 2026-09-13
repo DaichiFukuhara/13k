@@ -1,1273 +1,1297 @@
-/* ==========================================================================
-   ⚠️ NOT SUBMITTED. This implementation is not adopted (2026-09-04,
-   root@2026-09-04-decision-7 section 6.1). The single entry for js13kGames
-   2026 is designed in design/tree/ and built on prismatic-duel/.
-   Kept as material and history. Do not extend.
-   ==========================================================================
+"use strict";
 
-   Virginight - stage 1 (see VIRGINIGHT_DESIGN.md ch.19).
+/*
+=============================================================================
+RANDOM DUEL RAINBOW — ソースレビュー用ガイド
+=============================================================================
 
-   Exploration, time, karma and one guaranteed causality loop.
-   No combat, no items, no companions, no HP yet.
+このファイルは13KB提出用なので、通常の業務コードより変数名と改行を短くしている。
+ただし提出時はbuild.mjsがTerserで再圧縮するため、このレビュー用コメントはZIPへ
+入らない。まず次の順番で読むと全体を追いやすい。
 
-   The concept (ch.0) is responsibility: the game never shows a karma number
-   and never tells the player what is right. It only lets choices - and the
-   refusal to choose - come back.
-   ========================================================================== */
+  1. generateBoss()       シードからボス1体を組み立てる（危険度の合計上限つき）
+  2. validateBoss()       生成結果が公平性の条件を満たすか検査する
+  3. startBoss()          生成データへ戦闘中の状態を追加する
+  4. playerStep()         プレイヤーの1フレーム
+  5. bossStep()           ボスの1フレームと状態遷移
+  6. moveRect()           予告表示と実判定が共有する攻撃範囲
+  7. step() / loop()      画面遷移と60Hz固定更新
+  8. draw()               Canvas描画
 
-const root = document.documentElement;
-const screen = document.querySelector("#screen");
-const bar = document.querySelector("#bar");
-const kit = document.querySelector("#kit");
-const logbar = document.querySelector("#log");
-let ctx, hud;   // set when the night screen is built
+ゲームの中心ルール:
 
-/* --- 1. constants ------------------------------------------------------- */
+  - ボスの技セットは戦闘開始前にだけランダム生成する。
+  - 同じシードでリトライすれば、技の形と数値は完全に同じになる。
+  - 攻撃開始後は乱数で発生時刻や範囲を変えない。
+  - 強い特性には長い予備動作や硬直を付け、必ず反撃時間を作る。
+  - 操作キャラは1人。残機も交代もなく、逃げ場はスタミナ1本だけ。
+  - 表示した危険範囲と実際の当たり判定はmoveRect()を共有する。
 
-const TIMES = ["Morning", "Noon", "Evening", "Dusk"];
+1フレームの処理順:
 
-/* Danger is never given as a number (design ch.7.3). */
-const RISKS = ["Looks safe", "Should go well", "A little risky", "Very dangerous"];
+  loop()              requestAnimationFrameの経過時間を蓄積
+    └─ step()          60Hz単位で0～5回更新
+         ├─ playerStep()  入力、行動、移動
+         ├─ bossStep()    技選択、予告、攻撃、硬直
+         ├─ shotsStep()   プレイヤー弾・敵弾
+         └─ partsStep()   見た目だけの火花
+    └─ draw()          現在状態を1回描画
 
-/* Outcome odds per risk tier: great / good / fail / bad. */
-const ODDS = [
-  [15, 60, 20, 5],
-  [20, 45, 25, 10],
-  [25, 30, 30, 15],
-  [30, 20, 25, 25]
-];
+生成器部分はDOMへ依存させていない。test.mjsはブラウザを起動せずgame.jsを読み、
+generateBoss()とvalidateBoss()を30,000体に対して直接実行する。
+=============================================================================
+*/
 
-const STAGES = [
-  ["great", "It went better than you hoped"],
-  ["good", "It went well enough"],
-  ["fail", "It did not go well"],
-  ["bad", "It went badly"]
-];
+const CW=640,CH=360,FLOOR=307,STEP=1000/60;
+const WIND=[24,36,54,80],ACTIVE=[5,8,12],REC=[18,32,50,76],REACH=[48,82,136,250];
+const PAL=["#ed596f","#ec9348","#ead85b","#5dcc8a","#5ea8e8","#746ae6","#bd64e6"];
+const COLOR_NAME=["CRIMSON","AMBER","GOLDEN","VERDANT","AZURE","INDIGO","VIOLET"];
+const SHAPE_NAME=["SWEEP","THRUST","SLAM","CHARGE","SHOT","RAIN"];
+const WEAPON_NAME=["BLADE","LANCE","HAMMER","HORN","ORBIT","CROWN"];
+const DEF_NAME=["","ARMOR","BARRIER","SHIELD"];
+const PARRY=1,JUMPABLE=2,MOVEABLE=4;
+/*
+技データ Move
+---------------
+容量を抑えるためオブジェクトではなく9要素の配列を使う。
 
-/* Rainbow shards granted per outcome stage: [min, max]. */
-const SHARDS = [[4, 6], [2, 4], [0, 2], [0, 0]];
+  m[S] shape     0:横薙ぎ 1:突き 2:叩きつけ 3:突進 4:弾 5:落下攻撃
+  m[D] damage    1～4。プレイヤーHPから直接引く
+  m[R] range     1～4。REACHテーブルから実ピクセルへ変換
+  m[W] windup    1～4。WINDテーブルから予備動作フレームへ変換
+  m[A] active    1～3。ACTIVEテーブルから攻撃判定の持続へ変換
+  m[C] recovery  1～4。RECテーブルから攻撃後硬直へ変換
+  m[T] tracking  0～2。予備動作中の追尾と弾の曲がり方
+  m[N] repeat    1～3。同じ攻撃が何段発生するか
+  m[F] flags     PARRY / JUMPABLE / MOVEABLE のビット和
 
-/* --- 2. event data ------------------------------------------------------ */
-/* karma: applied when the action is confirmed, not when it resolves
-   (design ch.6.3 - intent is judged, not the result).
-   Events worth +-10 are the day 1-2 pool; +-20 unlocks on day 3. */
+例: [0,4,3,3,1,4,0,1,7]
+    = 長い予備動作と硬直を持つ、高威力・長射程の横薙ぎ。
+      flags 7なので移動・ジャンプ・パリィの回答を持つ。
+*/
+const S=0,D=1,R=2,W=3,A=4,C=5,T=6,N=7,F=8;
+const DMG_COST=[0,1,3,6,9],RANGE_COST=[0,0,1,3,5],WIND_COST=[0,4,2,0,-2],REC_COST=[0,0,-1,-3,-5];
 
-function ev(id, title, blurb, karma, risk, great, good, fail, bad) {
-  return { id, title, blurb, karma, risk, out: [great, good, fail, bad] };
+/*
+プレイヤー定義（1人）
+--------------------
+設計ツリー design/tree/duel の decision-5 で凍結:
+  操作キャラは1人。残機・控え・交代を持たない（根の 1.5 / 親に残すもの8）。
+  最大HP 14 は、旧3人構成の生HP合計25の56%。交代の猶予が消えるぶん単純比では足りない。
+  難易度はボス側の危険度合計上限（budgetCap）で釣り合わせる。
+
+  dmg 7 / cost 14 はスタミナ制約込みの撃破時間から決めた。回復0.3/F・消費後30F停止で、
+  ボスHP 120/160/210 に対し 16/21/28 回・約 14/20/29 秒。dmg 4 だと 33/45/61 秒かかり、
+  1体で1分を超えて初見の集中が切れる。
+
+  hp    最大HP
+  体勢削りは所持技のpostを段数で配分する。一攻撃の上限は形状で決まる。
+  roll  ローリング中の横速度
+
+  攻撃の性能は所持技(p.hold)が持つ。HEROは攻撃固有値を持たない。
+*/
+/*
+奪取（根の 1.10）
+=================
+倒したボスの技を1つ選んで持ち帰り、プレイヤーの攻撃を置き換える。
+所持は常に1つで、増えない。攻撃力は正規化するので強くならない——
+形状ごとに間合い・発生・移動・体勢削りを変え、HP威力は正規化する。
+
+steal(m) -> プレイヤー版の技
+
+  引き継ぐ: 形状 S / 射程 R / 予備動作 W / 持続 A / 硬直 C / 多段 N
+  固定する: 威力 D は段3へ正規化（DMG_COST[3]=6）
+  捨てる  : 追尾 T（プレイヤーは標的を持たない）、宣言 F（避ける側の値）
+
+  消費はボスと同じthreat()で測る。射程・速さ・多段は加点で高くなり、
+  長い硬直は減点で安くなる。「強い技ほど撃てない」が式1本で成立する。
+
+  HPダメージは合計7を段数で割り、余りを前の段から配る（[7]/[4,3]/[3,2,2]）。
+  体勢も一攻撃の上限を段数で分配し、多段数倍の追加効果を防ぐ。
+*/
+const HOLD_D=3;
+// Shape envelopes preserve the enemy's timing tier without losing the role.
+const ROLE_WIND=[16,6,32,12,14,30],ROLE_STEP=[3,2,4,3,3,3],ROLE_REST=[22,14,34,18,18,20];
+const ROLE_POST=[2,1,12,2,1,6],ROLE_COST=[2,0,4,2,0,2];
+const ROLE_GOOD=["MAKE SPACE","SHORT OPENING","BREAK POSTURE","CLOSE THE GAP","FIRE FROM AFAR","AIM AHEAD"];
+const ROLE_RISK=["PUSHES AWAY","NARROW HIT","SLOW COMMIT","ENDS UP CLOSE","FEET LOCKED","LANDS LATE"];
+function activeEnd(m){return m.wind+(m.active+10)*m[N]-10}
+function attackEnd(m){return activeEnd(m)+m.rest}
+function steal(m){
+  const t=[m[S],HOLD_D,m[R],m[W],m[A],m[C],0,m[N],0];
+  t.cost=clamp(10+threat(t)*2+ROLE_COST[m[S]],12,40);
+  // HPダメージは合計7を段数で割り、余りを前の段から配る（[7]/[4,3]/[3,2,2]）
+  t.seg=[];for(let i=0;i<m[N];i++)t.seg.push((7/m[N]|0)+(i<7%m[N]?1:0));
+  // 根decision-14: 形状の役割を保つ発生範囲へ変換し、元のW/C段の順序を残す。
+  t.wind=ROLE_WIND[m[S]]+(m[W]-1)*ROLE_STEP[m[S]];
+  t.rest=ROLE_REST[m[S]]+(m[C]-1)*4;
+  t.post=ROLE_POST[m[S]];
+  t.active=m[S]===3?12+m[R]*3+2*(m[A]-1):ACTIVE[m[A]-1];
+  return t;
 }
+// 初期の角突き。互換用の関数名bareHandは維持。発生7F・消費14。
+function bareHand(){const t=steal([1,3,1,3,1,2,0,1,0]);t.cost=14;t.wind=7;t.bare=1;return t}
 
-const EVENTS = {
-  town: [
-    ev("mend", "Mend the broken fence", "A family cannot keep their goats in.", 10, 0,
-      "The whole pen is sound by dark.",
-      "The rail holds.",
-      "The post splits a second time.",
-      "The rail goes through the trough. The goats scatter."),
-    ev("ration", "Share your ration", "Children are waiting outside the mill.", 10, 0,
-      "You feed every one of them.",
-      "There is enough to go round.",
-      "The smallest ones go without.",
-      "The older boys take it all and run."),
-    ev("offering", "Take from the offering box", "The shrine is unwatched at this hour.", -10, 1,
-      "Gone before the candle gutters.",
-      "A fair share, the lid as you found it.",
-      "The hinge cracks. You leave with less.",
-      "The priest sees your shadow on the wall."),
-    ev("frighten", "Frighten the merchant", "He is slow to name a price for strangers.", -10, 1,
-      "He empties the strongbox onto the counter.",
-      "He drops his price to nothing.",
-      "He holds his ground and calls the watch.",
-      "He swings the scale hook. The stall is ruined.")
-  ],
-  castle: [
-    ev("cage", "Free a caged bird", "Something small is singing above the gate.", 10, 1,
-      "The cage opens clean.",
-      "The bird goes.",
-      "The lock will not give.",
-      "The cage falls. The singing stops."),
-    ev("water", "Leave water at the cells", "The lower corridor has not been opened in days.", 10, 1,
-      "You reach every door.",
-      "You reach most of them.",
-      "The guard turns early. Two doors.",
-      "The bucket goes over on the stair."),
-    ev("plate", "Pocket a silver plate", "The hall is set for people who are not coming.", -10, 2,
-      "You take the whole setting.",
-      "Two plates, and nothing is missed.",
-      "The steward counts twice. You put it back.",
-      "The stack goes down the stairs."),
-    ev("rope", "Cut the alarm rope", "One rope runs the length of the wall.", -10, 2,
-      "It parts silently. The wall is deaf.",
-      "You cut it through. Nobody looks up.",
-      "The strands hold. You leave it fraying.",
-      "The bell rings once as it goes.")
-  ]
-};
+const HERO={col:"#f3f0ff",hp:14,roll:5.0};
 
-/* Day 3-4 events. Heavier karma, so they stay out of the early pool. */
-EVENTS.town.push(
-  ev("watch", "Stand guard until dawn", "The town has nobody left to put on the wall.", 20, 2,
-    "Nothing comes, and they see you at first light.",
-    "You hold the wall all night.",
-    "You sleep an hour. The east gate is open.",
-    "You sleep through it. A house stands open."),
-  ev("drive", "Drive the beggars out", "They have been at the well since the first night.", -20, 1,
-    "They leave everything behind in the rush.",
-    "They go, and leave what they carried.",
-    "They will not move.",
-    "One of them will not get up.")
-);
+/*
+seeded(seed) -> 0以上1未満を返す関数
 
-EVENTS.castle.push(
-  ev("wounded", "Carry the wounded out", "The east range is burning and still full.", 20, 3,
-    "You bring out every one of them.",
-    "Three, before the roof comes down.",
-    "One. The stair goes behind you.",
-    "The floor gives. You get out alone."),
-  ev("bind", "Bind the servant girl", "She has seen your face and the corridor behind you.", -20, 2,
-    "Quiet, and nobody comes.",
-    "Quiet long enough.",
-    "She works a hand loose and screams.",
-    "She is found before morning.")
-);
-
-/* The guaranteed causality loop (design ch.0.1, plan stage 1).
-   Offered every action of day 1 until it is taken or the day runs out. */
-/* All four outcomes must leave the three of them indoors: the payoff below
-   turns on the choice, not on how well the night went. */
-const SHELTER = ev("shelter", "Shelter the strangers",
-  "Three of them are asking at doors along the road. Nobody has opened one.", 10, 0,
-  "All three under a roof, talking half the night.",
-  "All three in a dry corner, and grateful.",
-  "All three inside, but nobody sleeps much.",
-  "All three inside. Something of yours goes with them.");
-
-/* Day 2 payoff. Which one appears depends on day 1 (design ch.0.1). */
-const REPAID = ev("marked", "Follow the marked path",
-  "The travelers left the safe way scratched into the milestone.", 0, 0,
-  "The path runs clean past every watch post.",
-  "The path holds. In and out unseen.",
-  "The marks stop halfway.",
-  "You lose the marks in the dark.");
-
-const PUNISHED = ev("watchmen", "Slip past the new watch",
-  "The men on the road tonight know the country better than the garrison does.", 0, 3,
-  "Through anyway, and you take what they guarded.",
-  "Past them, barely.",
-  "Turned back at the first bend.",
-  "They were waiting at both ends.");
-
-const WORKSHOP = { id: "shop", title: "The bench", blurb: "", karma: 0, risk: -1 };
-const REST = { id: "rest", title: "Rest", blurb: "", karma: 0, risk: -1 };
-
-/* --- 2b. causal items (design ch.8.2) ------------------------------------ */
-/* attr  +1 good / 0 neutral / -1 evil - decides what burns off at the
-         critical point (ch.6.4). Neutral marks always survive.
-   kind  "E" evidence: silently shifts how dangerous a place is for you.
-         "C" consumable: hangs a new action off the place, then is spent.
-   Consumable actions do not roll (ch.7.2): the main result is fixed. */
-
-function evidence(id, name, attr, place, shift, note) {
-  return { id, name, attr, kind: "E", place, shift, note };
-}
-
-function spend(id, name, attr, place, title, blurb, karma, shards, text) {
-  return { id, name, attr, kind: "C", place, act: { id: "u_" + id, title, blurb, karma, risk: -2, shards, text } };
-}
-
-const ITEMS = [
-  evidence("thanks", "The town's thanks", 1, "town", -1, "Doors open before you knock."),
-  evidence("blessing", "A healer's blessing", 1, "town", -1, "They look for you when someone is hurt."),
-  evidence("hunted", "Hunted in the town", -1, "town", 1, "They know your shape now."),
-  evidence("debtors", "Debtors in the town", -1, "town", 1, "Nobody meets your eye twice."),
-  evidence("quiet", "A quiet way in", 0, "castle", -1, "One door they forget to bar."),
-  evidence("alert", "The castle on alert", 0, "castle", 1, "The watch has been doubled."),
-  evidence("witness", "A witness left alive", -1, "castle", 1, "Someone can describe you to the guard."),
-
-  spend("map", "The castle map", 0, "castle",
-    "Take the hidden passage", "A line runs under the east range.", 0, 7,
-    "It comes out inside the wall, behind everyone. You leave the way you came."),
-  spend("favour", "A sworn favour", 1, "town",
-    "Call in the favour", "Someone said to come back if you needed it.", 10, 5,
-    "They do not ask what it is for, and shut the door quietly behind you."),
-  spend("key", "A stolen key", -1, "castle",
-    "Open the lower cells", "It fits the corridor nobody walks after dark.", -10, 6,
-    "The doors go back one after another, and nobody down there reports it.")
-];
-
-const ITEM = Object.fromEntries(ITEMS.map(i => [i.id, i]));
-
-/* Which action leaves which mark, and in which outcome band (from..to).
-   Marks are earned by how it actually went, not by what you meant. */
-const GIVES = {
-  mend: [["thanks", 0, 0]],
-  ration: [["blessing", 0, 1]],
-  offering: [["hunted", 2, 3]],
-  frighten: [["hunted", 0, 3]],
-  watch: [["favour", 0, 1]],
-  drive: [["debtors", 0, 2]],
-  cage: [["quiet", 0, 1]],
-  water: [["favour", 0, 1]],
-  plate: [["map", 0, 0], ["alert", 2, 3]],
-  rope: [["key", 0, 1], ["alert", 2, 3]],
-  wounded: [["blessing", 0, 1]],
-  bind: [["witness", 0, 3]],
-  watchmen: [["alert", 2, 3]],
-  marked: [["quiet", 0, 1]]
-};
-
-const BAG = 8;
-
-/* --- 2c. the seven ------------------------------------------------------- */
-/* [name, colour, damage, cooldown, range, trait]
-   trait 0 plain, 1 mends the ones beside her, 2 slows what she hits,
-   3 goes through more than one (design ch.12.2). */
-const HUES = [
-  ["Red", "#f2515f", 8, 1.0, 30, 0],
-  ["Orange", "#f2913f", 3, 0.4, 38, 0],
-  ["Yellow", "#f2d24f", 4, 0.9, 76, 0],
-  ["Green", "#5fc47a", 2, 1.1, 46, 1],
-  ["Blue", "#4f9ff2", 3, 0.8, 56, 2],
-  ["Indigo", "#6b6fd6", 5, 1.2, 62, 3],
-  ["Violet", "#a86bd6", 13, 2.1, 40, 0]
-];
-
-/* She is hard to kill on purpose. A death is permanent and does not rewind
-   (ch.12.4, ch.15.2), so losing one has to be a thing you let happen rather
-   than a thing that happens to you (ch.0.1). */
-const GIRL_HP = 30;
-
-/* A ribbon for every colour, made from the same table. It carries no power and
-   cannot be put down: it is the slot she used to be (design ch.8.4). */
-const RIBBONS = HUES.map(([name], i) => ({
-  id: "rib" + i, name: `${name} ribbon`, attr: 0, kind: "E", place: "", shift: 0,
-  note: "Hers. You do not get to put this one down.", keep: 1
-}));
-
-/* --- 2b2. arms ----------------------------------------------------------- */
-/* [name, damage, cooldown, range, made at, cost, needs]
-   needs: "" nothing, "girl" at least one of them, or the id of a mark.
-   Condition steps are sound / worn / broken (design ch.11.3). */
-const ARMS = [
-  ["Healing horn", 5, .70, 46, "town", 6, ""],
-  ["Rainbow spear", 9, .85, 54, "castle", 8, ""],
-  ["Star chain", 6, .75, 62, "", 7, "key"],
-  ["Sevenfold", 4, .60, 50, "", 9, "girl"]
-];
-
-const WEAR = [1, .7, .5];
-const CONDITION = ["sound", "worn", "broken"];
-const FIX_COST = 4;
-
-/* Every skill is one use a night, whether or not the arm is the one you hold
-   (design ch.11.1). Broken arms keep swinging but their skill is gone. */
-const SKILLS = [
-  "Mend what is still standing",
-  "Everything on the field at once",
-  "Hold them where they are",
-  "As many as there are of her"
-];
-
-/* Which actions bring one of them back with you. The castle reads as a
-   rescue and the town as taking her along; same seven either way (ch.12.1). */
-/* `shelter` is the guaranteed one: one of the three you took in stays, whatever
-   kind of night it was. Refuse them on day 1 and you meet the first night on
-   your own - hard, but not lost before it starts (ch.0.1). */
-const BRINGS = { shelter: 3, water: 1, wounded: 0, ration: 1, watch: 1, rope: 1, drive: 2, bind: 2 };
-
-/* --- 2d. the night ------------------------------------------------------- */
-/* [name, hp, damage, range, cooldown, speed, colour] */
-const KIND = {
-  // Monsters and soldiers are worth about the same: which of them is against
-  // you is decided by the karma band, not by the player picking a difficulty
-  // (design ch.13.2). Monsters come quicker, soldiers take more killing.
-  m: ["Monster", 15, 4, 13, 1.00, 18, "#7fd6a0"],
-  b: ["Bandit", 12, 3, 13, 0.90, 21, "#d6b87f"],
-  s: ["Soldier", 18, 4, 13, 1.10, 14, "#9fb4d6"],
-  // The fourth night only (design ch.14). Whichever one turns up, it turns up
-  // because of what you spent four days becoming.
-  k: ["The Demon King", 120, 7, 22, 1.5, 9, "#c85a52"],
-  h: ["The Hero", 102, 6, 20, 1.6, 10, "#e6dcae"]
-};
-
-/* Who the last night sends, by where you ended up (design ch.14).
-   Neutral gets no single thing to kill. It gets both armies instead: on the
-   last night the bandits are gone and it is the real ones on both roads. */
-const LAST = { "1": "k", "-1": "h", "0": "" };
-const LAST_NEUTRAL = [["m", 1], ["s", 1]];
-
-/* Who comes at you and who comes for you, by where you have ended up
-   (design ch.13.2). foe 1 = it is here for you. */
-const SIDES = {
-  "1": [["m", 1], ["s", 0]],    // good: monsters attack, people turn up to help
-  "0": [["b", 1], ["b", 1]],    // neutral: nobody's side, so both sides are bandits
-  "-1": [["m", 0], ["s", 1]]    // evil: monsters back you, the garrison comes
-};
-
-const LANES = [45, 90, 135];
-const MID = 160;
-const JUMPS = 3;
-const SPAWN_FOR = 30;
-const LASTS = 60;
-
-/* --- 3. state ----------------------------------------------------------- */
-
-let state;
-
-function newGame() {
-  state = {
-    day: 1,
-    step: 0,          // 0..3 -> TIMES
-    karma: 10,        // never shown as a number (design ch.6.1)
-    lock: 0,          // -1 evil, 0 open, +1 good
-    shards: 0,
-    sheltered: null,  // null until day 1 ends, then true / false
-    special: null,    // "repaid" | "punished" while the day 2 payoff is live
-    place: null,
-    offers: null,     // held across a "No" so the offers do not re-roll
-    justLocked: false,
-    items: [],        // causal marks, max BAG (design ch.8.3)
-    pending: null,    // a mark waiting on an exchange because the bag is full
-    log: [],          // last few lines only (design ch.9)
-    hp: 60,           // the unicorn's own HP is the thing being defended (ch.13.3)
-    max: 60,
-    girls: [],        // { i: hue index, hp }
-    dead: [],         // hue indices - never comes back, not even on a rewind
-    placed: [null, null, null],
-    arms: [],         // { i: ARMS index, cond: 0 sound / 1 worn / 2 broken }
-    held: 0,          // index into arms - the one that decides your attack
-    owed: [],         // ribbons waiting for a slot to be freed
-    fight: null
+Mulberry32系の小さな疑似乱数生成器。同じ整数seedからは必ず同じ列が出る。
+ボス生成にはこれだけを使い、火花や画面揺れに使うMath.randomとは分離する。
+見た目の乱数を何回呼んでも、次のリトライのボス構成には影響しない。
+*/
+function seeded(seed){
+  let x=seed>>>0||1;
+  return()=>{
+    let z=x+=0x6d2b79f5;
+    z=Math.imul(z^z>>>15,z|1);
+    z^=z+Math.imul(z^z>>>7,z|61);
+    return((z^z>>>14)>>>0)/4294967296;
   };
-  keep();
 }
+function pick(r,a){return a[(r()*a.length)|0]}
+function clamp(v,a,b){return v<a?a:v>b?b:v}
 
-/* The morning is kept so a lost night can be tried again (design ch.15.1).
-   Item objects are shared by reference on purpose - identity is checked. */
-function keep() {
-  const { fight, dawn, ...rest } = state;   // never nest one morning inside another
-  state.dawn = { ...rest, items: [...state.items], log: [...state.log],
-                 girls: state.girls.map(g => ({ ...g })),
-                 arms: state.arms.map(a => ({ ...a })), placed: [null, null, null] };
+/*
+threat(m) -> 技の危険度
+
+危険な特性を加点し、プレイヤーが観察・反撃できる時間を減点する。
+威力は線形ではなく1,3,6,9と増やし、高威力同士の組み合わせを重く扱う。
+
+  加点: 威力、射程、短い予備動作、追尾、多段、長い持続
+  減点: 長い予備動作、長い攻撃後硬直
+
+この値は絶対的な強さではなく「生成してよい帯域」を揃えるための一次判定。
+形状固有の理不尽さはharden()で別に禁止する。
+*/
+function threat(m){
+  return DMG_COST[m[D]]+RANGE_COST[m[R]]+WIND_COST[m[W]]+REC_COST[m[C]]+
+    m[T]*2+(m[N]-1)*2+(m[A]===3?2:0);
 }
-
-/* A lost night can be tried again, but the ones who died stay dead and the
-   morning does not give them back (design ch.15.2). */
-function rewind() {
-  const d = state.dawn, dead = state.dead;
-  state = { ...d, items: [...d.items], log: [...d.log],
-            girls: d.girls.filter(g => !dead.includes(g.i)).map(g => ({ ...g })),
-            arms: d.arms.map(a => ({ ...a })),
-            dead, placed: [null, null, null], fight: null };
-  // The ribbons come back with you even though the morning does not know
-  // about them yet - the dead are the one thing a rewind cannot undo (ch.15.2).
-  // Through ribbon(), so the eight slots still mean eight.
-  for (const i of dead) ribbon(i);
-  keep();
-  paint();
+function limits(tier,signature){
+  // tier 0/1/2は1～3体目。最後の固有技だけ、通常技より上の帯域を許可する。
+  return signature?[6+tier,8+tier*2]:[3+tier,6+tier];
 }
+/*
+budgetCap(tier) -> ボス1体が持てる危険度の合計上限
 
-/* She joins whichever way you came by her (design ch.12.1). The colour has to
-   be one nobody is wearing and nobody has died in - a lost colour is lost. */
-function bring(rescued) {
-  const held = state.girls.map(g => g.i);
-  const i = HUES.findIndex((h, n) => !held.includes(n) && !state.dead.includes(n));
-  if (i < 0) return;
-  state.girls.push({ i, hp: GIRL_HP });
-  note(`${rescued ? "Brought out" : "Brought along"}: ${HUES[i][0]}`);
+設計ツリー design/tree/duel の decision-5 で凍結した2層目。
+帯域(limits)は技1つを抑えるだけで、「全部が上限に張り付いた個体」を防げない。
+5技×(6+tier)=30/35/40 の8割を上限に置くと、強い技と弱い技が必ず混ざる。
+
+操作キャラを1人へ落として最大HPを14にしたぶんの難易度は、この上限で釣り合わせる。
+プレイヤー側を強くして調整しない（根の 1.8）。
+*/
+function budgetCap(tier){return 24+tier*6}
+
+/*
+harden(m) -> 同じ配列を安全側へ変更
+
+危険度の合計が同じでも手触りは同じではない。例えば「高速・低威力」と
+「低速・高威力」は同点でも成立するが、「高速・高威力・多段」は回避不能に
+なりやすい。この関数は次の組み合わせを強制的に崩す。
+
+  - 最速24f: 威力2以下、追尾1以下、単発のみ
+  - 威力4かつ全域射程: 予備動作54f以上、硬直50f以上
+  - 全域射程かつ強追尾: 威力2以下、予備動作36f以上
+  - 3段攻撃: 1発の威力は1
+  - 長時間持続かつ強追尾: 追尾を1へ下げる
+
+balance()の反復中にも毎回呼び、数値調整で禁止構成へ戻るのを防ぐ。
+*/
+function harden(m){
+  if(m[W]===1){m[D]=Math.min(2,m[D]);m[T]=Math.min(1,m[T]);m[N]=1}
+  if(m[D]===4&&m[R]===4){m[W]=Math.max(3,m[W]);m[C]=Math.max(3,m[C])}
+  if(m[R]===4&&m[T]===2){m[D]=Math.min(2,m[D]);m[W]=Math.max(2,m[W])}
+  if(m[N]===3)m[D]=1;
+  if(m[A]===3&&m[T]===2)m[T]=1;
+  return m;
 }
+/*
+balance(m, tier, signature) -> 帯域内へ調整した同じ配列
 
-/* --- 3b. items and log --------------------------------------------------- */
+最大24回の単調な補正で危険度を目標へ近づける。
 
-function note(line) {
-  state.log.push(line);
-  if (state.log.length > 4) state.log.shift();
-}
+  強すぎる場合:
+    硬直を延ばす → 予備動作を延ばす → 追尾/多段/威力/射程を落とす
 
-function has(id) {
-  return state.items.some(i => i.id === id);
-}
+  弱すぎる場合:
+    硬直を短くする → 予備動作を短くする → 威力/射程を上げる
 
-/* Returns false when the bag is full, and parks the mark for an exchange. */
-function take(item) {
-  if (has(item.id)) return true;
-  // Past the critical point the other colour will not stick to you any more.
-  // Ribbons are the exception: they stay whatever colour they are (ch.8.4).
-  if (state.lock && item.attr === -state.lock && !item.keep) {
-    note(`It does not stay with you: ${item.name}`);
-    return true;
+最初に攻撃の個性を消さず、プレイヤーへ反撃時間を返す方向で調整する。
+24回で打ち切るため、バグがあってもブラウザを無限ループさせない。
+*/
+function balance(m,tier,signature){
+  const [lo,hi]=limits(tier,signature);
+  for(let i=0;i<24;i++){
+    harden(m);
+    const q=threat(m);
+    if(q>hi){
+      if(m[C]<4)m[C]++;
+      else if(m[W]<4)m[W]++;
+      else if(m[T])m[T]--;
+      else if(m[N]>1)m[N]--;
+      else if(m[D]>1)m[D]--;
+      else if(m[R]>1)m[R]--;
+    }else if(q<lo){
+      if(m[C]>1)m[C]--;
+      else if(m[W]>1)m[W]--;
+      else if(m[D]<4)m[D]++;
+      else if(m[R]<4)m[R]++;
+      else break;
+    }else break;
   }
-  if (state.items.length >= BAG) { state.pending = item; return false; }
-  state.items.push(item);
-  note(`Kept: ${item.name}`);
-  snd(620, .11, "triangle");
-  return true;
+  return harden(m);
 }
+/*
+makeMove(r, shape, tier, signature) -> Move
 
-function drop(id, why) {
-  const i = state.items.findIndex(x => x.id === id);
-  if (i < 0) return;
-  note(`${why}: ${state.items[i].name}`);
-  state.items.splice(i, 1);
+1. 形状ごとの許可射程から一つ選ぶ
+2. 威力・予備動作・持続・硬直を段階値で抽選
+3. 弾と落下攻撃だけ追尾を抽選
+4. 固有技だけ多段・長時間持続を抽選
+5. 形状から有効な回避フラグを決める
+6. balance()で難易度帯へ収める
+
+フレーム数を直接ランダムにしないため、24/36/54/80fという読みやすい
+リズムだけが生成され、プレイテスト時も段階単位で調整できる。
+*/
+function makeMove(r,shape,tier,signature){
+  const ranges=[[2,3],[1,3],[1,2],[3,4],[3,4],[3,4]][shape];
+  let range=ranges[0]+((r()*(ranges[1]-ranges[0]+1))|0);
+  let damage=1+((r()*Math.min(4,2+tier+(signature?1:0)))|0);
+  let wind=1+(r()*4|0),active=1+(r()*2|0),recovery=1+(r()*4|0);
+  let track=(shape===4||shape===5)?r()*Math.min(3,tier+2)|0:0;
+  let repeat=signature&&r()>.55?2:1;
+  if(signature&&tier===2&&r()>.82)repeat=3;
+  if(signature&&r()>.7)active=3;
+  let flags=MOVEABLE;
+  // 武器・本体・弾はパリィ可能。落下する範囲攻撃RAINだけは回避で対処する。
+  if(shape!==5)flags|=PARRY;
+  if(shape===0||shape===3)flags|=JUMPABLE;
+  return balance([shape,damage,range,wind,active,recovery,track,repeat,flags],tier,signature);
 }
+/*
+generateBoss(seed, tier) -> ボスの不変な設計データ
 
-/* At the critical point everything of the opposite colour burns off.
-   Neutral marks stay, and so will ribbons once they exist (ch.6.4, ch.8.4). */
-function purge() {
-  const gone = state.items.filter(i => i.attr === -state.lock && !i.keep);
-  if (!gone.length) return;
-  state.items = state.items.filter(i => !gone.includes(i));
-  // One line, so a big purge cannot push the critical line out of the log.
-  note(`Gone with it: ${gone.map(i => i.name).join(", ")}`);
-}
+生成の全手順:
 
-/* Marks are earned by how it actually went, not by what you meant by it. */
-function grant(id, stage) {
-  // Only one mark can be waiting on an exchange at a time, so stop at the
-  // first one the bag cannot hold rather than overwrite what is pending.
-  for (const [item, from, to] of GIVES[id] || [])
-    if (stage >= from && stage <= to && !take(ITEM[item])) return;
-}
+  1. seedとtierから専用乱数列を作る
+  2. 技の役割枠を先に決める
+     [突き, 横薙ぎ, 接近/遠距離, 範囲制圧, 固有技]
+  3. 各枠をmakeMove()で数値化する
+  4. GAP枠が全域へ圧力をかけられるよう補正する
+  5. 最低2技へ長い硬直を与え、反撃機会を保証する
+  6. 最速24fの技を一つ以下へ抑える
+  7. 生成された特徴から外見色と異名を決める
+  8. HP・体勢と一緒に返す
 
-/* A ribbon cannot be refused, but nothing is thrown out behind the player's
-   back either: a full bag queues it and asks (design ch.8.3, ch.0.1). */
-function ribbon(i) {
-  if (has("rib" + i) || state.owed.includes(i)) return;
-  if (state.items.length < BAG) {
-    state.items.push(RIBBONS[i]);
-    note(`Kept: ${RIBBONS[i].name}`);
-  } else state.owed.push(i);
-}
-
-/* Clears anything waiting on an exchange, one at a time, then goes on. */
-function settle(then) {
-  if (!state.pending && state.owed.length) state.pending = RIBBONS[state.owed.shift()];
-  state.pending ? exchange(then) : then();
-}
-
-/* What you are holding decides your attack; its condition decides how much of
-   it is left. With nothing made you still have a horn (design ch.11.1). */
-function mine() {
-  const a = state.arms[state.held];
-  if (!a) return { dmg: 5, cd: .7, range: 44 };
-  const [, dmg, cd, range] = ARMS[a.i];
-  // The sevenfold is only ever worth as many as there are of her (ch.11.4).
-  const base = a.i === 3 ? 2 + state.girls.length : dmg;
-  return { dmg: Math.max(1, Math.round(base * WEAR[a.cond])), cd, range };
-}
-
-function canMake(n) {
-  const [, , , , where, cost, needs] = ARMS[n];
-  return !state.arms.some(a => a.i === n) &&
-    (!where || where === state.place) &&
-    (needs === "" || (needs === "girl" ? state.girls.length > 0 : has(needs))) &&
-    state.shards >= cost;
-}
-
-/* Evidence quietly makes a place kinder or harsher than it reads (ch.7.4). */
-function riskOf(e) {
-  if (e.risk < 0) return e.risk;
-  let r = e.risk;
-  for (const i of state.items) if (i.kind === "E" && i.place === state.place) r += i.shift;
-  return Math.max(0, Math.min(3, r));
-}
-
-/* --- 4. helpers --------------------------------------------------------- */
-
-const rnd = n => Math.floor(Math.random() * n);
-
-function roll(risk) {
-  const odds = ODDS[risk];
-  let n = rnd(100);
-  for (let i = 0; i < 4; i++) {
-    if (n < odds[i]) return i;
-    n -= odds[i];
+ここで返す値に現在HP、座標、行動タイマーは含まれない。それらはリトライで
+初期化すべき可変状態なので、startBoss()が別オブジェクトとして付け足す。
+*/
+function generateBoss(seed,tier){
+  const level=tier;tier=Math.min(3,tier);
+  const r=seeded((seed^Math.imul(tier+1,0x9e3779b9))>>>0);
+  const shapes=tier===0?
+    [1,0,pick(r,[3,4]),pick(r,[2,5])]:
+    [1,0,pick(r,[3,4]),pick(r,[4,5]),pick(r,[2,3,5])];
+  const moves=shapes.map((s,i)=>makeMove(r,s,tier,i===shapes.length-1));
+  if(moves[2][S]!==3){
+    // GAP枠は3番目。突進なら自分が接近し、弾なら射程4で遠距離を咎める。
+    // 射程を上げて危険度超過した分は、硬直・予備動作・威力の順に返す。
+    const m=moves[2],hi=limits(tier,0)[1];m[R]=4;harden(m);
+    for(let k=0;k<8&&threat(m)>hi;k++){if(m[C]<4)m[C]++;else if(m[W]<4)m[W]++;else if(m[D]>1)m[D]--;else break;harden(m)}
   }
-  return 3;
-}
+  const open=i=>{
+    /*
+    反撃用の技へrecovery 3以上（50f以上）を強制する局所関数。
+    通常のbalance()へ戻すと「弱すぎる」と判断して硬直を短くしてしまうため、
+    ここでは硬直を固定したまま威力・射程側で下限へ寄せる。
 
-function applyKarma(amount) {
-  if (!amount) return;
-  state.karma = Math.max(-100, Math.min(100, state.karma + amount));
-  if (state.lock === 0 && Math.abs(state.karma) >= 60) {
-    state.lock = state.karma > 0 ? 1 : -1;
-    state.justLocked = true;
-    note("You will not come back from this.");
-    snd(80, .6, "sawtooth", .07);
-    purge();
-  }
-  paint();
-}
-
-/* Good washes the world out, evil sinks it (design ch.6.5). No numbers.
-   Past the critical point the tone stops moving - it has already settled. */
-function paint() {
-  const k = state.lock ? state.lock * 60 : state.karma;
-  root.style.setProperty("--good", (Math.max(0, k) / 100).toFixed(2));
-  root.style.setProperty("--evil", (Math.max(0, -k) / 100).toFixed(2));
-}
-
-/* One context, one shape. Everything is frequency, length and volume - there
-   are no audio files anywhere in this (design ch.3). */
-let actx;
-function snd(f, d, type, vol) {
-  try {
-    actx = actx || new (AudioContext || webkitAudioContext)();
-    const o = actx.createOscillator(), g = actx.createGain(), t = actx.currentTime;
-    o.type = type || "square";
-    o.frequency.setValueAtTime(f, t);
-    o.frequency.exponentialRampToValueAtTime(f * .55, t + d);
-    g.gain.setValueAtTime(vol || .04, t);
-    g.gain.exponentialRampToValueAtTime(1e-4, t + d);
-    o.connect(g); g.connect(actx.destination);
-    o.start(t); o.stop(t + d);
-  } catch (e) { /* no audio, no problem */ }
-}
-
-function show(html) {
-  screen.innerHTML = html;
-}
-
-function on(sel, fn) {
-  document.querySelectorAll(sel).forEach(el => (el.onclick = () => fn(el)));
-}
-
-function status() {
-  if (!state) {
-    bar.innerHTML = "<span>Virginight</span>";
-    kit.innerHTML = "";
-    logbar.innerHTML = "";
-    return;
-  }
-  bar.innerHTML = `<span>Day <b>${state.day}</b> / 4</span><span>${TIMES[state.step] || "Night"}</span>
-    <span>Shards <b>${state.shards}</b></span><span>Carried <b>${state.items.length}</b> / ${BAG}</span>`;
-  kit.innerHTML = state.items.map(i =>
-    `<span class="chip a${i.attr + 1}" title="${i.note || i.act.blurb}">${i.name}</span>`).join("");
-  logbar.innerHTML = state.log.map(l => `<span>${l}</span>`).join("");
-}
-
-/* --- 5. offers ---------------------------------------------------------- */
-
-function pool() {
-  return EVENTS[state.place].filter(e =>
-    (state.day > 2 || Math.abs(e.karma) === 10) &&
-    !(state.lock === 1 && e.karma < 0) &&
-    !(state.lock === -1 && e.karma > 0)
-  );
-}
-
-/* The two standing choices say what they would actually do today. */
-function fixed() {
-  const can = ARMS.some((a, n) => canMake(n));
-  const bent = state.arms.some(a => a.cond && state.shards >= FIX_COST);
-  WORKSHOP.blurb = can && bent ? "There is something to make and something to mend."
-    : can ? "There is something here you could make."
-    : bent ? "Something you carry could be put right."
-    : "Nothing here can be made or mended today.";
-  const hurt = state.hp < state.max || state.girls.some(g => g.hp < GIRL_HP);
-  REST.blurb = hurt ? "Sit the hour out and put some of it back."
-    : "Sit the hour out. Nobody needs it.";
-  return [WORKSHOP, REST];
-}
-
-function buildOffers() {
-  // Past the critical point the other side's stronghold stops feeding and
-  // housing you. Its safe actions are replaced by exploration (design ch.5.2).
-  const shut = state.place === (state.lock === 1 ? "castle" : state.lock === -1 ? "town" : "");
-  const out = shut ? [] : fixed();
-  const extra = [];
-  let slots = shut ? 4 : 2;
-
-  // Day 1: the shelter choice holds an exploration slot until it is taken.
-  if (state.day === 1 && state.sheltered === null) {
-    out.push(SHELTER);
-    slots--;
-  }
-  // Day 2: refusing costs a slot, taking it in adds a fifth option
-  // (design ch.5.2 - causality is appended, never swapped in silently).
-  if (state.special === "punished") {
-    out.push(PUNISHED);
-    slots--;
-  } else if (state.special === "repaid") {
-    extra.push(REPAID);
-  }
-
-  const rest = pool();
-  while (slots-- > 0 && rest.length) {
-    out.push(rest.splice(rnd(rest.length), 1)[0]);
-  }
-
-  // Anything you are carrying that this place can be used against hangs its
-  // own action off the end of the list (design ch.5.2, ch.8.2).
-  for (const i of state.items) if (i.kind === "C" && i.place === state.place) extra.push(i.act);
-
-  return out.concat(extra);
-}
-
-/* --- 5b. the night ------------------------------------------------------- */
-
-/* Which way you have gone decides who turns up (design ch.13.2). */
-function band() {
-  return state.karma >= 21 ? 1 : state.karma <= -21 ? -1 : 0;
-}
-
-const friendly = (a, b) => !a.foe === !b.foe;
-
-function comer(kind, lane, dir, foe, tough) {
-  const [name, hp, dmg, range, cd, speed, colour] = KIND[kind];
-  const h = Math.round(hp * tough);
-  return { name, lane, x: dir > 0 ? -8 : 328, dir, hp: h, max: h, dmg: Math.round(dmg * tough),
-           range, cd, wait: cd * Math.random(), speed, colour, foe, trait: 0, slow: 0, stun: 0 };
-}
-
-/* She stands on the same spot the unicorn defends, so that what comes from the
-   left and what comes from the right meet her on equal terms (design ch.13.1). */
-function stander(g, lane) {
-  const [name, colour, dmg, cd, range, trait] = HUES[g.i];
-  return { name, lane, x: MID, dir: 0, hp: g.hp, max: GIRL_HP, dmg, range, cd,
-           wait: 0, mend: 0, speed: 0, colour, foe: 0, trait, girl: g, slow: 0, stun: 0 };
-}
-
-function startFight() {
-  const b = band();
-  const last = state.day === 4;
-  const [L, R] = last && !b ? LAST_NEUTRAL : SIDES[b];
-  const boss = last ? LAST[b] : "";
-  const n = 3 + state.day * 2;
-  const tough = 1 + state.day * .15;
-  // Standing for nothing means both ends of the road are against you. More of
-  // them come than either side alone would send, but not twice as many - and
-  // on the last night, with nothing at the head of it, a great deal more.
-  const both = L[1] && R[1];
-  const spawns = [];
-  for (const [side, dir] of [[L, 1], [R, -1]]) {
-    const [kind, foe] = side;
-    const count = Math.ceil(n * (foe ? (both ? (last ? .55 : .55) : 1) : .45));
-    for (let i = 0; i < count; i++)
-      spawns.push({ at: (i + Math.random()) * SPAWN_FOR / count, kind, dir, foe, lane: rnd(3), tough });
-  }
-  // It comes up the middle, from the side that was never yours.
-  if (boss) spawns.push({ at: 18, kind: boss, dir: b > 0 ? 1 : -1, foe: 1, lane: 1, tough: 1, boss: 1 });
-  spawns.sort((a, b) => a.at - b.at);
-
-  const w = mine();
-  const units = [{ name: "You", lane: 1, x: MID, dir: 0, hp: state.hp, max: state.max,
-                   dmg: w.dmg, range: w.range, cd: w.cd, wait: 0, speed: 0,
-                   colour: "#f4f0ff", foe: 0, trait: 0, slow: 0, stun: 0, me: 1 }];
-  state.placed.forEach((gi, lane) => {
-    if (gi != null) units.push(stander(state.girls[gi], lane));
-  });
-
-  state.fight = { t: 0, units, spawns, jumps: JUMPS, over: 0, last: 0,
-                  wasDead: state.dead.length, used: state.arms.map(() => 0) };
-  fightScreen();
-}
-
-/* One use a night, from every arm you have made, held or not (ch.11.1).
-   A broken arm still swings but has nothing left to give (ch.11.3). */
-function useSkill(n) {
-  const f = state.fight, a = state.arms[n];
-  if (!f || f.over || !a || f.used[n] || a.cond === 2) return;
-  if (a.i === 3 && !state.girls.length) return;   // none of her left to be
-  f.used[n] = 1;
-  const foes = f.units.filter(u => u.foe && u.hp > 0);
-  const ours = f.units.filter(u => !u.foe && u.hp > 0);
-
-  if (a.i === 0) ours.forEach(u => (u.hp = Math.min(u.max, u.hp + Math.round(u.max * .35))));
-  else if (a.i === 1) foes.forEach(u => (u.hp -= 14));
-  else if (a.i === 2) foes.forEach(u => (u.stun = 3));
-  else {
-    // As many as there are of her (design ch.11.4).
-    const n7 = state.girls.length;
-    const reach = n7 >= 5 ? foes
-      : foes.sort((x, y) => Math.abs(x.x - MID) - Math.abs(y.x - MID)).slice(0, n7 >= 3 ? 3 : 1);
-    reach.forEach(u => (u.hp -= n7 >= 5 ? 11 : 17));
-    if (n7 >= 7) ours.forEach(u => (u.hp = Math.min(u.max, u.hp + 9)));
-  }
-  snd(a.i === 0 ? 700 : 260, .22, a.i === 0 ? "triangle" : "sawtooth", .06);
-  paintSkills();
-}
-
-function strike(u, t, f) {
-  t.hp -= u.dmg;
-  if (t.me) snd(115, .06, "square", .03);
-  if (u.trait === 2) t.slow = 1.3;
-  if (u.trait === 3) {
-    // Through the first one and into whatever is standing behind it - which
-    // means further out on the same side, not just anything else in the lane.
-    const side = Math.sign(t.x - u.x) || 1, gap = Math.abs(t.x - u.x);
-    const behind = f.units.find(v => v.hp > 0 && v !== t && !friendly(v, u) && v.lane === u.lane &&
-      Math.sign(v.x - u.x) === side && Math.abs(v.x - u.x) > gap && Math.abs(v.x - u.x) <= u.range + 22);
-    if (behind) behind.hp -= u.dmg;
-  }
-}
-
-function step(dt) {
-  const f = state.fight;
-  f.t += dt;
-  // The hour is up before anyone gets another swing in (design ch.13.4).
-  if (f.t >= LASTS) return end(f.units.some(u => u.foe && u.hp > 0) ? 0 : 1);
-
-  while (f.spawns.length && f.spawns[0].at <= f.t) {
-    const s = f.spawns.shift();
-    const u = comer(s.kind, s.lane, s.dir, s.foe, s.tough);
-    if (s.boss) { u.boss = 1; snd(70, .9, "sawtooth", .08); }   // the HUD names it
-    f.units.push(u);
-  }
-
-  const me = f.units[0];
-
-  for (const u of f.units) {
-    if (u.hp <= 0) continue;
-    if (u.stun > 0) { u.stun -= dt; continue; }   // held where it stands
-    if (u.slow > 0) u.slow -= dt;
-    u.wait -= dt * (u.slow > 0 ? .5 : 1);
-
-    // Green mends the ones beside her on her own clock, and still fights.
-    if (u.trait === 1) {
-      u.mend -= dt;
-      if (u.mend <= 0) {
-        const hurt = f.units.filter(v => v.hp > 0 && v !== u && friendly(v, u) && v.lane === u.lane &&
-          v.hp < v.max && Math.abs(v.x - u.x) <= u.range).sort((a, b) => a.hp / a.max - b.hp / b.max)[0];
-        if (hurt) { hurt.hp = Math.min(hurt.max, hurt.hp + 5); u.mend = 2.2; }
-      }
+    oldとの比較はharden()が変更を元へ戻した場合の停止条件。例えば最速3段技は
+    威力を上げてもharden()が1へ戻すため、比較がないと同じ補正を繰り返す。
+    */
+    const m=moves[i],lo=limits(tier,i===moves.length-1)[0]-2;m[C]=Math.max(3,m[C]);
+    for(let k=0;k<8&&threat(m)<lo;k++){
+      const old=m.join();
+      if(m[N]===3&&m[D]===1)m[N]=2;else if(m[W]===1&&m[D]===2)m[W]=2;else if(m[D]<4)m[D]++;else if(m[R]<4)m[R]++;else if(m[W]>2)m[W]--;else break;
+      harden(m);if(m.join()===old)break;
     }
-
-    // An attacker goes for the unicorn first if she is standing in its lane,
-    // otherwise for whatever is nearest (design ch.13.1).
-    let target = null;
-    if (u.foe && me.hp > 0 && me.lane === u.lane && Math.abs(me.x - u.x) <= u.range) target = me;
-    if (!target) {
-      let best = 1e9;
-      for (const v of f.units) {
-        if (v.hp <= 0 || friendly(v, u) || v.lane !== u.lane) continue;
-        const d = Math.abs(v.x - u.x);
-        if (d <= u.range && d < best) { best = d; target = v; }
-      }
-    }
-    // It can only start on the thing you defend once nothing living is left
-    // holding that lane - it has to get through her first (design ch.13.1).
-    if (!target && u.foe && Math.abs(u.x - MID) < 7 &&
-        !f.units.some(v => v.hp > 0 && !v.foe && v.lane === u.lane && !v.me)) target = me;
-
-    if (target) { if (u.wait <= 0) { strike(u, target, f); u.wait = u.cd; } }
-    else if (u.speed) u.x += u.dir * u.speed * dt * (u.slow > 0 ? .5 : 1);
-  }
-
-  // Losses carry: her HP is hers to keep, and nothing brings her back (ch.12.4).
-  for (const u of f.units) {
-    if (u.girl) {
-      u.girl.hp = Math.max(0, u.hp);
-      if (u.hp <= 0 && !state.dead.includes(u.girl.i)) {
-        state.dead.push(u.girl.i);
-        state.girls = state.girls.filter(g => g !== u.girl);
-        note(`${HUES[u.girl.i][0]} does not get up.`);
-        ribbon(u.girl.i);
-        snd(170, .5, "sawtooth", .06);
-      }
-    }
-  }
-  state.hp = Math.max(0, me.hp);
-  const standing = f.units.length;
-  f.units = f.units.filter(u => u.hp > 0 || u.me);
-  if (f.units.length < standing) snd(400, .05, "square", .025);
-
-  const foesLeft = f.units.some(u => u.foe && u.hp > 0);
-  if (me.hp <= 0) end(0);
-  else if (!foesLeft && !f.spawns.some(s => s.foe)) end(1);
-  else if (f.t >= LASTS) end(foesLeft ? 0 : 1);
-}
-
-/* The world behind the fight remembers what you did to it (design ch.16).
-   None of this is an image: it is a sky, a skyline, a rainbow with holes in
-   it, and one stone for every colour that is not coming back. */
-function backdrop() {
-  const k = state.lock ? state.lock * 60 : state.karma;
-  ctx.fillStyle = k > 20 ? "#22212f" : k < -20 ? "#1e0c11" : "#15131f";
-  ctx.fillRect(0, 0, 320, 180);
-
-  ctx.lineWidth = 2;
-  ctx.globalAlpha = .3;
-  HUES.forEach((h, i) => {
-    if (state.dead.includes(i)) return;      // that band of it is simply gone
-    ctx.strokeStyle = h[1];
-    ctx.beginPath();
-    ctx.arc(MID, 178, 98 - i * 5, Math.PI, Math.PI * 2);
-    ctx.stroke();
-  });
-  ctx.globalAlpha = 1;
-
-  // One stone for every colour that went out under you.
-  ctx.fillStyle = "#332e45";
-  state.dead.forEach((d, i) => {
-    ctx.fillRect(112 + i * 14, 170, 6, 9);
-    ctx.fillRect(110 + i * 14, 168, 10, 3);
-  });
-}
-
-function draw() {
-  const f = state.fight;
-  backdrop();
-
-  LANES.forEach((y, i) => {
-    ctx.fillStyle = i === f.units[0].lane ? "rgba(44,37,84,.55)" : "rgba(12,10,24,.55)";
-    ctx.fillRect(0, y - 17, 320, 34);
-  });
-  ctx.fillStyle = "#2c2554";
-  ctx.fillRect(MID - 1, 0, 2, 180);
-
-  for (const u of f.units) {
-    if (u.hp <= 0) continue;
-    // She and the unicorn hold the same spot, so they are drawn apart to be read.
-    const y = LANES[u.lane] + (u.girl ? 7 : u.me ? -4 : 0), w = u.boss ? 16 : u.me ? 11 : 8;
-    if (!u.foe && !u.me) { ctx.fillStyle = "#2a3a30"; ctx.fillRect(u.x - w, y - w, w * 2, w * 2); }
-    ctx.fillStyle = u.colour;
-    if (u.me) {
-      ctx.fillRect(u.x - 5, y - 6, 10, 12);
-      ctx.fillRect(u.x + 4, y - 12, 2, 7);          // the horn
-    } else {
-      ctx.fillRect(u.x - w / 2, y - w / 2, w, w);
-      if (u.foe) { ctx.fillStyle = "#0d0b18"; ctx.fillRect(u.x - 2, y - 1, 4, 1); }
-    }
-    const bw = u.boss ? 34 : 14;
-    ctx.fillStyle = "#3a3352";
-    ctx.fillRect(u.x - bw / 2, y - w - 5, bw, u.boss ? 3 : 2);
-    ctx.fillStyle = u.foe ? "#e2687a" : "#7fd6a0";
-    ctx.fillRect(u.x - bw / 2, y - w - 5, bw * Math.max(0, u.hp) / u.max, u.boss ? 3 : 2);
-  }
-
-  const big = f.units.find(u => u.boss && u.hp > 0);
-  hud.innerHTML = `<span>${Math.max(0, LASTS - f.t).toFixed(0)}s</span>
-    <span>HP <b>${state.hp}</b> / ${state.max}</span>
-    <span>Jumps <b>${f.jumps}</b></span>
-    <span>${f.units.filter(u => u.foe && u.hp > 0).length + f.spawns.filter(s => s.foe).length} left</span>
-    ${big ? `<span class="big">${big.name} <b>${Math.max(0, big.hp)}</b></span>` : ""}`;
-}
-
-function loop(now) {
-  const f = state.fight;
-  if (!f || f.over) return;
-  const dt = Math.min((now - (f.last || now)) / 1000, .05);
-  f.last = now;
-  step(dt);
-  if (state.fight && !state.fight.over) { draw(); requestAnimationFrame(loop); }
-}
-
-function end(won) {
-  state.fight.over = 1;
-  // A night's work tells on whatever you were holding, win or lose (ch.11.3).
-  const a = state.arms[state.held];
-  if (a && a.cond < 2) { a.cond++; note(`${ARMS[a.i][0]} is ${CONDITION[a.cond]}.`); }
-  if (won) { snd(330, .16, "triangle", .06); setTimeout(() => snd(495, .3, "triangle", .06), 150); }
-  else snd(160, .8, "sawtooth", .07);
-  setTimeout(() => (won ? survived() : fell()), 400);
-}
-
-/* --- 6. screens --------------------------------------------------------- */
-
-function title() {
-  state = null;
-  root.style.setProperty("--good", 0);
-  root.style.setProperty("--evil", 0);
-  status();
-  show(`<div class="center"><div>
-    <h1>VIRGINIGHT</h1>
-    <p>Four days. No one will tell you what you are for.</p>
-    <button class="go" id="x">Begin</button>
-  </div></div>`);
-  on("#x", () => { newGame(); paint(); dayStart(); });
-}
-
-function dayStart() {
-  status();
-  let echo = "";
-
-  // The day 2 callback: what you did, or what you did not do (design ch.0.1).
-  // It is live for that day only - ignoring it is also an answer.
-  state.special = null;
-  if (state.day === 2) {
-    if (state.sheltered) {
-      state.special = "repaid";
-      echo = `<div class="echo">The three you took in were gone before you woke.
-        On the milestone at the edge of the road, someone has scratched a line of
-        marks that were not there yesterday.</div>`;
-    } else {
-      state.special = "punished";
-      echo = `<div class="echo">The three you left on the road did not go far.
-        They know the country, and by this morning they are walking it for the
-        castle. Every way out is watched tonight.</div>`;
-    }
-  }
-
-  show(`<div class="eyebrow">Day ${state.day}</div>
-    <h1>${["The road is quiet.", "Word has travelled.", "Fewer doors open now.", "It arrives tonight."][state.day - 1]}</h1>
-    <p>Four hours of daylight.</p>
-    ${echo}
-    <button class="go" id="x">Go on</button>`);
-  on("#x", placeSelect);
-}
-
-function placeSelect() {
-  status();
-  show(`<div class="eyebrow">${TIMES[state.step]}</div>
-    <h1>Where do you go?</h1>
-    <p>Every hour is a choice about where you are seen.</p>
-    <div class="pair">
-      <button data-p="town"><h2>The town</h2><small>People who still have doors to open.</small></button>
-      <button data-p="castle"><h2>The castle</h2><small>Held, lit, and full. Nobody expects you.</small></button>
-    </div>`);
-  on("[data-p]", el => {
-    state.place = el.dataset.p;
-    state.offers = null;
-    actionSelect();
-  });
-}
-
-/* What the player is told about danger - never a number (design ch.7.3).
-   Evidence they are carrying has already been folded into it. */
-function label(e) {
-  const r = riskOf(e);
-  return r === -2 ? `<span class="risk sure">Certain</span>`
-    : r >= 0 ? `<span class="risk">${RISKS[r]}</span>` : "";
-}
-
-function actionSelect() {
-  status();
-  if (!state.offers) state.offers = buildOffers();
-
-  const list = state.offers.map((e, i) => `
-    <button data-i="${i}">${label(e)}
-      <h2>${e.title}</h2><small>${e.blurb}</small>
-    </button>`).join("");
-
-  show(`<div class="eyebrow">${TIMES[state.step]} &middot; ${state.place === "town" ? "The town" : "The castle"}</div>
-    <h1>What do you do?</h1>
-    <div class="list">${list}</div>`);
-  on("[data-i]", el => {
-    const e = state.offers[+el.dataset.i];
-    e.id === "shop" ? bench() : confirm(e);
-  });
-}
-
-/* The bench is its own screen because making and mending are the same hour.
-   Walking away from it costs nothing at all (design ch.5.3, ch.11.3). */
-function bench() {
-  const rows = [];
-  ARMS.forEach((a, n) => {
-    if (canMake(n)) rows.push(`<button data-m="${n}">
-      <span class="risk">${a[5]} shards</span><h2>Forge the ${a[0].toLowerCase()}</h2>
-      <small>${a[1]} damage &middot; ${SKILLS[n].toLowerCase()}</small></button>`);
-  });
-  state.arms.forEach((a, n) => {
-    if (a.cond) rows.push(`<button data-f="${n}" ${state.shards < FIX_COST ? "disabled" : ""}>
-      <span class="risk">${FIX_COST} shards</span><h2>Mend the ${ARMS[a.i][0].toLowerCase()}</h2>
-      <small>${CONDITION[a.cond]} &middot; back to sound</small></button>`);
-  });
-
-  status();
-  show(`<div class="eyebrow">${TIMES[state.step]} &middot; the bench</div>
-    <h1>What do you work on?</h1>
-    <p>${rows.length ? "It takes the hour, whichever you pick." : "Nothing here needs you yet."}</p>
-    <div class="list">${rows.join("")}
-      <button id="b">Leave the bench<small>Costs nothing.</small></button>
-    </div>`);
-
-  on("[data-m]", el => askBench(+el.dataset.m, 1));
-  on("[data-f]", el => askBench(+el.dataset.f, 0));
-  on("#b", actionSelect);
-}
-
-/* Making and mending spend the hour, so they are asked like anything else. */
-function askBench(n, making) {
-  const name = making ? ARMS[n][0] : ARMS[state.arms[n].i][0];
-  const price = making ? ARMS[n][5] : FIX_COST;
-  show(`<div class="eyebrow">The bench</div>
-    <h1>${making ? "Forge" : "Mend"} the ${name.toLowerCase()}?</h1>
-    <div class="box">
-      <p class="gain">${price} shards, and the hour.</p>
-      <div class="row">
-        <button class="go" id="y">Yes</button>
-        <button class="go" id="n">No</button>
-      </div>
-    </div>`);
-  on("#y", () => {
-    if (making) {
-      state.shards -= price;
-      state.arms.push({ i: n, cond: 0 });
-      note(`Forged: ${name}`);
-      snd(520, .14, "triangle");
-      worked(`The ${name.toLowerCase()} is finished.`, `${SKILLS[n]}, once a night.`);
-    } else {
-      const a = state.arms[n];
-      state.shards -= price;
-      a.cond = 0;
-      note(`Mended: ${name}`);
-      snd(440, .12, "triangle");
-      worked(`The ${name.toLowerCase()} is sound again.`, "It will hold another night or two.");
-    }
-  });
-  on("#n", bench);
-}
-
-function worked(head, sub) {
-  status();
-  show(`<div class="eyebrow">The bench</div>
-    <div class="box"><div class="stage great">${head}</div><p>${sub}</p>
-      <button class="go" id="x">Go on</button></div>`);
-  on("#x", nextStep);
-}
-
-/* Every action is confirmed. Saying no costs nothing at all - no time, no
-   roll, no karma, and the same offers are still standing (design ch.5.3). */
-function confirm(e) {
-  show(`<div class="eyebrow">${TIMES[state.step]}</div>
-    <h1>${e.title}</h1>
-    <div class="box">
-      <p>${e.blurb}</p>
-      ${riskOf(e) >= 0 ? `<p class="gain">${RISKS[riskOf(e)]}.</p>` : ""}
-      <div class="row">
-        <button class="go" id="y">Yes</button>
-        <button class="go" id="n">No</button>
-      </div>
-    </div>`);
-  on("#y", () => resolve(e));
-  on("#n", actionSelect);
-}
-
-function resolve(e) {
-  // Danger is settled the moment you say yes. If this very action tips you
-  // over the critical point and burns off the evidence that was keeping the
-  // place safe, the odds you were shown still stand (ch.7.3, ch.0.1).
-  const r = riskOf(e);
-  applyKarma(e.karma);
-
-  if (e.id === "shelter") state.sheltered = true;
-  if (e.id === "marked" || e.id === "watchmen") state.special = null;
-
-  let body, stage = -1;
-
-  if (r === -2) {
-    // A mark being spent. The main result is fixed (design ch.7.2) and the
-    // mark itself is used up - no manual "use item" anywhere (ch.8.2).
-    drop(e.id.slice(2), "Spent");
-    state.shards += e.shards;
-    body = `<div class="stage great">It goes the way you were told it would</div>
-      <p>${e.text}</p><p class="gain">Rainbow shards +${e.shards}</p>`;
-  } else if (r < 0) {
-    // An hour of sitting still puts back a third of everyone, and nothing
-    // else - it does not mend arms and it does not raise the dead (ch.10).
-    const back = n => Math.round(n * .3);
-    state.hp = Math.min(state.max, state.hp + back(state.max));
-    state.girls.forEach(g => (g.hp = Math.min(GIRL_HP, g.hp + back(GIRL_HP))));
-    body = `<div class="stage">The hour passes</div>
-      <p>You put your head down where you are.</p>
-      <p class="gain">You and ${state.girls.length ? "the ones still with you are" : "nothing else is"} a little further from the edge.</p>`;
-  } else {
-    stage = roll(r);
-    const [lo, hi] = SHARDS[stage];
-    const got = lo + rnd(hi - lo + 1);
-    state.shards += got;
-    body = `<div class="stage ${STAGES[stage][0]}">${STAGES[stage][1]}</div>
-      <p>${e.out[stage]}</p>
-      ${got ? `<p class="gain">Rainbow shards +${got}</p>` : ""}`;
-    grant(e.id, stage);
-    // The castle reads as getting her out, the town as taking her with you.
-    if (BRINGS[e.id] !== undefined && stage <= BRINGS[e.id]) bring(state.place === "castle");
-  }
-
-  if (state.justLocked) {
-    state.justLocked = false;
-    body += `<p class="gain">${state.lock === 1
-      ? "Something in you has settled. There is no walking this back."
-      : "Something in you has closed. There is no walking this back."}</p>`;
-  }
-
-  status();
-  show(`<div class="eyebrow">${e.title}</div>
-    <div class="box">${body}<button class="go" id="x">Go on</button></div>`);
-  on("#x", () => settle(nextStep));
-}
-
-/* The bag is full and something new has turned up. Nothing is destroyed
-   quietly - the player picks what stops mattering (design ch.8.3). */
-function exchange(then) {
-  const p = state.pending;
-  status();
-  show(`<div class="eyebrow">Your hands are full</div>
-    <h1>${p.name}</h1>
-    <p>You cannot carry it and everything else. Something has to be put down.</p>
-    <div class="list">
-      ${state.items.map((i, n) => i.keep ? "" :
-        `<button data-d="${n}"><h2>${i.name}</h2><small>${i.note || i.act.blurb}</small></button>`).join("")}
-      ${p.keep ? "" : `<button data-d="-1"><h2>Leave it where it is</h2><small>Walk away from ${p.name}.</small></button>`}
-    </div>`);
-  on("[data-d]", el => {
-    const n = +el.dataset.d;
-    if (n < 0) note(`Left behind: ${p.name}`);
-    else {
-      drop(state.items[n].id, "Put down");
-      state.items.push(p);
-      note(`Kept: ${p.name}`);
-    }
-    state.pending = null;
-    settle(then);
-  });
-}
-
-function nextStep() {
-  state.offers = null;
-  state.place = null;
-  state.step++;
-  if (state.step < 4) return placeSelect();
-
-  // The day is spent. Refusing the shelter for a whole day is itself an answer.
-  if (state.day === 1 && state.sheltered === null) state.sheltered = false;
-
-  placeGirls();
-}
-
-/* Up to three of them, one to a lane, before the light goes (design ch.12.3). */
-function placeGirls() {
-  status();
-  const chosen = state.placed.filter(g => g != null);
-  const rows = state.girls.map((g, i) => {
-    const at = state.placed.indexOf(i);
-    return `<button data-g="${i}" class="${at >= 0 ? "on" : ""}">
-      <span class="risk">${at >= 0 ? ["Top", "Middle", "Bottom"][at] : "&mdash;"}</span>
-      <h2><i class="dot" style="background:${HUES[g.i][1]}"></i>${HUES[g.i][0]}</h2>
-      <small>${g.hp} / ${GIRL_HP} &middot; ${["steady", "mends the others", "slows what she hits", "goes through more than one"][HUES[g.i][5]]}</small>
-    </button>`;
-  }).join("");
-
-  const w = mine();
-  const arms = state.arms.map((a, n) => `<button data-w="${n}" class="${n === state.held ? "on" : ""}">
-    ${ARMS[a.i][0]}<small>${CONDITION[a.cond]}</small></button>`).join("");
-
-  show(`<div class="eyebrow">Day ${state.day} &middot; Dusk</div>
-    <h1>Who stands where?</h1>
-    <p>${state.girls.length
-      ? "One to a lane. You hold whichever lane you stand in."
-      : "Nobody to put out there. You hold all three yourself."}</p>
-    <div class="list">${rows}</div>
-    ${state.arms.length ? `<p class="tiny">What you carry (${w.dmg} damage). Every arm you made
-      lends its skill once, held or not.</p><div class="skills">${arms}</div>` : ""}
-    <button class="go" id="x">Let it come (${chosen.length} placed)</button>`);
-
-  on("[data-w]", el => { state.held = +el.dataset.w; placeGirls(); });
-  on("[data-g]", el => {
-    const i = +el.dataset.g, at = state.placed.indexOf(i);
-    if (at >= 0) state.placed[at] = null;
-    else { const free = state.placed.indexOf(null); if (free >= 0) state.placed[free] = i; }
-    placeGirls();
-  });
-  on("#x", startFight);
-}
-
-function fightScreen() {
-  status();
-  show(`<div class="eyebrow">Day ${state.day} &middot; Night</div>
-    <div class="hud" id="hud"></div>
-    <canvas id="field" width="320" height="180"></canvas>
-    <div class="skills" id="skills">${state.arms.map((a, n) =>
-      `<button data-s="${n}">${ARMS[a.i][0]}<small>${SKILLS[a.i]}</small></button>`).join("")}</div>
-    <p class="tiny">Click a lane to be there. Three jumps, no wait.</p>`);
-  hud = document.querySelector("#hud");
-  on("[data-s]", el => useSkill(+el.dataset.s));
-  paintSkills();
-  const cv = document.querySelector("#field");
-  ctx = cv.getContext("2d");
-  cv.onclick = e => {
-    const f = state.fight;
-    if (!f || f.over || !f.jumps) return;
-    const r = cv.getBoundingClientRect();
-    const lane = Math.min(2, Math.max(0, Math.floor((e.clientY - r.top) / r.height * 3)));
-    if (lane === f.units[0].lane) return;
-    f.units[0].lane = lane;
-    f.jumps--;
-    snd(540, .07, "triangle");
   };
+  open(moves.length-1);
+  if(moves.filter(m=>m[C]>=3).length<2){
+    let best=-1;for(let i=0;i<moves.length-1;i++)if(moves[i][C]<3&&(best<0||threat(moves[i])>threat(moves[best])))best=i;if(best>=0)open(best);
+  }
+  let fast=0;
+  moves.forEach((m,i)=>{
+    // 24f級の高速技は一体につき一つまで。追加分は36fへ落とす。
+    if(m[W]===1&&fast++){
+      m[W]=2;const lo=limits(tier,i===moves.length-1)[0];
+      for(let k=0;k<8&&threat(m)<lo;k++){if(m[D]<4)m[D]++;else if(m[R]<4)m[R]++;else if(m[C]>1)m[C]--;else break}
+      harden(m);
+    }
+  });
+  // 合計上限を超えていたら、危険度の高い技から硬直→予備動作→威力の順で削る。
+  // 個々の技は既に帯域内なので、ここで下限を割る場合は下限側で止める。
+  for(let guard=0;guard<60&&moves.reduce((a,m)=>a+threat(m),0)>budgetCap(tier);guard++){
+    // 帯域の下限を上回っている技のうち、最も危険度が高いものから削る。
+    // 全技が下限に張り付いていたら、それ以上は削れないので抜ける。
+    let pick=-1;
+    for(let i=0;i<moves.length;i++){
+      if(threat(moves[i])<=limits(tier,i===moves.length-1)[0])continue;
+      if(pick<0||threat(moves[i])>threat(moves[pick]))pick=i;
+    }
+    if(pick<0)break;
+    const m=moves[pick],before=m.join();
+    if(m[C]<4)m[C]++;else if(m[W]<4)m[W]++;else if(m[T])m[T]--;
+    else if(m[N]>1)m[N]--;else if(m[D]>1)m[D]--;else if(m[R]>1)m[R]--;
+    harden(m);
+    if(m.join()===before)break; // harden が押し戻したら同じ補正を繰り返さない
+  }
+  const defense=tier?1+(r()*3|0):0;
+  const traits=[];
+  // 外見色はランダム装飾ではなく、実際に生成された特徴候補から選ぶ。
+  if(moves.some(m=>m[D]>=3))traits.push(0);
+  if(moves.some(m=>m[A]===3))traits.push(1);
+  if(moves.some(m=>m[W]<=2))traits.push(2);
+  if(defense)traits.push(3);
+  if(moves.some(m=>m[R]===4))traits.push(4);
+  if(moves.some(m=>m[T]))traits.push(5);
+  if(moves.some(m=>m[N]>1))traits.push(6);
+  const hue=pick(r,traits.length?traits:[0]);
+  const sig=moves[moves.length-1][S];
+  return{
+    seed:seed>>>0,tier:level,moves,defense,hue,
+    name:COLOR_NAME[hue]+" "+WEAPON_NAME[sig],
+    maxHp:[120,160,210][level]||174+level*18,
+    maxPosture:[24,32,42][level]||36+level*3
+  };
+}
+function validateBoss(b){
+  /*
+  開発専用の静的検査。Terserでは未使用関数として提出版から消える。
+
+  技単体だけでなく、技セット全体について以下を保証する。
+    - 1体目は4技、2・3体目は5技
+    - ジャンプ回答が最低1技
+    - パリィ可能技が最低2技
+    - 遠距離プレイヤーへ届く技が最低1技
+    - 50f以上の反撃硬直が最低2技
+    - 24f級の高速技は最大1技
+    - 危険度の合計がbudgetCap(tier)以下
+
+  test.mjsは10,000 seed × 3 tierを生成し、エラー配列が空か検査する。
+  */
+  const errors=[],tier=Math.min(3,b.tier);
+  if(b.moves.length!==4+(tier>0))errors.push("move count");
+  if(!b.moves.some(m=>m[F]&JUMPABLE))errors.push("no jump answer");
+  if(b.moves.filter(m=>m[F]&PARRY).length<2)errors.push("too few parries");
+  if(!b.moves.some(m=>m[R]===4||m[S]===3))errors.push("no gap pressure");
+  if(b.moves.filter(m=>m[C]>=3).length<2)errors.push("too few openings");
+  if(b.moves.filter(m=>m[W]===1).length>1)errors.push("too many fast moves");
+  if(b.moves.reduce((a,m)=>a+threat(m),0)>budgetCap(tier))errors.push("budget cap");
+  for(const m of b.moves){
+    const [lo,hi]=limits(tier,m===b.moves[b.moves.length-1]);
+    if(threat(m)<lo-(m[C]>=3?2:0)||threat(m)>hi)errors.push("budget");
+    if(m[D]===4&&m[R]===4&&(m[W]<3||m[C]<3))errors.push("fast lethal range");
+    if(m[W]===1&&(m[D]>2||m[T]>1||m[N]>1))errors.push("fast overload");
+    if(m[R]===4&&m[T]===2&&(m[D]>2||m[W]<2))errors.push("tracking overload");
+    if(m.some(v=>!Number.isFinite(v)))errors.push("invalid number");
+  }
+  return errors;
+}
+
+/* ---------------------------- browser runtime ---------------------------
+
+主要な可変状態:
+
+  mode   title / fight / trial / pause / dead / bosswin / result の画面状態
+  seed   1ランを再現する32bit整数
+  run    全戦をまたいで保持するボス番号・時間・集計値
+  p      プレイヤー座標、HP、スタミナ、行動タイマー
+  b      生成データ + ボス現在HP、座標、状態、技山札、標的位置
+  shots プレイヤー弾と敵弾をownerで共有する配列
+  parts 当たり判定を持たない短命な火花
+  tap    押した瞬間だけ1になる入力。step()末尾で空にする
+  keys   keyupまで1のままの入力。左右移動とジャンプ高さに使う
+
+---------------------------------------------------------------------------- */
+
+let cv,cx,mode="title",seed=1,run,p,b,take=null,keys={},tap={},shots=[],parts=[],stars=[],best=0;
+let acc=0,last=0,freeze=0,shake=0,msg="",msgTime=0,audio,musicFrame=0,musicRoot=55,song=[];
+let feedback={text:"",kind:"",ttl:0},lastLesson="",pauseFrom="fight",saved,attune=null;
+
+/*
+CONTROLS -> 操作割当の唯一の正本
+
+設計ツリー design/tree/read/frame の decision-3 で凍結:
+  操作説明の文字列を生成するのは screens だけ。index.html は置き場所だけを用意し、
+  中身を持たない。二重管理にしない。
+  どの画面幅でも隠さない（shell の decision-3）。狭ければ折り返す。
+*/
+const CONTROLS=[["MOVE","A/D or arrows"],["JUMP","W/Up/Space"],["ATTACK","J/Z"],["PARRY","K/X"],["ROLL","L/C"]];
+
+function boot(){
+  const k=document.getElementById("k");
+  if(k)k.innerHTML=CONTROLS.map(([a,b])=>`<b>${a}</b> ${b}`).join("　");
+  /*
+  ブラウザ専用初期化。
+  - URLの?seed=を36進数として読む。なければ新規seedを作る
+  - 背景の星は固定seedで作り、ゲームseedの乱数列を消費しない
+  - キー入力とフォーカス喪失時の自動pauseを登録する
+  - requestAnimationFrameを開始する
+  */
+  cv=document.getElementById("c");cx=cv.getContext("2d");
+  try{best=+localStorage.prismBest||0}catch(e){}
+  const q=new URLSearchParams(location.search).get("seed");
+  seed=q?parseInt(q,36)>>>0:(Math.random()*0xffffffff)>>>0;
+  const sr=seeded(71);for(let i=0;i<70;i++)stars.push([sr()*CW,sr()*220,sr()*1.8+.3]);
+  addEventListener("keydown",e=>{
+    if(["ArrowLeft","ArrowRight","ArrowUp","Space","KeyA","KeyD","KeyW","KeyJ","KeyK","KeyL","KeyZ","KeyX","KeyC","KeyT","Enter","KeyR","KeyN","Escape"].includes(e.code))e.preventDefault();
+    // tapは一回だけ使う入力、keysは押し続ける移動入力として分ける。
+    if(!e.repeat)tap[e.code]=1;keys[e.code]=1;wakeAudio();
+  });
+  addEventListener("keyup",e=>keys[e.code]=0);
+  addEventListener("blur",()=>{if(mode==="fight"||mode==="trial")pauseGame();else clearInput()});
   requestAnimationFrame(loop);
 }
+function wakeAudio(){
+  if(!audio)try{audio=new AudioContext}catch(e){}
+  if(audio&&audio.state==="suspended")audio.resume();
+}
+function sound(f=220,d=.06,type="square",vol=.035,delay=0,attack=.004){
+  if(!audio)return;
+  const o=audio.createOscillator(),g=audio.createGain(),t=audio.currentTime+delay;
+  o.type=type;o.frequency.setValueAtTime(f,t);o.frequency.exponentialRampToValueAtTime(Math.max(40,f*(type==="sine"?1:.65)),t+d);
+  g.gain.setValueAtTime(.0001,t);g.gain.linearRampToValueAtTime(vol,t+attack);g.gain.exponentialRampToValueAtTime(.0001,t+d);
+  o.connect(g).connect(audio.destination);o.start(t);o.stop(t+d);
+}
+function chime(n){for(let i=0;i<n;i++)sound(440*[1,1.25,1.5,2][i],.22,"sine",.028,i*.09)}
+/* The run seed writes one minor-mode phrase. Later foes add voices, not a new tune. */
+function makeMusic(){
+  const r=seeded(seed^0x51ed270b),scale=[0,2,3,5,7,8+(seed&1),10,12];
+  musicRoot=55*Math.pow(2,(r()*7|0)/12);let n=r()*6|0;
+  song=Array.from({length:16},(_,i)=>scale[n=i===15?0:clamp(n+(r()*3|0)-1,0,7)]);musicFrame=0;
+}
+function music(){
+  if(audio&&!(musicFrame++%20)){
+    const i=(musicFrame/20|0)&15,f=musicRoot*Math.pow(2,song[i]/12),level=run.boss%3;
+    // Midrange melody survives small speakers; bass and reply stay underneath it.
+    if(level||!(i&1))sound(f*4,.55,"sine",.024,0,.025);
+    if(!(i&3))sound(musicRoot*2,1.25,"sine",.016,0,.025);
+    if(level>1&&i&1)sound(f*6,.3,"sine",.008,0,.025);
+  }
+}
+/*
+音は形状と技の性格で変える（設計 sound の 1.2）。
+波形が形状、高さが速さ——速い技ほど高い。多段は段ごとに上がるのでリズムになる。
 
-function paintSkills() {
-  const f = state.fight;
-  document.querySelectorAll("[data-s]").forEach((b, n) => {
-    const a = state.arms[n], empty = a.i === 3 && !state.girls.length;
-    b.disabled = !!f.used[n] || a.cond === 2 || empty;
-    b.className = f.used[n] ? "spent" : a.cond === 2 || empty ? "broke" : "";
+音は情報の主経路にしない（read の不変条件10）。予備動作は画面の予告が
+既に示しているので、音はそれを速く届けるだけで、切っても読める。
+*/
+const WAVE=["square","square","triangle","triangle","sawtooth","triangle"];
+function moveTone(m,windF,pulse=0){
+  // 速い技ほど高い。段が上がるごとに完全4度ぶん上げる。
+  return (300-windF*2.2)*Math.pow(1.33,pulse);
+}
+function pressed(...a){return a.some(k=>tap[k])}
+function held(...a){return a.some(k=>keys[k])}
+function runSeed(i){return(seed^Math.imul(i+1,0x85ebca6b))>>>0}
+function seedText(){return(seed>>>0).toString(36).toUpperCase().padStart(6,"0")}
+function clearInput(){keys={};tap={};if(p)p.jumpBuf=p.actBuf=p.parryBuf=p.rollBuf=0}
+function pauseGame(){pauseFrom=mode;mode="pause";clearInput()}
+function lesson(m){
+  return ["JUMP OVER THE LOW SWEEP","STEP BACK FROM THE THRUST","LEAVE THE SLAM AREA","ROLL THROUGH THE CHARGE","JUMP THE SHOT","LEAVE THE MARKED COLUMNS"][m[S]]+
+    (m[S]===4||m[F]&PARRY?" / TRY PARRY":" / NO PARRY");
+}
+function moveLesson(m){return SHAPE_NAME[m[S]]+": "+lesson(m)}
+function respond(kind,text){
+  if(kind==="tired"&&feedback.ttl&&(feedback.kind==="hurt"||feedback.kind==="parry"))return;
+  feedback={text,kind,ttl:kind==="hurt"?150:65};
+}
+function cleanArena(){shots=[];parts=[];attune=null;freeze=shake=msgTime=0;msg="";feedback={text:"",kind:"",ttl:0};clearInput()}
+function freed(){return !run?0:Math.min(3,run.boss+(take?1:0))}
+function rainAim(m,i){return clamp(p.x+p.face*(REACH[m[R]-1]+(i?(i%2?1:-1)*(55+18*i):0)),30,CW-30)}
+function headPose(m,a,t){
+  if(a==="attack")return t<m.wind?[[-6,3],[-4,0],[0,-7],[-3,5],[0,-2],[0,-9]][m[S]]:
+    t<activeEnd(m)?[[4,2],[4,0],[0,5],[3,3],[0,0],[0,-6]][m[S]]:[0,4];
+  return [0,a==="roll"?9:a==="parry"?-2:0];
+}
+function horn(u=p){const q=headPose(u.hold,u.action,u.timer);return{x:u.x+9+u.face*(22+q[0]),y:u.y-7+q[1]}}
+function startTrial(){
+  saved=[p,b];
+  p={...p,x:180,y:FLOOR-30,vx:0,vy:0,hp:HERO.hp,st:100,delay:0,face:1,ground:1,
+    action:"",timer:0,inv:0,lastHit:"",hold:take.list[take.i],targets:[]};
+  b={...b,x:360,hp:b.maxHp,posture:b.maxPosture,phase:"wait",defense:0,targets:[],deck:[]};
+  cleanArena();mode="trial";
+}
+function endTrial(){[p,b]=saved;saved=null;cleanArena();mode="bosswin"}
+function confirmTake(){
+  if(mode==="trial")endTrial();
+  const m=take.list[take.i],from=b.x+22;run.log.push([take.foe.name,take.foe.hue,m]);
+  p.hold=m;take=null;cleanArena();chime(run.boss%3===2?4:3);
+  run.boss++;best=Math.max(best,run.boss);try{localStorage.prismBest=best}catch(e){}
+  run.boss%3?startBoss():mode="result";
+  attune={x:from,y:FLOOR-45,ttl:45,col:HOLD_COL(m)};
+}
+
+function newRun(s=seed){
+  // ランを完全初期化。Rで同じランを再開するときだけ同じseedを渡す。
+  seed=s>>>0;makeMusic();run={boss:0,time:0,hits:0,parries:0,log:[]};p=null;startBoss();
+}
+function startBoss(){
+  /*
+  1戦分の可変状態を作る。
+
+  cfg: generateBoss()が返す不変データ。同じrun.bossならリトライでも同じ。
+
+  bの追加フィールド:
+    hp/posture       現在値
+    phase/timer      ボス状態機械と残り/経過フレーム
+    deck             未使用技の山札
+    move             現在技のmoves内添字
+    attack/pulse     ヒットID生成用の通し番号
+    target/aimY      落下技のX、弾のY標的
+    targets          多段落下攻撃の全X座標
+    attacks          SHIELD発動周期のための使用技数
+    barrier          0ならBARRIER有効。正数なら破壊中の残り時間
+    mutated          3体ごとのHP50%変異を一度だけ行うフラグ
+
+  */
+  const cfg=generateBoss(runSeed(run.boss),run.boss);
+  b={...cfg,hp:cfg.maxHp,posture:cfg.maxPosture,x:500,y:FLOOR-72,face:-1,phase:"wait",timer:70,
+    deck:[],move:0,attack:0,pulse:0,target:140,aimY:FLOOR-18,targets:[],lastGuard:-1,attacks:0,barrier:0,mutated:0};
+  p={x:125,y:FLOOR-30,vx:0,vy:0,face:1,ground:1,coyote:6,
+    hp:HERO.hp,st:100,delay:0,
+    action:"",timer:0,inv:0,lastHit:"",jumpBuf:0,actBuf:0,parryBuf:0,rollBuf:0,
+    hold:p&&p.hold?p.hold:bareHand(),attack:0,pulse:-1,hitId:"",targets:[0]};
+  cleanArena();take=null;saved=null;lastLesson="";musicFrame=0;mode="fight";
+  if(!run.boss)say("READ THE COLORS. LEARN THE RHYTHM.",120);
+}
+function say(t,n=70){msg=t;msgTime=n}
+function spark(x,y,col,n=8){
+  for(let i=0;i<n;i++){const a=Math.random()*6.28,s=Math.random()*2.5+.5;parts.push({x,y,vx:Math.cos(a)*s,vy:Math.sin(a)*s-1,life:16+Math.random()*15,col})}
+}
+// Vulnerable torso; horn, mane and tail are decorative outside this rectangle.
+function boxPlayer(){return{x:p.x-3,y:p.y+9,w:26,h:17}}
+function boxBoss(){return{x:b.x+5,y:b.y+4,w:37,h:68}}
+function hit(a,z){return a.x<z.x+z.w&&a.x+a.w>z.x&&a.y<z.y+z.h&&a.y+a.h>z.y}
+function spend(n){
+  // 消費後30fは回復しない。成功/失敗を返し、スタミナ不足で行動開始させない。
+  if(p.st<n){respond("tired","LOW STAMINA — LET IT REFILL");return 0}p.st-=n;p.delay=30;return 1;
+}
+function begin(a){p.action=a;p.timer=0;p.vx=0}
+// ロール24f中の4～14fだけ無敵。開始直後と終端には当たり判定が残る。
+function isRollInv(){return p.action==="roll"&&p.timer>=4&&p.timer<=14}
+// 入力が行動として始まる0fから11fまで受付（12f）。全体22fで連打には隙が残る。
+function isParry(){return p.action==="parry"&&p.timer<=11}
+
+/* --------------------------- player state machine ----------------------- */
+
+function playerStep(){
+  /*
+  プレイヤーの1フレーム。処理順には意味がある。
+
+    1. 無敵・交代CD・スタミナ回復待ちを減らす
+    2. 各入力を5～7fのバッファへ移す
+    3. 実行中actionのタイマーを進め、発生/終了フレームを処理
+    4. actionが空なら、交代→ロール→パリィ→攻撃の優先順で開始
+    5. ジャンプ入力とコヨーテタイムを処理
+    6. 重力、座標、床・画面端を処理
+    7. 通常時だけボス本体との重なりを押し戻す
+
+  入力バッファにより、硬直終了の数フレーム前に押したボタンも次行動になる。
+  */
+  if(p.inv)p.inv--;
+  // 消費後30fは回復が止まる。これが唯一の資源制約（根の 1.5）。
+  if(p.delay)p.delay--;else p.st=Math.min(100,p.st+.3);
+  p.jumpBuf=Math.max(0,p.jumpBuf-1);p.actBuf=Math.max(0,p.actBuf-1);
+  p.parryBuf=Math.max(0,p.parryBuf-1);p.rollBuf=Math.max(0,p.rollBuf-1);
+  if(pressed("Space","KeyW","ArrowUp"))p.jumpBuf=7;
+  if(pressed("KeyJ","KeyZ"))p.actBuf=5;
+  if(pressed("KeyK","KeyX"))p.parryBuf=5;
+  if(pressed("KeyL","KeyC"))p.rollBuf=5;
+
+  if(p.action){
+    // 行動中は原則キャンセル不可。パリィ成功だけがp.actionを直接解除する。
+    p.timer++;
+    if(p.action==="attack"){
+      // プレイヤー版の発生・実持続・硬直を同じ性能データから読む。
+      heroStrike();
+      if(p.timer>=attackEnd(p.hold)){p.action="";p.vx=0}
+    }else if(p.action==="roll"){
+      p.vx=p.face*HERO.roll;
+      if(p.timer>=24)p.action="";
+    }else if(p.action==="parry"){
+      if(p.timer>=22)p.action="";
+    }else if(p.action==="hit"&&p.timer>=12)p.action="";
+  }
+
+  if(!p.action){
+    // 同じフレームに複数入力された場合の優先順位。ロールは接地中だけ開始できる。
+    let d=(held("ArrowRight","KeyD")?1:0)-(held("ArrowLeft","KeyA")?1:0);
+    p.vx=d*2.45;if(d)p.face=d;
+    if(p.rollBuf&&p.ground&&spend(24)){p.rollBuf=0;begin("roll");sound(110,.05,"sine",.02)}
+    else if(p.parryBuf&&spend(18)){p.parryBuf=0;begin("parry");sound(280,.04,"triangle",.02)}
+    else if(p.actBuf&&spend(p.hold.cost)){
+      p.actBuf=0;begin("attack");p.attack++;p.pulse=-1;p.hitId="";
+      // RAINは全段ぶんの落下Xをここで確定する（攻撃開始後は動かない・不変条件7）
+      const m=p.hold;p.targets=[];
+      for(let i=0;i<m[N];i++)p.targets.push(rainAim(m,i));
+    }
+  }
+  if(p.ground)p.coyote=6;else p.coyote=Math.max(0,p.coyote-1);
+  // coyoteは床を離れた後6f、jumpBufは押してから7f残る。この二つが重なれば跳ぶ。
+  const planted=p.action==="attack"&&p.hold[S]===4&&p.timer<activeEnd(p.hold);
+  if(p.jumpBuf&&p.coyote&&p.action!=="roll"&&p.action!=="hit"&&!planted){
+    p.jumpBuf=0;p.coyote=0;p.ground=0;p.vy=-7.25;sound(170,.05,"sine",.018);
+  }
+  if(!held("Space","KeyW","ArrowUp")&&p.vy<-2.2)p.vy*=.58;
+  if(p.action!=="roll")p.vy=Math.min(9,p.vy+.42);
+  p.x+=p.vx;p.y+=p.vy;
+  p.x=clamp(p.x,20,CW-38);
+  if(p.y>=FLOOR-30){p.y=FLOOR-30;p.vy=0;p.ground=1}else p.ground=0;
+  if(hit(boxPlayer(),boxBoss())&&p.action!=="roll")p.x=clamp(b.x+23>p.x+9?b.x-24:b.x+46,20,CW-38);
+}
+function heroStrike(){
+  /*
+  所持技の1フレーム。ボスのactiveBossMove()と同じ時間割で動く。
+  予備動作が終わってから、段ごとに判定を出す。展開はmoveRect()を共有するので、
+  「見えているものと当たるもの」がプレイヤー側でも一致する（不変条件8）。
+  */
+  const m=p.hold,w=m.wind,span=m.active+10,t=p.timer-w;
+  if(t<0||t>=span*m[N]-10)return;
+  if(p.timer===w&&m[S]!==4)sound(moveTone(m,m.wind),.07,WAVE[m[S]],.025);
+  const pulse=Math.min(m[N]-1,(t/span)|0),local=t%span;
+  if(m[S]===4){ // 弾は段が変わった最初のフレームで一発だけ生成する
+    if(p.pulse!==pulse){p.pulse=pulse;
+      shots.push({...horn(),vx:p.face*7.2,vy:0,owner:0,dmg:m.seg[pulse],post:m.post/m[N],col:HOLD_COL(m),life:150});
+      sound(moveTone(m,m.wind,pulse),.06,"sawtooth",.022);}
+    return;
+  }
+  if(local>=m.active)return;
+  if(m[S]===3)p.x=clamp(p.x+p.face*(3.2+m[R]*.72),20,CW-38); // 突進は自分が前へ出る
+  const id=p.attack+":"+pulse;
+  if(p.hitId!==id&&hit(moveRect(m,pulse,p),boxBoss())){
+    p.hitId=id;bossDamage(m.seg[pulse],m.post/m[N],"melee",m[S]===0?p.face*40/m[N]:0);
+    if(pulse)sound(moveTone(m,m.wind,pulse),.05,WAVE[m[S]],.02);
+  }
+}
+function barrierUp(){return b.defense===2&&!b.barrier&&b.phase!=="recover"&&b.phase!=="stagger"}
+function bossDamage(dmg,post,kind,push=0){
+  /*
+  ボスが攻撃を受けたときの唯一の入口。
+
+  kind="shot"  Unicorn弾または反射弾
+  kind="melee" Red/Blueの近接
+
+  防御能力:
+    SHIELD  guard中はHP30%、体勢35%だけ通す
+    BARRIER 通常時のshotを30%へ減らす。反撃窓では開き、melee命中で180f破壊
+    ARMOR   通常時の体勢ダメージを半減
+
+  recover/stagger中は明確な反撃窓なのでHPダメージ1.25倍。
+  HP0を最優先し、その後に最終形態移行、体勢崩しを判定する。
+  */
+  if((mode!=="fight"&&mode!=="trial")||b.phase==="shift")return;
+  const counter=b.phase==="recover"||b.phase==="stagger";
+  if(b.phase==="guard"){dmg*=.3;post*=.35}
+  if(barrierUp()&&kind==="shot")dmg*=.3;
+  if(b.defense===1&&b.phase!=="recover"&&b.phase!=="stagger")post*=.5;
+  if(kind==="melee"&&b.defense===2)b.barrier=180;
+  if(b.phase==="recover"||b.phase==="stagger")dmg*=1.25;
+  b.hp=Math.max(0,b.hp-dmg);b.posture=Math.max(0,b.posture-post);
+  b.x=clamp(b.x+push,45,CW-65);
+  respond(counter?"counter":"hit",counter?"COUNTER!":"HIT");
+  spark(b.x+20,b.y+28,PAL[b.hue],7);freeze=counter?5:kind==="melee"?3:1;shake=kind==="melee"?3:1;
+  sound(counter?660:kind==="shot"?720:[180,520,90,130,720,240][p.hold[S]],counter?.12:.07,"triangle",.04);
+  if(mode==="trial"){b.reset=150;return}
+  if(b.hp<=0){
+    /*
+    撃破。奪取の候補をここで組み立てる（設計 arena の 1.4.1）。
+    倒したボスの全技＋今の所持技。選ぶのはduel側で、readは描くだけ。
+    */
+    mode="bosswin";take={list:b.moves.map(steal).concat([p.hold]),i:0,held:p.hold,foe:{name:b.name,hue:b.hue}};
+    chime(2);return;
+  }
+  if(b.tier%3===2&&!b.mutated&&b.hp<=b.maxHp/2){
+    // 最終形態は既知の固有技を強化するだけで、別の回避規則には変えない。
+    b.mutated=1;const m=b.moves[b.moves.length-1];m[D]=Math.min(4,m[D]+1);m[W]=Math.min(4,m[W]+1);m[C]=Math.min(4,m[C]+1);harden(m);
+    b.phase="shift";b.timer=75;shots=shots.filter(s=>s.owner===0);say("THE PRISM CHANGES",100);sound(65,.35,"sawtooth",.04);return;
+  }
+  if(b.posture<=0&&b.phase!=="stagger")breakBoss();
+}
+function breakBoss(){
+  // 110fの大きな反撃窓。終了後に体勢を全回復して通常ループへ戻す。
+  b.phase="stagger";b.timer=110;b.posture=0;freeze=6;shake=6;spark(b.x+22,b.y+30,"#fff",22);say("POSTURE BROKEN",70);sound(90,.18,"triangle",.05);sound(880,.25,"sine",.035);
+}
+function hurtPlayer(dmg,id,cause=moveLesson(b.moves[b.move])){
+  /*
+  プレイヤー被弾の唯一の入口。
+
+  idは「攻撃番号:多段番号」。activeが5～12f継続しても、同じ段から受ける
+  ダメージは一回だけ。被弾後42fの無敵を付ける。HP0で即敗北 —
+  逃げ場は残機ではなくスタミナ1本だけ（根の 1.5）。
+  */
+  if(mode!=="fight"||p.inv||isRollInv()||p.lastHit===id)return;
+  lastLesson=cause;respond("hurt",cause);
+  p.lastHit=id;p.hp=Math.max(0,p.hp-dmg);p.inv=42;run.hits++;shake=5;freeze=4;
+  spark(p.x+9,p.y+12,HERO.col,12);sound(75,.16,"sawtooth",.045);
+  if(!p.hp){mode="dead";say("THE PRISM GOES DARK",999);return}
+  begin("hit");p.vy=-2.4;p.vx=b.x>p.x?-2:2;
+}
+function parryBoss(id){
+  /*
+  近接攻撃のパリィ成功。
+  - 同じ攻撃段の多重成功をlastHitで防ぐ
+  - ボス体勢を8削る
+  - プレイヤーのparry硬直を解除する
+  - 体勢0ならstagger、残っていれば42fのrecoverへ送る
+  */
+  if(p.lastHit===id)return;p.lastHit=id;run.parries++;b.posture=Math.max(0,b.posture-8);freeze=6;shake=4;
+  respond("parry","PARRY! COUNTER NOW");
+  p.action="";spark(p.x+p.face*12,p.y+12,"#fff",18);sound(1320,.16,"sine",.035);say("PARRY",35);
+  if(!b.posture)breakBoss();else{b.phase="recover";b.timer=42}
+}
+function bossContact(q,id,parryable){
+  // 回避、パリィ、被弾の優先順を一か所へ集約する。
+  if(!hit(q,boxPlayer()))return;
+  if(isParry()&&parryable){parryBoss(id);return}
+  hurtPlayer(b.moves[b.move][D],id);
+}
+
+/* ---------------------------- boss state machine ------------------------ */
+
+function shuffle(a,r){for(let i=a.length-1;i;i--){const j=r()*(i+1)|0;[a[i],a[j]]=[a[j],a[i]]}return a}
+function nextMove(){
+  /*
+  次の技添字を返す。
+
+  山札が空なら全技をシード付きでシャッフルし、一巡するまで同じ技を戻さない。
+  先頭3枚だけを見て、現在距離で届く最初の技を選ぶ。候補がなければ先頭を使う。
+  これにより完全ランダムの連打を防ぎつつ、決まった順番の暗記にもならない。
+
+  シャッフルseedは「ボスseed + 周回数*97」なので、描画や入力の乱数に依存しない。
+  */
+  if(!b.deck.length){b.cycle=(b.cycle||0)+1;b.deck=shuffle(b.moves.map((_,i)=>i),seeded((b.seed+b.cycle*97)>>>0))}
+  let k=0;
+  for(let i=0;i<Math.min(3,b.deck.length);i++){
+    const m=b.moves[b.deck[i]],dist=Math.abs((b.x+20)-(p.x+9));
+    if((dist<150||m[R]>=3||m[S]===3)){k=i;break}
+  }
+  return b.deck.splice(k,1)[0];
+}
+function aimBoss(m){
+  b.target=p.x+8;b.aimY=p.y+14;b.face=p.x<b.x?-1:1;
+  for(let i=0;i<m[N];i++)b.targets[i]=clamp(b.target+(i?((i%2?1:-1)*(55+18*i)):0),30,CW-30);
+}
+function startMove(){
+  /*
+  waitからwindへ入る処理。
+  攻撃通し番号を増やし、向き、落下X、射撃Y、多段の全標的位置をここで確定する。
+  tracking>0の技だけはwind前半まで標的を更新するが、activeへ入った後は変えない。
+  */
+  b.move=nextMove();const m=b.moves[b.move];b.phase="wind";b.timer=WIND[m[W]-1];b.attack++;b.attacks++;b.pulse=0;
+  b.targets=[];aimBoss(m);
+  say(SHAPE_NAME[m[S]]+"  "+m[D]+"·"+m[R],Math.min(55,b.timer));
+  // 予備動作の開始を音でも出す。画面の予告と同じ情報なので、切っても読める。
+  sound(moveTone(m,WIND[m[W]-1])*.6,.09,WAVE[m[S]],.03);
+}
+function bossStep(){
+  /*
+  ボス状態機械:
+
+    wait     次の技までの待機。距離を105～245pxへ寄せる
+      ↓
+    wind     予備動作。攻撃範囲を薄く表示し、追尾は前半だけ行う
+      ↓
+    active   実際の攻撃判定。activeBossMove()が担当
+      ↓
+    recover  攻撃後硬直。プレイヤーダメージが1.25倍になる反撃時間
+      ↓
+    wait
+
+  割り込み状態:
+    guard    SHIELD持ちが山札一巡ごとに60f構える
+    stagger  体勢0による110fの大きな隙
+    shift    3体ごとのHP50%の75f変異演出。敵弾も消す
+
+  敵弾が画面に残っている間はwaitタイマーを止め、独立攻撃との重なりを防ぐ。
+  */
+  if(b.barrier)b.barrier--;
+  if(b.phase==="wait"){
+    const enemyShots=shots.some(s=>s.owner===1);
+    const dist=Math.abs(b.x-p.x);
+    if(!enemyShots){
+      if(dist>245)b.x+=b.x>p.x?-1.05:1.05;
+      else if(dist<105)b.x+=b.x>p.x?.7:-.7;
+      b.face=p.x<b.x?-1:1;
+      if(--b.timer<=0){
+        if(b.defense===3&&b.attacks&&b.attacks%b.moves.length===0&&b.lastGuard!==b.attacks){b.lastGuard=b.attacks;b.phase="guard";b.timer=60;say("PRISM SHIELD",55)}
+        else startMove();
+      }
+    }
+  }else if(b.phase==="guard"){
+    if(--b.timer<=0){b.phase="wait";b.timer=24}
+  }else if(b.phase==="wind"){
+    const m=b.moves[b.move],total=WIND[m[W]-1];
+    if(m[T]&&b.timer>total*.38)aimBoss(m);
+    if(--b.timer<=0){b.phase="active";b.timer=0;b.pulse=-1}
+  }else if(b.phase==="active")activeBossMove();
+  else if(b.phase==="recover"){
+    if(--b.timer<=0){b.phase="wait";b.timer=[42,34,28][Math.min(2,b.tier)]}
+  }else if(b.phase==="stagger"){
+    if(--b.timer<=0){b.posture=b.maxPosture;b.phase="wait";b.timer=48}
+  }else if(b.phase==="shift"){
+    if(--b.timer<=0){b.phase="wait";b.timer=45}
+  }
+  b.x=clamp(b.x,45,CW-65);
+}
+function moveRect(m,pulse=0,src=b){
+  /*
+  srcは展開の原点。ボス(b)でもプレイヤー(p)でも同じ規則を通す。
+  設計 design/tree/duel の 13.1「プレイヤー原点での展開」——
+  原点と向きを差し替えるだけで、別の展開器を持たない。
+  */
+  /*
+  Moveから現在段のAABB矩形{x,y,w,h}を作る。
+
+    SWEEP  床上24pxの横長矩形。ジャンプで抜けられる
+    THRUST 四足の胴体の高さへ向ける細い矩形
+    SLAM   ボスを中心とする地上の広い矩形
+    CHARGE 移動中のボス本体矩形
+    SHOT   shots配列で処理するためここでは空矩形
+    RAIN   startMove()で固定したtargets[pulse]の縦矩形
+
+  drawTelegraph()とbossContact()が同じ戻り値を使う。表示用の範囲を別に持つと
+  「見た目より判定が広い」事故が起きるため、ここを唯一の形状定義にする。
+  */
+  const reach=REACH[m[R]-1],dir=src.face,hero=src!==b,ox=src.x,oy=src.y;
+  const front=hero?horn(src).x:dir<0?ox:ox+40;
+  if(m[S]===0)return{x:dir<0?front-reach:front,y:FLOOR-24,w:reach,h:24};
+  if(m[S]===1)return{x:dir<0?front-reach:front,y:hero?horn(src).y-6:oy+48,w:reach,h:hero?12:18};
+  if(m[S]===2)return{x:ox-reach*.55,y:FLOOR-57,w:reach+44,h:57};
+  if(m[S]===3)return hero?boxPlayer():boxBoss();
+  if(m[S]===5){const w=28+m[R]*9,t=src.targets[pulse];return{x:t-w/2,y:18,w,h:FLOOR-18}}
+  return{x:0,y:0,w:0,h:0};
+}
+function activeBossMove(){
+  /*
+  active状態の1フレーム。
+
+  1段の長さ span = ACTIVE[段階] + 10fの段間隔。
+  b.timerから現在pulseと段内local時間を算出する。
+
+  - SHOT: pulse開始時に弾を一発だけ生成
+  - CHARGE: active中だけボス座標を前進
+  - その他: localがACTIVE内のときmoveRect()をbossContact()へ渡す
+
+  最終段が終わるとRECテーブルの長さでrecoverへ入る。
+  */
+  const m=b.moves[b.move],span=ACTIVE[m[A]-1]+10,pulse=Math.min(m[N]-1,(b.timer/span)|0),local=b.timer%span;
+  if(pulse!==b.pulse){b.pulse=pulse;if(m[S]===4)spawnBossShot(m,pulse)}
+  if(local<ACTIVE[m[A]-1]&&m[S]!==4){
+    if(m[S]===3)b.x+=b.face*(3.2+m[R]*.72);
+    bossContact(moveRect(m,pulse),b.attack+":"+pulse,!!(m[F]&PARRY));
+    // パリィで確定した反撃窓・体勢崩しを通常の攻撃終了処理で上書きしない。
+    if(b.phase!=="active")return;
+  }
+  b.timer++;
+  if(b.timer>=span*m[N]-10){b.phase="recover";b.timer=REC[m[C]-1]}
+}
+function spawnBossShot(m,pulse){
+  const speed=3.1+(5-m[W])*.45;
+  const distance=Math.max(60,Math.abs((b.x+20)-(p.x+9)));
+  shots.push({x:b.x+20+b.face*22,y:b.y+29,vx:b.face*speed,vy:(b.aimY-b.y-29)/distance*speed,owner:1,dmg:m[D],post:0,col:PAL[b.hue],life:220,track:m[T]*.018,id:b.attack+":"+pulse,parry:1,lesson:moveLesson(m)});
+  sound(moveTone(m,WIND[m[W]-1],pulse)*.6,.08,"sawtooth",.028);
+}
+function shotsStep(){
+  /*
+  全弾の1フレーム。
+
+  owner=0: プレイヤー弾。boxBossへ当たるとbossDamage("shot")
+  owner=1: 敵弾。弱/強追尾でvyを少し曲げ、boxPlayerへ判定
+
+  敵弾へパリィが合うとowner=0へ反転し、速度・色・ダメージ・体勢値を変更する。
+  画面外またはlife 0の弾は最後にまとめて削除する。
+  */
+  for(const s of shots){
+    if(s.track&&s.owner===1)s.vy=clamp(s.vy+Math.sign((p.y+14)-s.y)*s.track,-1.3,1.3);
+    s.x+=s.vx;s.y+=s.vy;s.life--;
+    if(s.owner===0){
+      if(hit({x:s.x-4,y:s.y-3,w:8,h:6},boxBoss())){bossDamage(s.dmg,s.post,"shot");s.life=0}
+    }else if(hit({x:s.x-5,y:s.y-5,w:10,h:10},boxPlayer())){
+      if(isParry()&&s.parry){s.owner=0;s.vx*=-1.35;s.vy*=-1;s.dmg=3;s.post=7;s.col="#fff";if(mode==="fight")run.parries++;respond("parry","PARRY! SHOT RETURNED");freeze=4;sound(1320,.16,"sine",.035)}
+      else if(!isRollInv()&&!p.inv){hurtPlayer(s.dmg,s.id,s.lesson);s.life=0}
+    }
+  }
+  shots=shots.filter(s=>s.life>0&&s.x>-30&&s.x<CW+30&&s.y>-30&&s.y<CH+30);
+}
+function partsStep(){for(const q of parts){q.x+=q.vx;q.y+=q.vy;q.vy+=.09;q.life--}parts=parts.filter(q=>q.life>0)}
+
+/* ---------------------------- run flow ---------------------------------- */
+
+function step(){
+  /*
+  ゲーム全体の画面状態を1フレーム進める。
+
+    title   Nでseed再生成、EnterでnewRun
+    fight   戦闘更新。freeze中は物理を止め、火花だけ進める
+    pause   Enter/Escapeで復帰、Rで同seedを最初から、Nで新seedのタイトル
+    dead    Enter/Rで同じボス、Nで新seed
+    bosswin Tでtrial、Enterで候補を確定。3体ごとにresult
+    trial   本戦と同じプレイヤー・弾更新。Rで候補、Enterで確定
+    result  Enterで次の3体へ、Rで同seed再走、Nで新ラン
+
+  step末尾でtapを空にするため、一回のキー入力が複数固定stepへ重複しない。
+  */
+  if(mode==="pause"){
+    if(pressed("Enter","Escape")){mode=pauseFrom;clearInput()}
+    else if(pressed("KeyR"))newRun(seed);
+    else if(pressed("KeyN")){seed=(Math.random()*0xffffffff)>>>0;cleanArena();take=saved=null;mode="title"}
+    tap={};return;
+  }
+  if((mode==="fight"||mode==="trial")&&pressed("Escape")){pauseGame();return}
+  if(feedback.ttl)feedback.ttl--;
+  if(attune&&!--attune.ttl)attune=null;
+  shake*=.82;if(shake<.3)shake=0;
+  if(mode==="title"){
+    if(pressed("KeyN")){seed=(Math.random()*0xffffffff)>>>0;sound(300,.05)}
+    if(pressed("Enter"))newRun(seed);
+  }else if(mode==="dead"){
+    if(pressed("Enter","KeyR"))startBoss();
+    if(pressed("KeyN")){seed=(Math.random()*0xffffffff)>>>0;mode="title"}
+  }else if(mode==="bosswin"){
+    // カーソルはduel側が持つ。readは位置を描くだけ（片方向性の保持）。
+    if(pressed("ArrowLeft","KeyA"))take.i=(take.i+take.list.length-1)%take.list.length;
+    if(pressed("ArrowRight","KeyD"))take.i=(take.i+1)%take.list.length;
+    if(pressed("Enter"))confirmTake();
+    // Keep trial entry separate from attack so defeat-time mashing stays here.
+    else if(pressed("KeyT"))startTrial();
+  }else if(mode==="result"){
+    if(pressed("KeyR"))newRun(seed);
+    if(pressed("Enter"))startBoss();
+    if(pressed("KeyN")){seed=(Math.random()*0xffffffff)>>>0;mode="title"}
+  }else if(mode==="trial"&&pressed("Enter"))confirmTake();
+  else if(mode==="trial"&&pressed("KeyR"))endTrial();
+  else if(mode==="fight"||mode==="trial"){
+    music();
+    if(freeze)freeze--;
+    else{
+      if(mode==="fight")run.time++;
+      playerStep();
+      if(mode==="fight")bossStep();
+      else if(b.reset&&!--b.reset){if(p.action||shots.length)b.reset=1;else{b.x=360;b.hp=b.maxHp;b.posture=b.maxPosture;}}
+      if(mode==="fight"||mode==="trial")shotsStep();
+    }
+    partsStep();if(msgTime)msgTime--;
+  }
+  tap={};
+}
+
+/* ---------------------------- rendering --------------------------------- */
+
+function bar(x,y,w,h,v,max,col){cx.fillStyle="#1b1d32";cx.fillRect(x,y,w,h);cx.fillStyle=col;cx.fillRect(x+1,y+1,(w-2)*Math.max(0,v/max),h-2)}
+function text(t,x,y,size=10,col="#dfe1f1",align="left"){
+  cx.font=`${size}px system-ui,sans-serif`;cx.textAlign=align;cx.fillStyle=col;cx.fillText(t,x,y);
+}
+function background(){
+  const g=cx.createLinearGradient(0,0,0,CH);g.addColorStop(0,"#090a19");g.addColorStop(1,"#171226");cx.fillStyle=g;cx.fillRect(0,0,CW,CH);
+  for(const s of stars){cx.globalAlpha=.25+s[2]*.2;cx.fillStyle="#b8c9ff";cx.fillRect(s[0],s[1],s[2],s[2])}cx.globalAlpha=1;
+  // All seven colors return together in three arcs; progress is not color loot.
+  const n=mode==="title"?0:freed();
+  cx.save();cx.lineWidth=3;
+  for(let i=0;i<7;i++){
+    cx.strokeStyle=PAL[i];cx.globalAlpha=.055;cx.beginPath();cx.arc(320,302,186+i*5,Math.PI,Math.PI*2);cx.stroke();
+    if(n){cx.globalAlpha=.26;cx.beginPath();cx.arc(320,302,186+i*5,Math.PI,Math.PI+Math.PI*n/3);cx.stroke()}
+  }cx.restore();
+  cx.fillStyle="#1f1830";for(let x=0;x<CW;x+=58)cx.fillRect(x,230+(x%3)*8,34,77);
+  cx.fillStyle="#2b2038";cx.fillRect(0,FLOOR,CW,CH-FLOOR);cx.fillStyle="#594569";cx.fillRect(0,FLOOR,CW,2);
+}
+/*
+HOLD_COL(m) -> 奪取技の色
+
+設計 design/tree/duel の 13.2。変換後の値で決め直すので、
+「追尾を捨てたのに藍のまま」のような嘘が出ない。
+出るのは黄(高速)/青(長射程)/紫(多段)/橙(長持続)の4色だけ。
+赤は威力を正規化するため、藍は追尾を捨てるため、緑は攻撃技でないため出ない。
+*/
+function HOLD_COL(m){
+  /*
+  優先順は設計 design/tree/read/tell/palette の 1.2.1 と同じ 黄→青→紫→橙。
+  判定は変換後の実フレームで行う（段のままだと予備動作の半減が反映されない）。
+  */
+  if(m.bare)return "#c9c6d8";          // 初期の角は無色
+  if(m.wind<=18)return PAL[2];         // 黄 高速（実フレーム18F以下）
+  if(m[R]===4)return PAL[4];           // 青 長射程
+  if(m[N]>1)return PAL[6];             // 紫 多段
+  if(m[A]===3)return PAL[1];           // 橙 長持続
+  return "#c9c6d8";
+}
+function attackColor(m){
+  if(m[D]>=4)return PAL[0];if(m[T]>=1)return PAL[5];if(m[W]===1)return PAL[2];if(m[R]===4)return PAL[4];if(m[N]>1)return PAL[6];return PAL[b.hue];
+}
+function drawTelegraph(){
+  // Read only: active timer has already advanced past the last collision frame.
+  if(!b||mode==="trial"||!(b.phase==="wind"||b.phase==="active"))return;
+  const m=b.moves[b.move],col=attackColor(m),wind=b.phase==="wind",span=ACTIVE[m[A]-1]+10;
+  const t=Math.max(0,b.timer-1),pulse=wind?0:Math.min(m[N]-1,(t/span)|0);
+  const live=!wind&&b.timer>0&&t%span<ACTIVE[m[A]-1],progress=wind?clamp(1-b.timer/WIND[m[W]-1],0,1):1;
+  cx.save();cx.fillStyle=cx.strokeStyle=col;cx.lineWidth=1;
+  if(wind&&b.timer<=11&&m[F]&PARRY)cx.strokeStyle="#fff";
+  if(m[S]===4&&wind){
+    const x=b.x+20+b.face*22,y=b.y+29,dx=b.face*REACH[m[R]-1];
+    const dy=(b.aimY-y)/Math.max(60,Math.abs((b.x+20)-(p.x+9)))*REACH[m[R]-1];
+    cx.globalAlpha=.4;cx.setLineDash([5,5]);cx.beginPath();cx.moveTo(x,y);cx.lineTo(x+dx,y+dy);cx.stroke();
+    cx.setLineDash([]);cx.lineWidth=3;cx.globalAlpha=.9;cx.beginPath();cx.moveTo(x,y);cx.lineTo(x+dx*progress,y+dy*progress);cx.stroke();
+  }else if(m[S]!==4){
+    for(let i=pulse;i<(m[S]===5?m[N]:pulse+1);i++){
+      if(!wind&&!live&&b.timer>0&&i===pulse)continue;
+      const q=moveRect(m,i,b),next=i>pulse;
+      cx.setLineDash(next?[3,6]:wind?[6,3]:[]);cx.lineWidth=next?1:live?2:1;
+      cx.globalAlpha=next?.3:.65;cx.strokeRect(q.x,q.y,q.w,q.h);
+      cx.globalAlpha=next?.035:live?.45:.06;cx.fillRect(q.x,q.y,q.w,q.h);
+      if(wind&&!next){cx.globalAlpha=.25;cx.fillRect(q.x,q.y+q.h*(1-progress),q.w,q.h*progress)}
+      if(m[S]===5){cx.globalAlpha=next?.45:1;text(i+1,q.x+q.w/2,128,12,col,"center")}
+    }
+  }
+  if(m[S]===3){
+    const x=b.x+20,y=b.y-15,d=b.face;
+    cx.setLineDash([]);cx.globalAlpha=.9;cx.lineWidth=2;cx.beginPath();cx.moveTo(x,y);cx.lineTo(x+d*32,y);cx.lineTo(x+d*24,y-6);cx.moveTo(x+d*32,y);cx.lineTo(x+d*24,y+6);cx.stroke();
+  }
+  cx.restore();
+}
+function poly(v,col){cx.beginPath();cx.moveTo(v[0],v[1]);for(let i=2;i<v.length;i+=2)cx.lineTo(v[i],v[i+1]);cx.closePath();cx.fillStyle=col;cx.fill()}
+function drawPerson(x,y,scale,col,u){
+  // Boss-only renderer. The player uses unicorn(); poses read combat timing.
+  const m=u.moves[u.move||0],shape=m[S],span=ACTIVE[m[A]-1]+10;
+  let phase=u.phase,t=u.timer,q=0;
+  if(phase==="wind")q=clamp(1-t/WIND[m[W]-1],0,1);
+  if(phase==="active"&&t%span>=ACTIVE[m[A]-1])phase="gap";
+  const wind=phase==="wind",fire=phase==="active",down=phase==="recover",stun=phase==="stagger";
+  const drop=stun?9:down?3+3*clamp(t/REC[m[C]-1],0,1):0;
+  const lean=stun?7:fire?(shape===3?9:4):wind?-2*q:down?3:0;
+  let a=-.6,hx=8,hy=-7;
+  if(wind){a=[-2.7,-3,-1.8,-.4,-2.5,-1.3][shape];hx=-3-5*q;hy=shape===2||shape===5?-20:-10}
+  if(fire){a=[.65,0,1.2,0,-.15,-1.6][shape];hx=12;hy=shape===5?-22:shape===0?-2:-10;a+=(shape===0||shape===2)?(t%span/ACTIVE[m[A]-1]-.5)*.7:0}
+  if(phase==="gap"){a=-1.9;hx=0;hy=-12}
+  if(down||stun){a=1.15;hx=7;hy=drop-2}
+  const len=14+m[R]*4;
+  cx.save();cx.translate(x,y);cx.scale(scale*u.face,scale);cx.lineCap="round";
+  poly([lean-5,-14+drop,-12-lean,5,-4,1,lean+2,-12+drop],"#594569");
+  cx.strokeStyle=col;cx.lineWidth=4;cx.beginPath();cx.moveTo(-3,0);cx.lineTo(-6-lean*.3,12);cx.moveTo(3,0);cx.lineTo(7+lean*.3,12);cx.stroke();
+  poly([lean-6,-14+drop,lean+6,-14+drop,7,1,-6,1],col);
+  poly([lean,-13+drop,lean+5,-12+drop,5,0,0,-2],"#151426");
+  poly([lean-5,-21+drop,lean+4,-22+drop,lean+7,-16+drop,lean+2,-13+drop,lean-5,-15+drop],col);
+  cx.fillStyle="#151426";cx.fillRect(lean+1,-18+drop,6,2);
+  poly([lean-5,-19+drop,lean-9,-25+drop,lean,-21+drop],col);
+  cx.lineWidth=3;cx.beginPath();cx.moveTo(lean,-11+drop);cx.lineTo(hx,hy);cx.moveTo(lean-4,-10+drop);cx.lineTo(-8,drop);cx.stroke();
+  if(fire){cx.strokeStyle="#fff";cx.lineWidth=1;cx.beginPath();cx.arc(hx,hy,len*.8,a-.45,a);cx.stroke()}
+  cx.save();cx.translate(hx,hy);cx.rotate(a);cx.fillStyle=col;
+  const thick=1+m[D]*.45;
+  cx.fillRect(-3,-thick,len,thick*2);cx.fillRect(2,-thick-3,2,thick*2+6);
+  if(shape===2)cx.fillRect(len-7,-thick-3,7,thick*2+6);
+  cx.restore();cx.restore();
+}
+function unicorn(x,y,face,m,action="",timer=0,stride=0){
+  const wind=action==="attack"&&timer<m.wind,live=action==="attack"&&timer>=m.wind&&timer<activeEnd(m);
+  const recover=action==="attack"&&timer>=activeEnd(m),s=m[S];
+  const crouch=action==="roll"?9:recover?3:0,rear=wind&&s===2?-7:0,head=headPose(m,action,timer);
+  cx.save();cx.translate(x,y);cx.scale(face,1);cx.lineCap="round";
+  // Tail, four independently articulated legs, torso, neck and long horse muzzle.
+  poly([-12,-17,-21,-23,-24,-11,-19,-16,-12,-10],"#b6a5d5");
+  for(let i=0;i<4;i++){
+    const xx=(i<2?-11:7)+(i%2)*4,step=Math.sin(stride+(i%2)*Math.PI+(i<2?0:Math.PI))*(stride?4:0);
+    cx.strokeStyle=i%2?"#a49cbb":HERO.col;cx.lineWidth=3;cx.beginPath();
+    cx.moveTo(xx,-11+crouch);cx.lineTo(xx+step,-5+crouch/2+(i>=2?rear:0));cx.lineTo(xx-step,(i>=2?rear:0));cx.stroke();
+  }
+  cx.save();cx.translate(0,crouch);
+  poly([-14,-19,-6,-23,10,-21,14,-11,6,-6,-10,-7],HERO.col);
+  cx.restore();cx.save();cx.translate(head[0],head[1]);
+  poly([6,-20,11,-30,17,-31,18,-23,26,-19,25,-14,17,-15,12,-18,10,-8],HERO.col);
+  poly([10,-29,8,-34,14,-30],HERO.col);
+  poly([11,-29,7,-28,3,-15,8,-18,13,-25],"#b6a5d5");
+  cx.fillStyle="#171226";cx.fillRect(16,-25,2,2);cx.fillRect(24,-18,2,1);
+  // The single forehead horn ends at the shared projectile / attack origin.
+  poly([16,-28,22,-37,20,-28],HOLD_COL(m));
+  if(wind||live){cx.strokeStyle=HOLD_COL(m);cx.globalAlpha=live?.9:.4;cx.lineWidth=1;cx.beginPath();cx.arc(22,-37,live?6:3+timer/m.wind*4,0,6.3);cx.stroke()}
+  cx.restore();cx.restore();
+}
+function drawHero(){
+  const m=p.hold,trial=mode==="trial"||mode==="pause"&&pauseFrom==="trial",h=horn();
+  cx.save();if(isRollInv())cx.globalAlpha=.55;
+  unicorn(p.x+9,p.y+30,p.face,m,p.action,p.timer,p.vx?p.x*.22:0);cx.restore();
+  cx.save();cx.strokeStyle=cx.fillStyle=HOLD_COL(m);cx.lineWidth=2;
+  if(m[S]===5){
+    const aiming=!p.action,locked=p.action==="attack"&&p.timer<activeEnd(m);
+    if(aiming||locked)for(let i=0;i<m[N];i++){
+      const x=aiming?rainAim(m,i):p.targets[i];cx.globalAlpha=aiming?.3:.75;cx.setLineDash(aiming?[2,3]:[]);
+      cx.beginPath();cx.moveTo(x-10,FLOOR-3);cx.lineTo(x+10,FLOOR-3);cx.moveTo(x,FLOOR-10);cx.lineTo(x,FLOOR);cx.stroke();
+      if(locked){cx.globalAlpha=.16;cx.beginPath();cx.moveTo(h.x,h.y);cx.quadraticCurveTo(h.x,100,x,130);cx.stroke()}
+    }
+  }
+  cx.setLineDash([]);
+  if(p.action==="attack"){
+    const t=p.timer-m.wind,span=m.active+10;
+    if(t>=0&&p.timer<activeEnd(m)&&t%span<m.active&&m[S]!==4){
+      const q=moveRect(m,Math.floor(t/span),p);cx.globalAlpha=.16;cx.fillRect(q.x,q.y,q.w,q.h);
+      cx.globalAlpha=.7;cx.strokeRect(q.x,q.y,q.w,q.h);
+    }
+  }
+  if(p.action==="parry"){
+    cx.strokeStyle="#fff";cx.globalAlpha=isParry()?1:.25;cx.beginPath();cx.arc(h.x,h.y,12,-1.4,1.4);cx.stroke();
+  }
+  if(feedback.kind==="parry"&&feedback.ttl>45){
+    for(let i=0;i<7;i++){cx.strokeStyle=PAL[i];cx.globalAlpha=(feedback.ttl-45)/20;cx.beginPath();cx.arc(h.x,h.y,12+i*2,-2.6,.5);cx.stroke()}
+  }
+  cx.restore();
+  if(trial)text("TRIAL HORN",p.x+9,p.y-15,8,HOLD_COL(m),"center");
+  drawAttune(h);
+}
+function drawAttune(h){
+  if(!attune)return;
+  const t=1-attune.ttl/45,x=attune.x+(h.x-attune.x)*t,y=attune.y+(h.y-attune.y)*t-Math.sin(t*Math.PI)*65;
+  cx.fillStyle=attune.col;cx.fillRect(x-3,y-3,6,6);
+  if(mode!=="result")text("ONE HORN · ONE MOVE",320,88,10,attune.col,"center");
+}
+function drawBoss(){
+  const col=PAL[b.hue],x=b.x+22,y=b.y+36;cx.save();cx.translate(x,y);
+  if(barrierUp()){cx.strokeStyle=PAL[3];cx.globalAlpha=.45;cx.lineWidth=3;cx.beginPath();cx.arc(0,0,34,0,6.3);cx.stroke();cx.globalAlpha=1}
+  if(b.phase==="guard"){cx.fillStyle=PAL[3]+"66";cx.fillRect(b.face<0?-32:14,-28,18,58)}
+  drawPerson(0,12,2,col,b);
+  for(let i=0;i<7;i++){cx.fillStyle=PAL[i];cx.globalAlpha=i===b.hue?1:.25;cx.fillRect(-13+i*4,9,3,5)}cx.globalAlpha=1;cx.restore();
+}
+function hud(){
+  const trial=mode==="trial"||mode==="pause"&&pauseFrom==="trial";
+  text(trial?"TARGET":`PRISM ${run.boss+1}  ${b.name}`,20,20,11,PAL[b.hue]);text(`SEED ${seedText()}`,620,20,9,"#777b99","right");
+  text("HP",20,35,9);text("POSTURE",20,44,9);
+  bar(80,28,330,8,b.hp,b.maxHp,PAL[b.hue]);bar(80,39,330,4,b.posture,b.maxPosture,"#f2e6a2");
+  if(!trial){
+    if(b.defense)text(DEF_NAME[b.defense]+(b.defense===2&&!barrierUp()?" OPEN":""),420,43,9,PAL[3]);
+    if(b.phase==="recover"||b.phase==="stagger")text("[OPEN] COUNTER NOW",620,33,11,"#fff","right");
+  }
+  ["RED power","ORANGE lasts","YELLOW fast","GREEN guard","BLUE range","INDIGO tracks","VIOLET multi"].forEach((s,i)=>text(s,20+i*86,55,9,PAL[i]));
+  /*
+  バーは色ではなく位置と太さで区別する（上=敵/下=自分、太い=命/細い=崩れ・資源）。
+  グレースケールでも4本を見分けられる（根の不変条件11）。
+  スタミナには「ロール24」「パリィ18」の必要量に目盛りを置く。残量がそれを
+  下回っているかが一目で分かる（design/tree/read/frame/hud の decision-3）。
+  */
+  text("HP",20,343,9);text("ST",20,351,9);
+  bar(40,339,130,5,p.hp,HERO.hp,HERO.col);bar(40,347,130,3,p.st,100,"#e7d96d");
+  cx.fillStyle="#8a8298";for(const n of[18,24,p.hold.cost])cx.fillRect(41+128*(n/100),346,1,5);
+  // 所持技を常時出す。スタミナの目盛りと並べて読めるようにする（設計 hud）。
+  const m=p.hold;cx.fillStyle=HOLD_COL(m);cx.fillRect(180,340,4,4);
+  text("HORN: "+SHAPE_NAME[m[S]]+"  "+m.cost+"ST",190,344,9,"#c4c6dc");
+  text("RAINBOW "+freed()+"/3",620,344,9,"#c4c6dc","right");
+  if(feedback.ttl)text(feedback.kind.toUpperCase()+": "+feedback.text,320,70,feedback.kind==="hurt"?10:12,"#fff","center");
+  else if(!trial&&b.phase==="wind")text(SHAPE_NAME[b.moves[b.move][S]]+" / TRY: "+lesson(b.moves[b.move]),320,70,10,"#fff","center");
+  else if(msgTime)text(msg,CW/2,70,12,"#fff","center");
+}
+function drawTake(){
+  /*
+  撃破画面が奪取の選択画面を兼ねる（設計 screens の 1.2.1）。
+  根の 1.1 の7が既にここで技構成を出しているので、画面を増やさない。
+
+  威力は表示しない。正規化されて全部同じなので、並べると「どれも同じ」に見えて
+  選ぶ意味が消える。出すのは間合いと速さと代償だけ——それが実際に変わるもの。
+  */
+  cx.fillStyle="#080914e8";cx.fillRect(24,60,CW-48,240);
+  text("ONE HORN · ONE MOVE",CW/2,96,22,"#f0efff","center");
+  text("COPY A FOE'S MOVE   A/D CHOOSE   T TRY   ENTER CONFIRM",CW/2,120,10,"#a3a6c2","center");
+  const n=take.list.length,w=Math.min(96,(CW-80)/n);
+  take.list.forEach((m,i)=>{
+    const x=CW/2+(i-(n-1)/2)*w,on=i===take.i,own=m===take.held;
+    cx.globalAlpha=on?1:.68;
+    cx.strokeStyle=on?"#fff":"#4a4760";cx.lineWidth=on?2:1;
+    cx.strokeRect(x-w/2+3,146,w-6,116);
+    cx.fillStyle=HOLD_COL(m);cx.fillRect(x-w/2+3,146,w-6,4);
+    text(SHAPE_NAME[m[S]],x,168,10,"#f0efff","center");
+    text(ROLE_GOOD[m[S]],x,184,8,"#c4c6dc","center");
+    text(ROLE_RISK[m[S]],x,199,8,"#ec9348","center");
+    text((m.wind<=18?"QUICK":m.wind<=27?"STEADY":"SLOW")+" START",x,212,8,"#9a9cb4","center");
+    text((m.rest<=30?"FAST":"LONG")+" RESET",x,225,8,"#9a9cb4","center");
+    text(m[N]+" HIT / "+m.cost+" ST",x,240,8,m.cost>26?"#ed596f":"#e7d96d","center");
+    if(own)text("HELD",x,256,8,"#5dcc8a","center");
+    cx.globalAlpha=1;
   });
+  text(take.foe.name+" · ENTER: "+(run.boss%3===2?"RECORD":"PRISM "+(run.boss+2)+" NEXT"),CW/2,285,9,PAL[take.foe.hue],"center");
+}
+function overlay(title,sub,action){
+  cx.fillStyle="#080914d9";cx.fillRect(85,78,470,206);text(title,CW/2,126,28,"#f0efff","center");text(sub,CW/2,160,11,"#a3a6c2","center");text(action,CW/2,246,12,"#ead85b","center");
+  if(mode==="dead"&&lastLesson){
+    const lines=lastLesson.split(" / ");
+    lines.forEach((line,i)=>text(line,CW/2,192+i*17,10,"#f0efff","center"));
+  }
+}
+function draw(){
+  /*
+  描画順:
+    背景 → 予告 → 弾 → 待機/操作キャラ → ボス → 火花 → HUD → 画面別overlay
+
+  当たり判定は一切ここで変更しない。shakeはCanvas座標だけを揺らすため、
+  見た目が揺れてもゲーム内部の座標と判定は安定したまま。
+  */
+  background();cx.save();if(shake)cx.translate((Math.random()-.5)*shake,(Math.random()-.5)*shake);
+  if(mode!=="title"&&mode!=="result"){
+    drawTelegraph();for(const s of shots){cx.fillStyle=s.col;cx.globalAlpha=.9;cx.fillRect(s.x-5,s.y-3,10,6)}cx.globalAlpha=1;
+    drawHero();drawBoss();for(const q of parts){cx.globalAlpha=q.life/30;cx.fillStyle=q.col;cx.fillRect(q.x,q.y,2,2)}cx.globalAlpha=1;hud();
+  }
+  cx.restore();
+  if(mode==="title"){
+    cx.save();cx.translate(320,82);cx.scale(1.8,1.8);unicorn(0,0,1,bareHand());cx.restore();
+    text("RANDOM DUEL",CW/2,112,16,"#a9aad0","center");text("RAINBOW",CW/2,158,48,"#f1efff","center");
+    for(let i=0;i<7;i++){cx.fillStyle=PAL[i];cx.fillRect(224+i*28,177,22,3+i%2*3)}
+    text("A UNICORN. ONE HORN. ONE STOLEN MOVE.",CW/2,207,11,"#f0efff","center");
+    text("DEFEAT 3. CLIMB ON.",CW/2,225,10,"#a3a6c2","center");text("SEED "+seedText()+"  BEST "+best,CW/2,252,12,"#c4c6dc","center");text("ENTER BEGIN   N NEW SEED",CW/2,280,11,"#ead85b","center");
+  }else if(mode==="dead")overlay("YOU FELL",b.name+" remembers every move.","ENTER / R  RETRY SAME FOE     N  NEW SEED");
+  else if(mode==="bosswin")drawTake();
+  else if(mode==="trial"){
+    text("TRY "+SHAPE_NAME[p.hold[S]]+" · "+p.hold.cost+" ST · J/Z ATTACK · TARGET WILL NOT ATTACK",CW/2,92,10,"#f0efff","center");
+    text("R CHOOSE AGAIN   ENTER "+(run.boss%3===2?"RECORD":"NEXT FOE")+"   ESC PAUSE",CW/2,110,10,"#ead85b","center");
+    text(ROLE_GOOD[p.hold[S]]+" / "+ROLE_RISK[p.hold[S]]+" · TARGET RESETS AFTER HITS",CW/2,128,9,"#c4c6dc","center");
+  }
+  else if(mode==="result")drawResult();
+  else if(mode==="pause"){
+    overlay("PAUSED","SEED "+seedText(),"ENTER / ESC  RESUME");
+    text("R  RESTART SAME SEED    N  NEW SEED",CW/2,200,12,"#f0efff","center");
+  }
+}
+function drawResult(){
+  /*
+  Result はランの記録である（設計 screens の 1.4）。
+  数字だけ出しても「何をやったランか」が残らない。直近3体の異名と主色、
+  そこで持ち替えた技を並べると、シードと合わせて共有できる形になる。
+  */
+  background();
+  text(run.boss===3?"RAINBOW RESTORED":"PRISM "+run.boss+" CLEARED",CW/2,64,26,"#f0efff","center");
+  const t=Math.floor(run.time/60);
+  text(`TIME ${Math.floor(t/60)}:${String(t%60).padStart(2,"0")}   HITS ${run.hits}   PARRIES ${run.parries}`,
+       CW/2,90,11,"#a3a6c2","center");
+  run.log.slice(-3).forEach(([nm,hue,m],i)=>{
+    const y=124+i*52;
+    cx.fillStyle=PAL[hue];cx.fillRect(96,y-10,3,34);
+    text(nm,110,y+2,13,PAL[hue]);
+    text("TOOK",110,y+18,8,"#777b99");
+    cx.fillStyle=HOLD_COL(m);cx.fillRect(146,y+12,4,4);
+    text(`${SHAPE_NAME[m[S]]}  ${REACH[m[R]-1]}px  ${m.wind}F  ${m.cost}ST`,156,y+18,9,"#c4c6dc");
+  });
+  const h=p.hold;
+  unicorn(530,300,1,h);drawAttune({x:552,y:263});
+  text("HOLDING",CW/2,290,8,"#777b99","center");
+  cx.fillStyle=HOLD_COL(h);cx.fillRect(CW/2-52,296,4,4);
+  text(`${SHAPE_NAME[h[S]]}  ${REACH[h[R]-1]}px  ${h.wind}F  ${h.cost}ST`,CW/2-42,302,10,"#f0efff");
+  text(`SEED ${seedText()}  BEST ${best}  ENTER:CLIMB  R:REPLAY  N:NEW`,CW/2,336,11,"#ead85b","center");
+}
+function loop(now){
+  /*
+  可変間隔のrequestAnimationFrameを60Hz固定stepへ変換するaccumulator loop。
+  1描画あたり最大5stepに丸める。タブ復帰時に数秒分を一気に計算して、
+  プレイヤーが操作できないまま攻撃を受けることを防ぐ。
+  */
+  if(!last)last=now;acc=Math.min(acc+now-last,STEP*5);last=now;
+  while(acc>=STEP){step();acc-=STEP}draw();requestAnimationFrame(loop);
 }
 
-function survived() {
-  status();
-  show(`<div class="eyebrow">Day ${state.day} &middot; Dawn</div>
-    <h1>It holds.</h1>
-    <p>What was coming is not coming any more.</p>
-    <button class="go" id="x">${state.day < 4 ? "Next morning" : "See how it ends"}</button>`);
-  on("#x", () => settle(() => {
-    if (state.day < 4) { state.day++; state.step = 0; state.placed = [null, null, null]; keep(); dayStart(); }
-    else ending();
-  }));
-}
-
-function fell() {
-  const lost = state.dead.length - state.fight.wasDead;
-  status();
-  show(`<div class="eyebrow">Day ${state.day} &middot; Night</div>
-    <h1>It does not hold.</h1>
-    <p>The day is yours to take again, and spend differently.</p>
-    ${lost ? `<p class="gain">${lost === 1 ? "The one who died tonight stays dead"
-      : `The ${lost} who died tonight stay dead`}. That much does not come back with you.</p>` : ""}
-    <div class="row">
-      <button class="go" id="r">Take the day again</button>
-      <button class="go" id="q">Start over</button>
-    </div>`);
-  on("#r", () => { rewind(); settle(dayStart); });
-  on("#q", scrap);
-}
-
-/* Nothing is thrown away without being asked first (design ch.15.3). */
-function scrap() {
-  show(`<div class="eyebrow">Start over</div>
-    <h1>All of it?</h1>
-    <div class="box">
-      <p>The days, what you carried, what you did, and the ones who are gone.</p>
-      <div class="row">
-        <button class="go" id="y">Yes, all of it</button>
-        <button class="go" id="n">No</button>
-      </div>
-    </div>`);
-  on("#y", title);
-  on("#n", fell);
-}
-
-function ending() {
-  const k = state.karma;
-  const [name, text] = k >= 21
-    ? ["VIRGIN KNIGHT", "You go up and you do not come back down. The telling will be kinder than the four days were."]
-    : k <= -21
-      ? ["VIRGIN NIGHT", "What survives, survives behind a door you keep the key to."]
-      : ["VIRGINIGHT", "You came down on neither side, and nothing between them is settled."];
-
-  // What is left of the seven, said plainly and shown (design ch.16, ch.19).
-  const gone = state.dead.length, with_ = state.girls.length;
-  const after = gone
-    ? `${gone} of them went out under you, and you are still carrying the ${gone === 1 ? "ribbon" : "ribbons"}.`
-    : with_
-      ? `The ${with_} who came with you are still standing.`
-      : "Nobody came with you, and nobody was lost.";
-
-  status();
-  show(`<div class="center"><div>
-    <div class="eyebrow">Four days</div>
-    <h1>${name}</h1>
-    <p>${text}</p>
-    <div class="bow">${HUES.map((h, i) =>
-      `<i style="background:${state.dead.includes(i) ? "transparent" : h[1]};
-        ${state.dead.includes(i) ? "border:1px dashed var(--grey)" : ""}"></i>`).join("")}</div>
-    <p>${after}</p>
-    <button class="go" id="x">Again</button>
-  </div></div>`);
-  on("#x", title);
-}
-
-title();
+if(typeof document!=="undefined")boot();

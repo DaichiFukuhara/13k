@@ -3,7 +3,7 @@ import {readFileSync} from 'node:fs';
 import {createContext,runInContext} from 'node:vm';
 
 const ctx=createContext({console,Math,Number,JSON});
-runInContext(readFileSync(new URL('game.js',import.meta.url),'utf8'),ctx);
+runInContext(readFileSync(new URL('../game.js',import.meta.url),'utf8'),ctx);
 const read=s=>runInContext(s,ctx);
 read(`function fixture(shape,face=1,active=1,repeat=1,rest=1){
   newRun(123);p.x=300;p.face=-face;

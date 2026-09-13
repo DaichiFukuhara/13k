@@ -21,7 +21,7 @@ Nodeのvmへ読み込んでもCanvasやAudioContextを要求しない。生成�
 generateBoss()で再現して原因を追える。
 */
 
-const source=readFileSync(new URL("game.js",import.meta.url),"utf8");
+const source=readFileSync(new URL("../game.js",import.meta.url),"utf8");
 const box={console,Math,Number};
 // DOMを起動しないNode環境で本体を評価し、生成関数だけを直接検査する。
 runInNewContext(source,box,{filename:"game.js"});

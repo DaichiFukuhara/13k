@@ -136,6 +136,7 @@ tree/
 ## 決まったこと（2026-09-04）
 
 - **実装基盤: `prismatic-duel/`**（コードと build 環境のみ。ゲーム設計はツリーが正本）
+  — 2026-09-13 にリポジトリ直下へ昇格。旧パスとの対応は [`docs/REPOSITORY_LAYOUT.md`](../docs/REPOSITORY_LAYOUT.md)
 - **不採用物は削除せず、無効と明記して残す。**一覧はリポジトリ直下の
   [`README.md`](../README.md)。受け入れ条件「一意」はそこで判定する
 

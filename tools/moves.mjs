@@ -8,12 +8,12 @@ import {runInNewContext} from "node:vm";
 generateBoss() が実際に何を作っているかを、人間が読める表で出す。
 数値の調整と「どの技を奪えるようにするか」の判断に使う。
 
-  node prismatic-duel/moves.mjs            既定のseedを3体
-  node prismatic-duel/moves.mjs 12345      seed指定
-  node prismatic-duel/moves.mjs stats 2000 2000体ぶんの分布
+  node tools/moves.mjs            既定のseedを3体
+  node tools/moves.mjs 12345      seed指定
+  node tools/moves.mjs stats 2000 2000体ぶんの分布
 */
 
-const src = readFileSync(new URL("game.js", import.meta.url), "utf8");
+const src = readFileSync(new URL("../game.js", import.meta.url), "utf8");
 const hook = `globalThis.__api={generateBoss,threat,limits,budgetCap,
   WIND,ACTIVE,REC,REACH,SHAPE_NAME,COLOR_NAME,WEAPON_NAME,DEF_NAME,PAL};`;
 const box = {console, Math, Number, JSON};

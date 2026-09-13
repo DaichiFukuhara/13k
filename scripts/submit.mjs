@@ -15,7 +15,7 @@ import {execFileSync} from "node:child_process";
 残るのはソースだけで、ZIP は**コミットから再生成する**。
 だから「同じコミットからは同じ ZIP が出る」ことを毎回確かめる必要がある。
 
-  遊べる ZIP  = このスクリプトが出す dist/prismatic-duel.zip
+  遊べる ZIP  = このスクリプトが出す dist/random-duel-rainbow.zip
   読めるソース = origin のリポジトリ（この HEAD のコミット）
 
 検査:
@@ -29,11 +29,10 @@ git の状態（未コミット・未push）は**印として出すだけで、�
 作業中でも検査を回せるようにするため。提出の直前に ✅ が揃っていることを見る。
 
 実行:
-  node prismatic-duel/submit.mjs
+  node scripts/submit.mjs
 */
 
-const root = new URL("./", import.meta.url);
-const repo = new URL("../", root);
+const root = new URL("../", import.meta.url);
 const LIMIT = 13312;
 const path = u => new URL(u, root).pathname.replace(/^\/([A-Za-z]:)/, "$1");
 
@@ -46,11 +45,11 @@ const ok = (cond, label, detail = "") => {
 const sha = buf => createHash("sha256").update(buf).digest("hex");
 
 // ── 1. 2回ビルドして再現性を見る ────────────────────────
-const build = () => execFileSync(process.execPath, [path("build.mjs")], {encoding: "utf8"});
+const build = () => execFileSync(process.execPath, [path("scripts/build.mjs")], {encoding: "utf8"});
 const out1 = build();
-const zip1 = readFileSync(new URL("dist/prismatic-duel.zip", root));
+const zip1 = readFileSync(new URL("dist/random-duel-rainbow.zip", root));
 build();
-const zip2 = readFileSync(new URL("dist/prismatic-duel.zip", root));
+const zip2 = readFileSync(new URL("dist/random-duel-rainbow.zip", root));
 const html = readFileSync(new URL("dist/index.html", root));
 
 console.log(out1.trimEnd());
@@ -88,7 +87,7 @@ ok(zip1.length <= LIMIT, "13,312 bytes 以下",
 
 // ── git の状態（印。合否に含めない） ─────────────────────
 const git = args => {
-  try { return execFileSync("git", args, {cwd: path("../"), encoding: "utf8"}).trim() } catch { return "" }
+  try { return execFileSync("git", args, {cwd: path("./"), encoding: "utf8"}).trim() } catch { return "" }
 };
 const head = git(["rev-parse", "HEAD"]);
 const dirty = git(["status", "--porcelain"]);
@@ -107,14 +106,14 @@ mkdirSync(new URL("dist/", root), {recursive: true});
 const slip = [
   "js13kGames 2026 — Random Duel Rainbow",
   "",
-  `提出 ZIP     prismatic-duel/dist/prismatic-duel.zip`,
+  `提出 ZIP     dist/random-duel-rainbow.zip`,
   `             ${zip1.length} bytes / ${LIMIT} (${(zip1.length / LIMIT * 100).toFixed(1)}%)`,
   `             sha256 ${sha(zip1)}`,
   `読めるソース ${remote}/tree/${head.slice(0, 12)}`,
   `             コミット ${head}`,
   `             作業ツリー ${dirty ? "未コミットあり" : "clean"} / ${pushed ? "送信済み" : "未送信"}`,
   "",
-  `この ZIP は上のコミットから node prismatic-duel/submit.mjs で再生成できる。`,
+  `この ZIP は上のコミットから node scripts/submit.mjs で再生成できる。`,
   `生成日時 ${new Date().toISOString()}`,
   ""
 ].join("\n");

@@ -13,7 +13,7 @@ const ctx={globalAlpha:1,lineWidth:1,dash:[],
 for(const op of ["fillRect","strokeRect","beginPath","moveTo","lineTo","stroke","fillText"])
   ctx[op]=function(...args){calls.push({op,args,alpha:this.globalAlpha,dash:[...this.dash],stroke:this.strokeStyle})};
 const box=createContext({console,Math,Number,ctx});
-runInContext(readFileSync(new URL("game.js",import.meta.url),"utf8"),box);
+runInContext(readFileSync(new URL("../game.js",import.meta.url),"utf8"),box);
 const read=s=>runInContext(s,box);
 read('cx=ctx;mode="fight";p={x:80,y:270};b={x:300,y:253,hue:0,face:-1,move:0,targets:[100,240,390],aimY:280};');
 const state=()=>read("JSON.stringify({b,p,mode,shots,take,run})");

@@ -45,7 +45,7 @@
 ## 5.2 ビルド
 
 ```
-node prismatic-duel/build.mjs
+node scripts/build.mjs
 ```
 
 | 段 | 処理 |
@@ -77,7 +77,7 @@ node prismatic-duel/build.mjs
 ## 5.3 提出
 
 ```
-node prismatic-duel/submit.mjs
+node scripts/submit.mjs
 ```
 
 `dist/` は `.gitignore` されている。**提出物はリポジトリに残らない。**
@@ -85,7 +85,7 @@ node prismatic-duel/submit.mjs
 
 | 出すもの | 実体 |
 | --- | --- |
-| **遊べる ZIP** | `prismatic-duel/dist/prismatic-duel.zip` |
+| **遊べる ZIP** | `dist/random-duel-rainbow.zip` |
 | **読めるソース** | リポジトリを、提出したコミットで指す |
 
 ### 検査（すべて合否に含む）
@@ -107,7 +107,7 @@ node prismatic-duel/submit.mjs
 検査を通ると `dist/SUBMISSION.txt` を書き出す。
 
 ```
-提出 ZIP     prismatic-duel/dist/prismatic-duel.zip
+提出 ZIP     dist/random-duel-rainbow.zip
              9876 bytes / 13312 (74.2%)
              sha256 ...
 読めるソース <リポジトリ>/tree/<コミット>

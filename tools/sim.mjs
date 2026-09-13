@@ -18,7 +18,7 @@ step() だけを回せば、戦闘を実時間より速くヘッドレスで走�
 ここで測れるのは「完全ランダム入力」の下限だけである。
 */
 
-const src = readFileSync(new URL("game.js", import.meta.url), "utf8");
+const src = readFileSync(new URL("../game.js", import.meta.url), "utf8");
 
 // game.js のトップレベルは let 宣言なので、外から触るためのフックを末尾に足して評価する。
 // 提出ビルドには入らない（このファイルは build.mjs の入力ではない）。

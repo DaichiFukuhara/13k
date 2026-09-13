@@ -1,7 +1,7 @@
 # Development Guide
 
-Random Duel Rainbow currently lives in `prismatic-duel/`. Run commands from
-the repository root. See the [main README](../README.md) to play.
+Random Duel Rainbow lives at the repository root: `index.html`, `game.js` and
+`style.css`. Run commands from the repository root. See the [main README](../README.md) to play.
 
 ## Requirements and commands
 
@@ -12,7 +12,7 @@ npm ci
 npm run dev
 ```
 
-The server binds to `127.0.0.1:4173` and serves the current game's directory.
+The server binds to `127.0.0.1:4173` and serves the repository root.
 Stop it with Ctrl+C. If the port is in use, reuse your existing game server or
 run the Python command from the README with another port.
 
@@ -21,27 +21,27 @@ run the Python command from the README with another port.
 | `npm test` | Run the eight current regression suites |
 | `npm run build` | Minify and package the game |
 | `npm run verify` | Build twice and validate the local submission ZIP |
-| `node prismatic-duel/moves.mjs 12345` | Inspect generated move data |
-| `node prismatic-duel/roles.sim.mjs 20` | Run scripted combat comparisons |
+| `node tools/moves.mjs 12345` | Inspect generated move data |
+| `node tools/roles.sim.mjs 20` | Run scripted combat comparisons |
 
 The suites cover 90,000 generated bosses, 28,000 stolen moves, trial and pause
 flows, melee parries and timing boundaries, telegraphs, move roles, counter
 opportunities and sound events. Simulations do not measure human enjoyment.
 
-`refactor.test.mjs` is a separate before/after comparison tool. It needs three
+`tests/refactor.test.mjs` is a separate before/after comparison tool. It needs three
 explicit paths and is not part of `npm test`:
 
 ```sh
-node prismatic-duel/refactor.test.mjs before.js after.js prismatic-duel/dist/index.html
+node tests/refactor.test.mjs before.js after.js dist/index.html
 ```
 
 ## Build output
 
 | File | Purpose |
 | --- | --- |
-| `prismatic-duel/dist/index.html` | Standalone game with inline CSS and JavaScript |
-| `prismatic-duel/dist/prismatic-duel.zip` | Submission package; original development filename |
-| `prismatic-duel/dist/SUBMISSION.txt` | Verification record, size, hash and source revision |
+| `dist/index.html` | Standalone game with inline CSS and JavaScript |
+| `dist/random-duel-rainbow.zip` | Submission package |
+| `dist/SUBMISSION.txt` | Verification record, size, hash and source revision |
 
 Generated output is ignored by Git. The build uses Terser and Node's built-in
 compression; the shipped game has no runtime dependencies or external assets.
@@ -57,7 +57,7 @@ ZIP includes changes that cannot be reproduced from HEAD alone.
 ## Sound tools
 
 With the development server running, visit
-[the sound lab](http://localhost:4173/soundcheck.html). It uses the game's real
+[the sound lab](http://localhost:4173/tools/soundcheck.html). It uses the game's real
 sound functions and renders WAV samples through OfflineAudioContext. The page,
 its script and generated samples do not enter the submission ZIP.
 
@@ -66,5 +66,5 @@ its script and generated samples do not enter the submission ZIP.
 [Current specifications](../design/spec/README.md) describe the implementation;
 the [design tree](../design/tree/index.md) records decisions and precedence.
 Most design history and code comments are in Japanese. They are kept as authored.
-A [layout proposal](REPOSITORY_LAYOUT.md) describes promotion of the current game
-to the root while preserving earlier experiments. It has not been applied.
+[Repository layout](REPOSITORY_LAYOUT.md) lists where current and archived
+files live. Frozen work sits under `archive/`.

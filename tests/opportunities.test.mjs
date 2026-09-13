@@ -48,7 +48,7 @@ function scenarios(source){
     JSON.stringify({far,long,rain,sweep})`,ctx));
 }
 
-const source=readFileSync(new URL('game.js',import.meta.url),'utf8');
+const source=readFileSync(new URL('../game.js',import.meta.url),'utf8');
 const now=scenarios(source);
 const label=['HORN','SWEEP','THRUST','SLAM','CHARGE','SHOT','RAIN'];
 console.table(now.far.map((r,i)=>({shape:label[i],...r})));

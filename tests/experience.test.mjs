@@ -5,7 +5,7 @@ import {createContext, runInContext} from "node:vm";
 // Development-only regression checks. Fixtures place combatants and shorten HP;
 // all attacks, damage, selection, trial and confirmation run through real input
 // events and step(). No replacement combat implementation or rendering is used.
-const source=readFileSync(new URL("game.js",import.meta.url),"utf8");
+const source=readFileSync(new URL("../game.js",import.meta.url),"utf8");
 let checked=0;
 function game(){
   const listeners={};
